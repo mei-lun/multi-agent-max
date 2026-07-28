@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "1.0.0",
+  "generatedAt": "2026-07-28T08:50:42.115Z",
+  "platform": "darwin",
+  "architecture": "x64",
+  "probes": [
+    {
+      "kind": "codex-cli",
+      "executable": "codex",
+      "version": "codex-cli 0.146.0-alpha.3.1",
+      "status": "ready",
+      "missing": [],
+      "appServerSchemaGenerated": true
+    },
+    {
+      "kind": "grok-cli",
+      "executable": "grok",
+      "status": "executable_unavailable",
+      "error": "spawnSync grok ENOENT"
+    },
+    {
+      "kind": "pi-rpc",
+      "executable": "pi",
+      "version": "0.81.1",
+      "status": "ready",
+      "missing": []
+    }
+  ]
+}

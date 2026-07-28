@@ -1,0 +1,657 @@
+{
+  "schemaVersion": "1.0.0",
+  "generatedAt": "2026-07-28T08:23:34.189Z",
+  "status": "passed",
+  "scope": {
+    "executorKinds": [
+      "pi-rpc"
+    ],
+    "deferredRequirementIds": [
+      "MAM2-EXEC-001",
+      "MAM2-EXEC-002",
+      "MAM2-EXEC-004"
+    ]
+  },
+  "platform": "darwin",
+  "architecture": "x64",
+  "commands": [
+    {
+      "id": "core",
+      "status": "passed",
+      "command": "pnpm verify",
+      "exitCode": 0,
+      "evidence": "docs/acceptance/final-command-logs/core.log"
+    },
+    {
+      "id": "desktop",
+      "status": "passed",
+      "command": "pnpm smoke:desktop",
+      "exitCode": 0,
+      "evidence": "docs/acceptance/final-command-logs/desktop.log"
+    },
+    {
+      "id": "desktop-seeded",
+      "status": "passed",
+      "command": "pnpm smoke:desktop:seeded",
+      "exitCode": 0,
+      "evidence": "docs/acceptance/final-command-logs/desktop-seeded.log"
+    },
+    {
+      "id": "executor-probe",
+      "status": "passed",
+      "command": "pnpm probe:executors",
+      "exitCode": 0,
+      "evidence": "docs/acceptance/final-command-logs/executor-probe.log"
+    },
+    {
+      "id": "pi-smoke",
+      "status": "passed",
+      "command": "pnpm smoke:pi",
+      "exitCode": 0,
+      "evidence": "docs/acceptance/final-command-logs/pi-smoke.log"
+    },
+    {
+      "id": "source-manifest",
+      "status": "passed",
+      "command": "pnpm manifest:source -- /Users/mei/Documents/multi-agent-max",
+      "exitCode": 0,
+      "evidence": "docs/acceptance/final-command-logs/source-manifest.log"
+    },
+    {
+      "id": "pi-probe",
+      "status": "passed",
+      "evidence": "docs/acceptance/executor-interface-probe.json"
+    }
+  ],
+  "criteria": [
+    {
+      "id": "MAM2-APP-001",
+      "criterion": "current-authority-acceptance",
+      "paths": [
+        "src/main/index.ts",
+        "src/renderer/src/App.tsx"
+      ],
+      "commands": [
+        "core",
+        "desktop",
+        "desktop-seeded",
+        "source-manifest"
+      ],
+      "status": "passed",
+      "evidence": [
+        "docs/acceptance/final-command-logs/core.log",
+        "docs/acceptance/final-command-logs/desktop.log",
+        "docs/acceptance/final-command-logs/desktop-seeded.log",
+        "docs/acceptance/final-command-logs/source-manifest.log"
+      ]
+    },
+    {
+      "id": "MAM2-APP-002",
+      "criterion": "current-authority-acceptance",
+      "paths": [
+        "src/shared/mam/application-api.ts",
+        "src/main/ipc/mam-ipc.ts"
+      ],
+      "commands": [
+        "core"
+      ],
+      "status": "passed",
+      "evidence": [
+        "docs/acceptance/final-command-logs/core.log"
+      ]
+    },
+    {
+      "id": "MAM2-WORKFLOW-001",
+      "criterion": "current-authority-acceptance",
+      "paths": [
+        "src/renderer/src/features/mam/MamWorkflowEditor.tsx",
+        "src/main/mam/workflow/workflow-compiler.test.ts",
+        "src/main/mam/application/workflow-run-factory.test.ts",
+        "src/main/mam/application/system-node-advancement.real-git.test.ts"
+      ],
+      "commands": [
+        "core"
+      ],
+      "status": "passed",
+      "evidence": [
+        "docs/acceptance/final-command-logs/core.log"
+      ]
+    },
+    {
+      "id": "MAM2-UI-001",
+      "criterion": "current-authority-acceptance",
+      "paths": [
+        "src/renderer/src/App.tsx",
+        "src/renderer/src/features/mam/MamRunsPage.test.tsx"
+      ],
+      "commands": [
+        "core",
+        "desktop-seeded"
+      ],
+      "status": "passed",
+      "evidence": [
+        "docs/acceptance/final-command-logs/core.log",
+        "docs/acceptance/final-command-logs/desktop-seeded.log"
+      ]
+    },
+    {
+      "id": "MAM2-STATE-001",
+      "criterion": "current-authority-acceptance",
+      "paths": [
+        "src/main/mam/state-store/git-state-repository.real-git.test.ts"
+      ],
+      "commands": [
+        "core"
+      ],
+      "status": "passed",
+      "evidence": [
+        "docs/acceptance/final-command-logs/core.log"
+      ]
+    },
+    {
+      "id": "MAM2-STATE-002",
+      "criterion": "current-authority-acceptance",
+      "paths": [
+        "src/main/mam/state-store/git-state-repository.real-git.test.ts"
+      ],
+      "commands": [
+        "core"
+      ],
+      "status": "passed",
+      "evidence": [
+        "docs/acceptance/final-command-logs/core.log"
+      ]
+    },
+    {
+      "id": "MAM2-STATE-003",
+      "criterion": "current-authority-acceptance",
+      "paths": [
+        "src/main/mam/state-store/git-state-repository.real-git.test.ts"
+      ],
+      "commands": [
+        "core"
+      ],
+      "status": "passed",
+      "evidence": [
+        "docs/acceptance/final-command-logs/core.log"
+      ]
+    },
+    {
+      "id": "MAM2-STATE-004",
+      "criterion": "current-authority-acceptance",
+      "paths": [
+        "src/main/desktop-seeded-project.smoke.ts"
+      ],
+      "commands": [
+        "core",
+        "desktop-seeded"
+      ],
+      "status": "passed",
+      "evidence": [
+        "docs/acceptance/final-command-logs/core.log",
+        "docs/acceptance/final-command-logs/desktop-seeded.log"
+      ]
+    },
+    {
+      "id": "MAM2-ASSIGN-001",
+      "criterion": "current-authority-acceptance",
+      "paths": [
+        "src/main/mam/application/mam-ui-command-service.real-git.test.ts"
+      ],
+      "commands": [
+        "core"
+      ],
+      "status": "passed",
+      "evidence": [
+        "docs/acceptance/final-command-logs/core.log"
+      ]
+    },
+    {
+      "id": "MAM2-PRESENCE-001",
+      "criterion": "current-authority-acceptance",
+      "paths": [
+        "src/main/mam/state-store/git-state-repository.real-git.test.ts"
+      ],
+      "commands": [
+        "core"
+      ],
+      "status": "passed",
+      "evidence": [
+        "docs/acceptance/final-command-logs/core.log"
+      ]
+    },
+    {
+      "id": "MAM2-EXEC-003",
+      "criterion": "current-authority-acceptance",
+      "paths": [
+        "src/main/mam/executors/pi-rpc-real-process.test.ts"
+      ],
+      "commands": [
+        "core",
+        "pi-probe",
+        "pi-smoke"
+      ],
+      "status": "passed",
+      "evidence": [
+        "docs/acceptance/final-command-logs/core.log",
+        "docs/acceptance/executor-interface-probe.json",
+        "docs/acceptance/final-command-logs/pi-smoke.log"
+      ]
+    },
+    {
+      "id": "MAM2-RESULT-001",
+      "criterion": "current-authority-acceptance",
+      "paths": [
+        "src/main/mam/artifacts/attempt-result-builder.ts",
+        "src/main/mam/application/mam-attempt-execution-service.real-git.test.ts"
+      ],
+      "commands": [
+        "core"
+      ],
+      "status": "passed",
+      "evidence": [
+        "docs/acceptance/final-command-logs/core.log"
+      ]
+    },
+    {
+      "id": "MAM2-RESOURCE-001",
+      "criterion": "current-authority-acceptance",
+      "paths": [
+        "src/main/mam/profiles/attempt-resource-materializer.ts",
+        "src/main/mam/application/executor-capability-bridge.test.ts",
+        "src/main/mam/profiles/attempt-config-resolver.test.ts"
+      ],
+      "commands": [
+        "core"
+      ],
+      "status": "passed",
+      "evidence": [
+        "docs/acceptance/final-command-logs/core.log"
+      ]
+    },
+    {
+      "id": "MAM2-SECURITY-001",
+      "criterion": "current-authority-acceptance",
+      "paths": [
+        "src/main/mam/gateways/capability-gateways.test.ts",
+        "src/main/mam/diagnostics/diagnostics-recorder.ts"
+      ],
+      "commands": [
+        "core"
+      ],
+      "status": "passed",
+      "evidence": [
+        "docs/acceptance/final-command-logs/core.log"
+      ]
+    },
+    {
+      "id": "MAM2-ARTIFACT-001",
+      "criterion": "current-authority-acceptance",
+      "paths": [
+        "src/main/mam/application/attempt-artifact-validator.ts",
+        "src/renderer/src/features/mam/MamAttemptPanel.tsx"
+      ],
+      "commands": [
+        "core"
+      ],
+      "status": "passed",
+      "evidence": [
+        "docs/acceptance/final-command-logs/core.log"
+      ]
+    },
+    {
+      "id": "MAM2-REVIEW-001",
+      "criterion": "current-authority-acceptance",
+      "paths": [
+        "src/main/mam/application/review-panel-advancement.ts",
+        "src/main/mam/review/review-event-flow.test.ts"
+      ],
+      "commands": [
+        "core"
+      ],
+      "status": "passed",
+      "evidence": [
+        "docs/acceptance/final-command-logs/core.log"
+      ]
+    },
+    {
+      "id": "MAM2-MERGE-001",
+      "criterion": "current-authority-acceptance",
+      "paths": [
+        "src/main/mam/application/mam-merge-queue-execution-service.ts",
+        "src/main/mam/application/merge-queue.acceptance.real-git.test.ts",
+        "src/main/mam/application/workflow-run-projection.test.ts"
+      ],
+      "commands": [
+        "core"
+      ],
+      "status": "passed",
+      "evidence": [
+        "docs/acceptance/final-command-logs/core.log"
+      ]
+    },
+    {
+      "id": "MAM2-RECOVERY-001",
+      "criterion": "current-authority-acceptance",
+      "paths": [
+        "src/main/mam/state-store/attempt-recovery-projection.test.ts"
+      ],
+      "commands": [
+        "core"
+      ],
+      "status": "passed",
+      "evidence": [
+        "docs/acceptance/final-command-logs/core.log"
+      ]
+    },
+    {
+      "id": "MAM2-OBS-001",
+      "criterion": "current-authority-acceptance",
+      "paths": [
+        "src/main/mam/diagnostics/diagnostics-recorder.test.ts",
+        "src/main/mam/executors/pi-rpc-real-process.test.ts"
+      ],
+      "commands": [
+        "core",
+        "pi-smoke"
+      ],
+      "status": "passed",
+      "evidence": [
+        "docs/acceptance/final-command-logs/core.log",
+        "docs/acceptance/final-command-logs/pi-smoke.log"
+      ]
+    },
+    {
+      "id": "MAM2-E2E-001",
+      "criterion": "current-authority-acceptance",
+      "paths": [
+        "src/main/mam/application/mam-attempt-execution-service.real-git.test.ts"
+      ],
+      "commands": [
+        "core"
+      ],
+      "status": "passed",
+      "evidence": [
+        "docs/acceptance/final-command-logs/core.log"
+      ]
+    },
+    {
+      "id": "MAM2-E2E-002",
+      "criterion": "current-authority-acceptance",
+      "paths": [
+        "src/main/mam/state-store/git-state-repository.real-git.test.ts"
+      ],
+      "commands": [
+        "core"
+      ],
+      "status": "passed",
+      "evidence": [
+        "docs/acceptance/final-command-logs/core.log"
+      ]
+    },
+    {
+      "id": "MAM2-E2E-003",
+      "criterion": "current-authority-acceptance",
+      "paths": [
+        "src/main/mam/review/review-event-flow.test.ts",
+        "src/main/mam/state-store/git-state-repository.real-git.test.ts",
+        "src/main/mam/application/review-disagreement-resolution.test.ts"
+      ],
+      "commands": [
+        "core"
+      ],
+      "status": "passed",
+      "evidence": [
+        "docs/acceptance/final-command-logs/core.log"
+      ]
+    },
+    {
+      "id": "INV-001",
+      "criterion": "current-authority-acceptance",
+      "paths": [
+        "src/main/mam/scheduler/scheduler-command-authority.ts",
+        "src/main/mam/state-store/git-state-repository.real-git.test.ts"
+      ],
+      "commands": [
+        "core"
+      ],
+      "status": "passed",
+      "evidence": [
+        "docs/acceptance/final-command-logs/core.log"
+      ]
+    },
+    {
+      "id": "INV-002",
+      "criterion": "current-authority-acceptance",
+      "paths": [
+        "src/main/mam/scheduler/scheduler-command-authority.ts",
+        "src/main/mam/state-store/git-state-repository.real-git.test.ts"
+      ],
+      "commands": [
+        "core"
+      ],
+      "status": "passed",
+      "evidence": [
+        "docs/acceptance/final-command-logs/core.log"
+      ]
+    },
+    {
+      "id": "INV-003",
+      "criterion": "current-authority-acceptance",
+      "paths": [
+        "src/main/mam/scheduler/scheduler-command-authority.ts",
+        "src/main/mam/state-store/git-state-repository.real-git.test.ts"
+      ],
+      "commands": [
+        "core"
+      ],
+      "status": "passed",
+      "evidence": [
+        "docs/acceptance/final-command-logs/core.log"
+      ]
+    },
+    {
+      "id": "INV-004",
+      "criterion": "current-authority-acceptance",
+      "paths": [
+        "src/main/mam/scheduler/scheduler-command-authority.ts",
+        "src/main/mam/state-store/git-state-repository.real-git.test.ts"
+      ],
+      "commands": [
+        "core"
+      ],
+      "status": "passed",
+      "evidence": [
+        "docs/acceptance/final-command-logs/core.log"
+      ]
+    },
+    {
+      "id": "INV-005",
+      "criterion": "current-authority-acceptance",
+      "paths": [
+        "src/main/mam/scheduler/scheduler-command-authority.ts",
+        "src/main/mam/state-store/git-state-repository.real-git.test.ts"
+      ],
+      "commands": [
+        "core"
+      ],
+      "status": "passed",
+      "evidence": [
+        "docs/acceptance/final-command-logs/core.log"
+      ]
+    },
+    {
+      "id": "INV-006",
+      "criterion": "current-authority-acceptance",
+      "paths": [
+        "src/main/mam/scheduler/scheduler-command-authority.ts",
+        "src/main/mam/state-store/git-state-repository.real-git.test.ts"
+      ],
+      "commands": [
+        "core"
+      ],
+      "status": "passed",
+      "evidence": [
+        "docs/acceptance/final-command-logs/core.log"
+      ]
+    },
+    {
+      "id": "INV-007",
+      "criterion": "current-authority-acceptance",
+      "paths": [
+        "src/main/mam/scheduler/scheduler-command-authority.ts",
+        "src/main/mam/state-store/git-state-repository.real-git.test.ts"
+      ],
+      "commands": [
+        "core"
+      ],
+      "status": "passed",
+      "evidence": [
+        "docs/acceptance/final-command-logs/core.log"
+      ]
+    },
+    {
+      "id": "INV-008",
+      "criterion": "current-authority-acceptance",
+      "paths": [
+        "src/main/mam/scheduler/scheduler-command-authority.ts",
+        "src/main/mam/state-store/git-state-repository.real-git.test.ts"
+      ],
+      "commands": [
+        "core"
+      ],
+      "status": "passed",
+      "evidence": [
+        "docs/acceptance/final-command-logs/core.log"
+      ]
+    },
+    {
+      "id": "INV-009",
+      "criterion": "current-authority-acceptance",
+      "paths": [
+        "src/main/mam/scheduler/scheduler-command-authority.ts",
+        "src/main/mam/state-store/git-state-repository.real-git.test.ts"
+      ],
+      "commands": [
+        "core"
+      ],
+      "status": "passed",
+      "evidence": [
+        "docs/acceptance/final-command-logs/core.log"
+      ]
+    },
+    {
+      "id": "INV-010",
+      "criterion": "current-authority-acceptance",
+      "paths": [
+        "src/main/mam/scheduler/scheduler-command-authority.ts",
+        "src/main/mam/state-store/git-state-repository.real-git.test.ts"
+      ],
+      "commands": [
+        "core"
+      ],
+      "status": "passed",
+      "evidence": [
+        "docs/acceptance/final-command-logs/core.log"
+      ]
+    },
+    {
+      "id": "INV2-011",
+      "criterion": "current-authority-acceptance",
+      "paths": [
+        "src/main/mam/scheduler/scheduler-command-authority.ts",
+        "src/main/mam/state-store/git-state-repository.real-git.test.ts"
+      ],
+      "commands": [
+        "core"
+      ],
+      "status": "passed",
+      "evidence": [
+        "docs/acceptance/final-command-logs/core.log"
+      ]
+    },
+    {
+      "id": "INV2-012",
+      "criterion": "current-authority-acceptance",
+      "paths": [
+        "src/main/mam/scheduler/scheduler-command-authority.ts",
+        "src/main/mam/state-store/git-state-repository.real-git.test.ts"
+      ],
+      "commands": [
+        "core"
+      ],
+      "status": "passed",
+      "evidence": [
+        "docs/acceptance/final-command-logs/core.log"
+      ]
+    },
+    {
+      "id": "INV2-013",
+      "criterion": "current-authority-acceptance",
+      "paths": [
+        "src/main/mam/scheduler/scheduler-command-authority.ts",
+        "src/main/mam/state-store/git-state-repository.real-git.test.ts"
+      ],
+      "commands": [
+        "core"
+      ],
+      "status": "passed",
+      "evidence": [
+        "docs/acceptance/final-command-logs/core.log"
+      ]
+    },
+    {
+      "id": "INV2-014",
+      "criterion": "current-authority-acceptance",
+      "paths": [
+        "src/main/mam/scheduler/scheduler-command-authority.ts",
+        "src/main/mam/state-store/git-state-repository.real-git.test.ts"
+      ],
+      "commands": [
+        "core"
+      ],
+      "status": "passed",
+      "evidence": [
+        "docs/acceptance/final-command-logs/core.log"
+      ]
+    },
+    {
+      "id": "INV2-015",
+      "criterion": "current-authority-acceptance",
+      "paths": [
+        "src/main/mam/scheduler/scheduler-command-authority.ts",
+        "src/main/mam/state-store/git-state-repository.real-git.test.ts"
+      ],
+      "commands": [
+        "core"
+      ],
+      "status": "passed",
+      "evidence": [
+        "docs/acceptance/final-command-logs/core.log"
+      ]
+    },
+    {
+      "id": "INV2-016",
+      "criterion": "current-authority-acceptance",
+      "paths": [
+        "src/main/mam/scheduler/scheduler-command-authority.ts",
+        "src/main/mam/state-store/git-state-repository.real-git.test.ts"
+      ],
+      "commands": [
+        "core"
+      ],
+      "status": "passed",
+      "evidence": [
+        "docs/acceptance/final-command-logs/core.log"
+      ]
+    }
+  ],
+  "legacyMapping": {
+    "status": "passed",
+    "evidence": "docs/readme/MAM_REQUIREMENTS_DELTA_2026-07-27.md"
+  },
+  "secretCanary": {
+    "status": "passed",
+    "hitPaths": []
+  }
+}

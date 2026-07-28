@@ -1,0 +1,8 @@
+node_modules/
+dist/
+out/
+release/
+coverage/
+.DS_Store
+.mam-local/
+*.log

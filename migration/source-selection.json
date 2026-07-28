@@ -1,0 +1,408 @@
+{
+  "schemaVersion": "1.0.0",
+  "entries": [
+    { "source": "LICENSE", "target": "LICENSE", "reuseLevel": "R0", "notes": "License retained" },
+    {
+      "source": "docs/final-reuse-integration-plan.md",
+      "target": "docs/final-reuse-integration-plan.md",
+      "reuseLevel": "R0",
+      "notes": "Product authority"
+    },
+    {
+      "source": "docs/MAM_CURRENT_PROJECT_REUSE_MATRIX.md",
+      "target": "docs/MAM_CURRENT_PROJECT_REUSE_MATRIX.md",
+      "reuseLevel": "R0",
+      "notes": "Migration authority"
+    },
+    {
+      "source": "docs/readme/MAM_REQUIREMENTS_DELTA_2026-07-27.md",
+      "target": "docs/readme/MAM_REQUIREMENTS_DELTA_2026-07-27.md",
+      "reuseLevel": "R0",
+      "notes": "Requirement traceability"
+    },
+    {
+      "source": "docs/STYLEGUIDE.md",
+      "target": "docs/STYLEGUIDE.md",
+      "reuseLevel": "R0",
+      "notes": "UI design authority"
+    },
+    {
+      "source": "src/renderer/src/assets/main.css",
+      "target": "src/renderer/src/assets/main.css",
+      "reuseLevel": "R1",
+      "notes": "Canonical tokens retained with standalone desktop import adaptation"
+    },
+    {
+      "source": "src/shared/mam/domain/primitives.ts",
+      "target": "src/shared/mam/domain/primitives.ts",
+      "reuseLevel": "R0",
+      "notes": "Copied without behavior changes"
+    },
+    {
+      "source": "src/shared/mam/domain/artifact.ts",
+      "target": "src/shared/mam/domain/artifact.ts",
+      "reuseLevel": "R1",
+      "notes": "Add task and availability metadata"
+    },
+    {
+      "source": "src/shared/mam/domain/review.ts",
+      "target": "src/shared/mam/domain/review.ts",
+      "reuseLevel": "R2",
+      "notes": "Remove Runtime and Session assignment"
+    },
+    {
+      "source": "src/shared/mam/domain/skill-definition.ts",
+      "target": "src/shared/mam/domain/skill-definition.ts",
+      "reuseLevel": "R1",
+      "notes": "Versioned Executor-compatible definition"
+    },
+    {
+      "source": "src/shared/mam/domain/workspace-artifact.ts",
+      "target": "src/shared/mam/domain/workspace-artifact.ts",
+      "reuseLevel": "R1",
+      "notes": "Remove hosted pull-request artifact"
+    },
+    {
+      "source": "src/shared/mam/domain/role.ts",
+      "target": "src/shared/mam/domain/role.ts",
+      "reuseLevel": "R2",
+      "notes": "Flat Role and Run/Attempt snapshot split"
+    },
+    {
+      "source": "src/shared/mam/domain/task.ts",
+      "target": "src/shared/mam/domain/task.ts",
+      "reuseLevel": "R2",
+      "notes": "Manual Assignment and advisory execution notice"
+    },
+    {
+      "source": "src/shared/mam/domain/workflow.ts",
+      "target": "src/shared/mam/domain/workflow.ts",
+      "reuseLevel": "R2",
+      "notes": "New node types and bounded cycles"
+    },
+    {
+      "source": "src/main/mam/artifacts/artifact-store-error.ts",
+      "target": "src/main/mam/artifacts/artifact-store-error.ts",
+      "reuseLevel": "R0",
+      "notes": "Stable error type"
+    },
+    {
+      "source": "src/main/mam/artifacts/artifact-content-validator.ts",
+      "target": "src/main/mam/artifacts/artifact-content-validator.ts",
+      "reuseLevel": "R0",
+      "notes": "Artifact format validation"
+    },
+    {
+      "source": "src/main/mam/artifacts/local-artifact-store.ts",
+      "target": "src/main/mam/artifacts/local-artifact-store.ts",
+      "reuseLevel": "R2",
+      "notes": "Add task metadata and persisted access projection"
+    },
+    {
+      "source": "src/main/mam/artifacts/local-artifact-store.test.ts",
+      "target": "src/main/mam/artifacts/local-artifact-store.test.ts",
+      "reuseLevel": "T",
+      "notes": "Adapt contract tests"
+    },
+    {
+      "source": "src/main/mam/workflow/review-loop-policy.ts",
+      "target": "src/main/mam/workflow/review-loop-policy.ts",
+      "reuseLevel": "R0",
+      "notes": "Immutable Attempt review loop"
+    },
+    {
+      "source": "src/main/mam/workflow/review-loop-policy.test.ts",
+      "target": "src/main/mam/workflow/review-loop-policy.test.ts",
+      "reuseLevel": "T",
+      "notes": "Copied contract tests"
+    },
+    {
+      "source": "src/main/mam/diagnostics/diagnostics-recorder.ts",
+      "target": "src/main/mam/diagnostics/diagnostics-recorder.ts",
+      "reuseLevel": "R1",
+      "notes": "Rename Runtime identity to Executor invocation"
+    },
+    {
+      "source": "src/shared/mam/scheduler-protocol.ts",
+      "target": "src/shared/mam/scheduler-protocol.ts",
+      "reuseLevel": "R2",
+      "notes": "Remove Device and Lease; add Assignment, notice, result, and merge events"
+    },
+    {
+      "source": "src/main/mam/scheduler/kernel.ts",
+      "target": "src/main/mam/scheduler/kernel.ts",
+      "reuseLevel": "R2",
+      "notes": "Retain deterministic authority and replace command switch"
+    },
+    {
+      "source": "src/main/mam/scheduler/scheduler-command-authority.ts",
+      "target": "src/main/mam/scheduler/scheduler-command-authority.ts",
+      "reuseLevel": "R2",
+      "notes": "Replace Device and Runtime authority with user, Scheduler, and Executor"
+    },
+    {
+      "source": "src/main/mam/state-store/scheduler-state-writer.ts",
+      "target": "src/main/mam/state-store/scheduler-state-writer.ts",
+      "reuseLevel": "R0",
+      "notes": "Kernel batch writer port"
+    },
+    {
+      "source": "src/main/mam/state-store/append-only-event-store.ts",
+      "target": "src/main/mam/state-store/append-only-event-store.ts",
+      "reuseLevel": "R2",
+      "notes": "Publish atomic event batches instead of partial event writes"
+    },
+    {
+      "source": "src/main/mam/review/review-aggregation-policy.ts",
+      "target": "src/main/mam/review/review-aggregation-policy.ts",
+      "reuseLevel": "R0",
+      "notes": "Review consensus and human disagreement gate"
+    },
+    {
+      "source": "src/main/mam/review/review-aggregation-policy.test.ts",
+      "target": "src/main/mam/review/review-aggregation-policy.test.ts",
+      "reuseLevel": "T",
+      "notes": "Adapt user authority fixture"
+    },
+    {
+      "source": "src/main/mam/workflow/workflow-compiler.ts",
+      "target": "src/main/mam/workflow/workflow-compiler.ts",
+      "reuseLevel": "R2",
+      "notes": "Retain parsing and deterministic hash; adapt graph analysis to bounded loops"
+    },
+    {
+      "source": "src/main/mam/state-store/github-event-reducer.ts",
+      "target": "src/main/mam/state-store/git-event-projection.ts",
+      "reuseLevel": "R2",
+      "notes": "Provider-neutral deterministic replay and parent revision ordering"
+    },
+    {
+      "source": "src/main/mam/state-store/github-state-projection.ts",
+      "target": "src/main/mam/state-store/git-state-projection.ts",
+      "reuseLevel": "R2",
+      "notes": "Remove Device and Lease projections; project Assignment, Attempt, result, and merge state"
+    },
+    {
+      "source": "src/main/mam/state-store/github-task-event-application.ts",
+      "target": "src/main/mam/state-store/git-event-application.ts",
+      "reuseLevel": "R2",
+      "notes": "Adapt event transitions to final task and Attempt contracts"
+    },
+    {
+      "source": "src/main/mam/state-store/github-state-store.ts",
+      "target": "src/main/mam/state-store/git-state-repository.ts",
+      "reuseLevel": "R2",
+      "notes": "Move Git authority into an independent mam-state worktree"
+    },
+    {
+      "source": "src/main/mam/state-store/github-sync-coordinator.ts",
+      "target": "src/main/mam/state-store/git-command-retry-coordinator.ts",
+      "reuseLevel": "R2",
+      "notes": "Replace stale-event rebase with command regeneration on the latest projection"
+    },
+    {
+      "source": "src/main/mam/state-store/github-state-store.real-git.test.ts",
+      "target": "src/main/mam/state-store/git-state-repository.real-git.test.ts",
+      "reuseLevel": "T",
+      "notes": "Adapt real two-clone convergence fixture to mam-state worktrees"
+    },
+    {
+      "source": "src/main/git/runner.ts",
+      "target": "src/main/mam/state-store/git-command-client.ts",
+      "reuseLevel": "R3",
+      "notes": "Extract a narrow Git 2.25-compatible state command boundary"
+    },
+    {
+      "source": "src/main/mam/state-store/pending-event-queue.ts",
+      "target": "src/main/mam/state-store/git-command-conflict-store.ts",
+      "reuseLevel": "R2",
+      "notes": "Persist original commands and consume conflicts only after a Git resolution event"
+    },
+    {
+      "source": "src/main/mam/state-store/pending-event-queue.test.ts",
+      "target": "src/main/mam/state-store/git-command-conflict-store.test.ts",
+      "reuseLevel": "T",
+      "notes": "Adapt persistence tests to command-level conflicts and resolution metadata"
+    },
+    {
+      "source": "src/main/mam/devices/device-recovery.test.ts",
+      "target": "src/main/mam/state-store/attempt-recovery-projection.test.ts",
+      "reuseLevel": "T",
+      "notes": "Retain crash and unknown-side-effect cases without Device, Lease, or Session recovery"
+    },
+    {
+      "source": "src/shared/mam/runtime-capabilities.ts",
+      "target": "src/main/mam/profiles/profile-compatibility-validator.ts",
+      "reuseLevel": "R2",
+      "notes": "Replace fixed Runtime manifests with adapter-reported Executor capability validation"
+    },
+    {
+      "source": "src/shared/mam/runtime-capabilities.test.ts",
+      "target": "src/main/mam/profiles/profile-compatibility-validator.test.ts",
+      "reuseLevel": "T",
+      "notes": "Adapt negative capability tests to arbitrary Executor and Model combinations"
+    },
+    {
+      "source": "src/main/mam/skills/skill-package-validator.ts",
+      "target": "src/main/mam/skills/skill-package-validator.ts",
+      "reuseLevel": "R1",
+      "notes": "Retain package safety and digest validation for the three supported Executors"
+    },
+    {
+      "source": "src/main/mam/skills/runtime-skill-materializer.ts",
+      "target": "src/main/mam/profiles/attempt-resource-materializer.ts",
+      "reuseLevel": "R2",
+      "notes": "Materialize only frozen Role resources into an immutable per-Attempt bundle"
+    },
+    {
+      "source": "src/main/mam/runtimes/pi/pi-role-materializer.ts",
+      "target": "src/main/mam/profiles/attempt-config-resolver.ts",
+      "reuseLevel": "R3",
+      "notes": "Extract provider/model/resource resolution without Pi Session or container behavior"
+    },
+    {
+      "source": "src/main/mam/runtimes/pi/pi-role-materializer.test.ts",
+      "target": "src/main/mam/profiles/attempt-config-resolver.test.ts",
+      "reuseLevel": "T",
+      "notes": "Adapt isolation tests to Executor-neutral Effective Config and resource bundles"
+    },
+    {
+      "source": "src/main/mam/application/mam-git-run-store.ts",
+      "target": "src/main/mam/application/workflow-run-factory.ts",
+      "reuseLevel": "R2",
+      "notes": "Freeze canonical Workflow, Role, NodeRun and Task catalogs before the create event"
+    },
+    {
+      "source": "src/main/mam/application/mam-workflow-advancement.ts",
+      "target": "src/main/mam/application/workflow-run-projection.ts",
+      "reuseLevel": "R2",
+      "notes": "Project readiness from the authoritative Run Bundle and Git events"
+    },
+    {
+      "source": "src/main/mam/runtimes/orca/orca-hosted-runtime-adapter.ts",
+      "target": "src/main/mam/executors/executor-local-preflight.ts",
+      "reuseLevel": "R3",
+      "notes": "Replace terminal readiness with real structured-interface capability probes"
+    },
+    {
+      "source": "src/main/mam/runtimes/orca/orca-hosted-runtime-adapter.test.ts",
+      "target": "src/main/mam/executors/executor-local-preflight.test.ts",
+      "reuseLevel": "T",
+      "notes": "Replace terminal-idle fixtures with executable/version/structured-interface checks"
+    },
+    {
+      "source": "src/main/mam/runtimes/contracts/runtime-adapter.ts",
+      "target": "src/main/mam/executors/codex-headless-adapter.ts",
+      "reuseLevel": "R2",
+      "notes": "Adapt the lifecycle boundary to one structured Codex invocation and standard result"
+    },
+    {
+      "source": "src/main/mam/runtimes/acp/acp-runtime-adapter.ts",
+      "target": "src/main/mam/executors/codex-jsonl-parser.ts",
+      "reuseLevel": "R3",
+      "notes": "Extract event normalization without ACP Session or idle completion semantics"
+    },
+    {
+      "source": "src/main/mam/runtimes/pi/pi-role-materialization-files.ts",
+      "target": "src/main/mam/executors/codex-headless-invocation.ts",
+      "reuseLevel": "R3",
+      "notes": "Reuse private directory and minimal-environment patterns for isolated Codex config"
+    },
+    {
+      "source": "src/main/mam/runtimes/acp/acp-runtime-adapter.test.ts",
+      "target": "src/main/mam/executors/codex-headless-adapter.test.ts",
+      "reuseLevel": "T",
+      "notes": "Replace ACP fixtures with JSONL, result-file and authority negative tests"
+    },
+    {
+      "source": "src/main/mam/runtimes/pi/pi-runtime-adapter.ts",
+      "target": "src/main/mam/executors/pi-rpc-adapter.ts",
+      "reuseLevel": "R1",
+      "notes": "Adapt Pi RPC lifecycle to Effective Config, Executor events and the standard Attempt Result"
+    },
+    {
+      "source": "src/main/mam/runtimes/pi/pi-event-normalizer.ts",
+      "target": "src/main/mam/executors/pi-rpc-event-normalizer.ts",
+      "reuseLevel": "R1",
+      "notes": "Normalize Pi events and usage without Session or idle-completion semantics"
+    },
+    {
+      "source": "src/main/mam/runtimes/pi/pi-rpc-log-writer.ts",
+      "target": "src/main/mam/executors/pi-rpc-log-writer.ts",
+      "reuseLevel": "R0",
+      "notes": "Retain serialized private RPC logs with recursive secret redaction"
+    },
+    {
+      "source": "src/main/mam/runtimes/pi/pi-role-materialization-files.ts",
+      "target": "src/main/mam/executors/pi-rpc-invocation.ts",
+      "reuseLevel": "R1",
+      "notes": "Retain host-only private directories, exact credentials and minimal environment; remove containers and Extensions"
+    },
+    {
+      "source": "src/main/mam/runtimes/pi/pi-isolated-launcher-source.ts",
+      "target": "src/main/mam/executors/pi-isolated-launcher-source.ts",
+      "reuseLevel": "R1",
+      "notes": "Retain the host launcher, remove Docker paths and redact stderr before it reaches the RPC client"
+    },
+    {
+      "source": "src/main/mam/runtimes/pi/pi-runtime-adapter.test.ts",
+      "target": "src/main/mam/executors/pi-rpc-adapter.test.ts",
+      "reuseLevel": "T",
+      "notes": "Adapt lifecycle tests to structured Result authority, Attempt isolation and idle negative cases"
+    },
+    {
+      "source": "src/main/mam/runtimes/pi/pi-real-process.test.ts",
+      "target": "src/main/mam/executors/pi-rpc-real-process.test.ts",
+      "reuseLevel": "T",
+      "notes": "Run the installed Pi CLI through RPC against a deterministic local provider"
+    },
+    {
+      "source": "src/main/mam/runtimes/pi/pi-event-normalizer.test.ts",
+      "target": "src/main/mam/executors/pi-rpc-event-normalizer.test.ts",
+      "reuseLevel": "T",
+      "notes": "Retain event, usage, unknown-event and secret-canary coverage under Executor contracts"
+    },
+    {
+      "source": "acceptance/fixtures/pi/fake-rpc-server.mjs",
+      "target": "src/main/mam/executors/test-fixtures/pi-rpc-fake-server.mjs",
+      "reuseLevel": "T",
+      "notes": "Adapt the official RpcClient fake process to return a standard Attempt Result"
+    },
+    {
+      "source": "src/main/mam/runtimes/acp/acp-protocol.ts",
+      "target": "src/main/mam/executors/grok-acp-protocol.ts",
+      "reuseLevel": "R3",
+      "notes": "Scope JSON-RPC contracts to the verified Grok ACP stdio interface"
+    },
+    {
+      "source": "src/main/mam/runtimes/acp/acp-stdio-transport.ts",
+      "target": "src/main/mam/executors/grok-acp-transport.ts",
+      "reuseLevel": "R3",
+      "notes": "Retain framing and correlation with an exact minimal environment and redacted stderr"
+    },
+    {
+      "source": "src/main/mam/runtimes/acp/acp-runtime-adapter.ts",
+      "target": "src/main/mam/executors/grok-cli-adapter.ts",
+      "reuseLevel": "R3",
+      "notes": "Replace Session and idle semantics with Executor events and mandatory standard Result ingestion"
+    },
+    {
+      "source": "src/main/mam/runtimes/profiles/runtime-profile-materializer.ts",
+      "target": "src/main/mam/executors/grok-cli-invocation.ts",
+      "reuseLevel": "R2",
+      "notes": "Retain isolated GROK_HOME and custom model config without generic Runtime or Session products"
+    },
+    {
+      "source": "src/main/mam/runtimes/acp/acp-runtime-adapter.test.ts",
+      "target": "src/main/mam/executors/grok-cli-adapter.test.ts",
+      "reuseLevel": "T",
+      "notes": "Adapt ACP fixtures to standard Result, isolation, secret canary and idle negative cases"
+    },
+    {
+      "source": "acceptance/fixtures/acp/fake-acp-server.mjs",
+      "target": "src/main/mam/executors/test-fixtures/grok-acp-fake-server.mjs",
+      "reuseLevel": "T",
+      "notes": "Adapt the framed fake process to the verified Grok initialize/session/prompt surface"
+    }
+  ]
+}
