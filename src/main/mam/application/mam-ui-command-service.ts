@@ -1,47 +1,33 @@
 import { randomUUID } from 'node:crypto'
 import {
   MamAssignTaskInputSchema,
+  MamDeleteRoleProfileInputSchema,
   MamRecoverAttemptInputSchema,
-  MamResolveApprovalGateInputSchema,
+  MamReassignTaskInputSchema,
   MamSaveLocalSettingsInputSchema,
   MamSaveProfileInputSchema,
   MamSelectAttemptInputSchema,
   MamSaveWorkflowInputSchema
 } from '../../../shared/mam/application-command'
 import { MamEntityIdSchema } from '../../../shared/mam/domain/primitives'
-import type { SchedulerCommand } from '../../../shared/mam/scheduler-protocol'
 import type { MamUiSnapshot } from '../../../shared/mam/ui-projection'
-import type { WorkflowDefinition } from '../../../shared/mam/domain/workflow'
 import { GitCommandRetryCoordinator } from '../state-store/git-command-retry-coordinator'
 import type { GitStateRepository } from '../state-store/git-state-repository'
 import type { MamUiQueryService } from './mam-ui-query-service'
 import { compileWorkflow } from '../workflow/workflow-compiler'
 import type { MamLocalSettingsStore } from '../profiles/mam-local-settings-store'
-import { validateSkillPackage } from '../skills/skill-package-validator'
-import type { MamSkillDefinition } from '../../../shared/mam/domain/skill-definition'
 import { submitReviewAndAggregate } from './mam-review-command-service'
 import { resolveReviewDisagreementAndPublishMerge } from './mam-review-disagreement-command'
-import { advanceDeterministicNodes } from './deterministic-node-advancement'
-
-type CommandPublisher = Readonly<{
-  executeAndPush(input: { command: SchedulerCommand; schedulerId: string }): unknown
-}>
-
-type WritableRegistry<T = unknown> = Readonly<{
-  save(input: unknown): T
-  listVersions(id: string): readonly T[]
-}>
-
-export type MamUiWritableProfiles = Readonly<{
-  roles: WritableRegistry
-  executors: WritableRegistry
-  providers: WritableRegistry
-  models: WritableRegistry
-  skills: WritableRegistry<MamSkillDefinition>
-  mcpServers: WritableRegistry
-  knowledgeBases: WritableRegistry
-  workflows: WritableRegistry<WorkflowDefinition>
-}>
+import { saveModelConnectionProfiles } from './model-connection-command'
+import { MamProviderModelCatalogService } from './provider-model-catalog'
+import { importSkillProfile } from './skill-import-command'
+import type { MamLocalSecretWriter, MamUiWritableProfiles } from './mam-profile-write-ports'
+import type { MamModelCatalogResult } from '../../../shared/mam/model-catalog'
+import { publishTaskAssignmentCommand } from './task-assignment-command'
+import {
+  resolveApprovalGateAndPublishDelivery,
+  type CommandPublisher
+} from './approval-gate-delivery-command'
 
 export type MamUiCommandServiceOptions = Readonly<{
   userId: string
@@ -73,7 +59,9 @@ export class MamUiCommandService {
     options: MamUiCommandServiceOptions,
     repository?: GitStateRepository,
     private readonly profiles?: MamUiWritableProfiles,
-    private readonly localSettings?: MamLocalSettingsStore
+    private readonly localSettings?: MamLocalSettingsStore,
+    private readonly localSecrets?: MamLocalSecretWriter,
+    private readonly modelCatalog = new MamProviderModelCatalogService()
   ) {
     this.userId = MamEntityIdSchema.parse(options.userId)
     this.schedulerId = MamEntityIdSchema.parse(options.schedulerId)
@@ -89,19 +77,28 @@ export class MamUiCommandService {
 
   assignTask(input: unknown): MamUiSnapshot {
     const parsed = MamAssignTaskInputSchema.parse(input)
-    this.requireCommands().executeAndPush({
-      command: {
-        schemaVersion: '1.0.0',
-        commandId: this.nextId('command'),
-        issuedAt: this.now(),
-        workflowRunId: parsed.workflowRunId,
-        taskId: parsed.taskId,
-        actor: { kind: 'user', userId: this.userId },
-        type: 'assign_task',
-        roleProfileId: parsed.roleProfileId,
-        roleProfileVersion: parsed.roleProfileVersion
-      },
-      schedulerId: this.schedulerId
+    publishTaskAssignmentCommand({
+      request: parsed,
+      type: 'assign_task',
+      userId: this.userId,
+      schedulerId: this.schedulerId,
+      commandId: this.nextId('command'),
+      issuedAt: this.now(),
+      publisher: this.requireCommands()
+    })
+    return this.query.getSnapshot()
+  }
+
+  reassignTask(input: unknown): MamUiSnapshot {
+    const parsed = MamReassignTaskInputSchema.parse(input)
+    publishTaskAssignmentCommand({
+      request: parsed,
+      type: 'reassign_task',
+      userId: this.userId,
+      schedulerId: this.schedulerId,
+      commandId: this.nextId('command'),
+      issuedAt: this.now(),
+      publisher: this.requireCommands()
     })
     return this.query.getSnapshot()
   }
@@ -119,7 +116,7 @@ export class MamUiCommandService {
         issuedAt: this.now(),
         workflowRunId: parsed.workflowRunId,
         taskId: parsed.taskId,
-        actor: { kind: 'scheduler', schedulerId: this.schedulerId },
+        actor: { kind: 'user', userId: this.userId },
         type: 'recover_attempt',
         previousAttemptId: parsed.previousAttemptId,
         directive,
@@ -167,24 +164,12 @@ export class MamUiCommandService {
   }
 
   resolveApprovalGate(input: unknown): MamUiSnapshot {
-    const parsed = MamResolveApprovalGateInputSchema.parse(input)
-    this.requireCommands().executeAndPush({
-      command: {
-        schemaVersion: '1.0.0',
-        commandId: this.nextId('command'),
-        issuedAt: this.now(),
-        workflowRunId: parsed.workflowRunId,
-        actor: { kind: 'user', userId: this.userId },
-        type: 'resolve_approval_gate',
-        gateId: parsed.gateId,
-        option: parsed.option
-      },
-      schedulerId: this.schedulerId
-    })
-    advanceDeterministicNodes({
+    resolveApprovalGateAndPublishDelivery({
+      request: input,
       repository: this.requireRepository(),
-      workflowRunId: parsed.workflowRunId,
+      commands: this.requireCommands(),
       schedulerId: this.schedulerId,
+      userId: this.userId,
       nextCommandId: () => this.nextId('command'),
       now: this.now
     })
@@ -237,6 +222,33 @@ export class MamUiCommandService {
     return this.query.getSnapshot()
   }
 
+  saveModelConnection(input: unknown): MamUiSnapshot {
+    saveModelConnectionProfiles(
+      input,
+      this.requireProfiles(),
+      this.localSettings,
+      this.localSecrets
+    )
+    return this.query.getSnapshot()
+  }
+
+  fetchModelCatalog(input: unknown): Promise<MamModelCatalogResult> {
+    return this.modelCatalog.fetch(input)
+  }
+
+  deleteRoleProfile(input: unknown): MamUiSnapshot {
+    const parsed = MamDeleteRoleProfileInputSchema.parse(input)
+    const profiles = this.requireProfiles()
+    if (!profiles.roles.deactivate) {
+      throw new MamUiCommandServiceError(
+        'profile_catalog_unavailable',
+        'The Role Profile catalog cannot delete profiles'
+      )
+    }
+    profiles.roles.deactivate(parsed.roleProfileId)
+    return this.query.getSnapshot()
+  }
+
   async importSkill(sourcePath: string): Promise<MamUiSnapshot> {
     const profiles = this.requireProfiles()
     if (!this.localSettings) {
@@ -245,25 +257,11 @@ export class MamUiCommandService {
         'The local Settings store is unavailable'
       )
     }
-    const validated = await validateSkillPackage(sourcePath)
-    const id = validated.declaredId ?? normalizeSkillId(validated.name)
-    const version = profiles.skills.listVersions(id).length + 1
-    profiles.skills.save({
-      schemaVersion: '1.0.0',
-      id,
-      version,
-      name: validated.name,
-      description: validated.description,
-      supportedExecutors: validated.supportedExecutors ?? ['codex-cli', 'grok-cli', 'pi-rpc'],
-      contentDigest: validated.contentDigest,
-      enabled: true,
-      importedAt: this.now()
-    })
-    this.localSettings.upsertSkillBinding({
-      id: `binding.${id}`,
-      skillId: id,
-      sourcePath: validated.canonicalPath,
-      bindingIdentity: this.localSettings.get().bindingIdentity
+    await importSkillProfile({
+      sourcePath,
+      profiles,
+      localSettings: this.localSettings,
+      now: this.now
     })
     return this.query.getSnapshot()
   }
@@ -298,12 +296,4 @@ export class MamUiCommandService {
   private nextId(kind: 'command' | 'attempt'): string {
     return MamEntityIdSchema.parse(this.createId(kind))
   }
-}
-
-function normalizeSkillId(name: string): string {
-  const normalized = name
-    .toLowerCase()
-    .replace(/[^a-z0-9._:-]+/gu, '-')
-    .replace(/^-+|-+$/gu, '')
-  return MamEntityIdSchema.parse(normalized || 'skill.imported')
 }

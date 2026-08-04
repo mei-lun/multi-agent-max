@@ -15,7 +15,8 @@ import {
 import {
   ReviewAggregationSchema,
   ReviewDecisionSchema,
-  ReviewDisagreementResolutionSchema
+  ReviewDisagreementResolutionSchema,
+  ReviewSubjectSchema
 } from './domain/review'
 import { RoleProfileSchema } from './domain/role'
 import {
@@ -51,14 +52,27 @@ export const MamUiTaskSnapshotSchema = z
       'needs_attention'
     ]),
     roleProfileId: MamEntityIdSchema.optional(),
+    roleProfileVersion: z.number().int().positive().optional(),
     assignedByUserId: MamEntityIdSchema.optional(),
     dependencies: z.array(MamEntityIdSchema),
     recommendedRoleProfileIds: z.array(MamEntityIdSchema),
     allowedRoleProfileIds: z.array(MamEntityIdSchema),
     attemptIds: z.array(MamEntityIdSchema),
     selectedAttemptId: MamEntityIdSchema.optional(),
+    reviewSubject: ReviewSubjectSchema.optional(),
     reviewIds: z.array(MamEntityIdSchema),
     executionWarningCount: z.number().int().nonnegative()
+  })
+  .strict()
+
+export const MamUiAttemptInterruptionSchema = z
+  .object({
+    stage: z.enum(['executor', 'result_validation', 'artifact_validation']),
+    code: z.string().min(1).max(120),
+    detail: z.string().min(1).max(500).optional(),
+    summary: z.string().min(1).max(500),
+    nextStep: z.string().min(1).max(800),
+    worktreeRetained: z.boolean()
   })
   .strict()
 
@@ -77,6 +91,7 @@ export const MamUiAttemptSnapshotSchema = z
     ]),
     roleInstanceId: MamEntityIdSchema.optional(),
     effectiveConfigHash: Sha256Schema.optional(),
+    interruption: MamUiAttemptInterruptionSchema.optional(),
     result: AttemptResultSchema.optional()
   })
   .strict()
@@ -85,6 +100,7 @@ export const MamUiRunSnapshotSchema = z
   .object({
     run: WorkflowRunSchema,
     definitionName: z.string().min(1),
+    roleProfiles: z.array(RoleProfileSchema),
     revision: Sha256Schema,
     stateHash: Sha256Schema,
     nodeRuns: z.array(NodeRunSchema),
@@ -130,7 +146,8 @@ export const MamUiSnapshotSchema = z
       .object({
         projectDirectory: z.string().min(1),
         stateDirectory: z.string().min(1),
-        remote: z.string().min(1),
+        collaborationMode: z.enum(['local', 'distributed']),
+        remote: z.string().min(1).optional(),
         branch: z.string().min(1)
       })
       .strict()

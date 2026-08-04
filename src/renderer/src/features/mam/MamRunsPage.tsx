@@ -1,228 +1,278 @@
-import { AlertTriangle, ChevronDown, History } from 'lucide-react'
+import { History, Search } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import type {
+  MamAssignTaskInput,
+  MamCancelWorkflowRunInput,
   MamRecoverAttemptInput,
+  MamReassignTaskInput,
+  MamRestartWorkflowRunInput,
+  MamSaveLocalSettingsInput,
   MamResolveApprovalGateInput,
-  MamSelectAttemptInput
+  MamSelectAttemptInput,
+  MamStartAttemptInput
 } from '../../../../shared/mam/application-command'
-import type { MamUiRunSnapshot, MamUiSnapshot } from '../../../../shared/mam/ui-projection'
 import type {
   MamAttemptDiff,
   MamGetAttemptDiffInput
 } from '../../../../shared/mam/attempt-inspection'
+import type { MamUiSnapshot } from '../../../../shared/mam/ui-projection'
+import type { MamLocalSettings } from '../../../../shared/mam/local-settings'
 import { Badge } from '../../components/ui/badge'
-import { useUiLocale, type UiLocale } from '../../i18n/ui-locale'
-import { MamStateBadge } from './MamStateBadge'
-import { MamAttemptPanel, MamTaskContractList } from './MamAttemptPanel'
-import { MamApprovalGatePanel } from './MamApprovalGatePanel'
+import { Button } from '../../components/ui/button'
+import { Input } from '../../components/ui/input'
+import { useUiLocale } from '../../i18n/ui-locale'
+import { MamRunRecordPanel } from './MamRunRecordPanel'
+import {
+  countMamRunRecords,
+  filterMamRunRecords,
+  MAM_RUN_RECORD_VIEWS,
+  mamRunRecordViewLabel,
+  preferredMamRunRecordView,
+  type MamRunRecordView
+} from './mam-run-record-filter'
+import { activateMamLocalCollaboration } from './mam-local-collaboration-settings'
 
 export function MamRunsPage({
   runs,
   roles,
+  workflows = [],
+  focusedRunId,
+  localSettings,
   pending,
+  onReassignTask,
+  onAssignTask,
+  onStartAttempt,
+  onCancelWorkflowRun,
+  onRestartWorkflowRun,
+  collaborationErrors,
+  onSaveLocalSettings,
   onRecoverAttempt,
   onSelectAttempt,
   onGetAttemptDiff,
-  onResolveApprovalGate
+  onResolveApprovalGate,
+  onOpenIntegration
 }: Readonly<{
   runs: MamUiSnapshot['runs']
   roles: MamUiSnapshot['roles']
+  workflows?: MamUiSnapshot['workflows']
+  focusedRunId?: string
+  localSettings: MamLocalSettings
   pending: boolean
+  onReassignTask(input: MamReassignTaskInput): Promise<void>
+  onAssignTask(input: MamAssignTaskInput): Promise<void>
+  onStartAttempt(input: MamStartAttemptInput): Promise<void>
+  onCancelWorkflowRun(input: MamCancelWorkflowRunInput): Promise<void>
+  onRestartWorkflowRun(input: MamRestartWorkflowRunInput): Promise<MamUiSnapshot>
+  collaborationErrors: ReadonlyMap<string, string>
+  onSaveLocalSettings(input: MamSaveLocalSettingsInput): Promise<void>
   onRecoverAttempt(input: MamRecoverAttemptInput): Promise<void>
   onSelectAttempt(input: MamSelectAttemptInput): Promise<void>
   onGetAttemptDiff(input: MamGetAttemptDiffInput): Promise<MamAttemptDiff>
   onResolveApprovalGate(input: MamResolveApprovalGateInput): Promise<void>
+  onOpenIntegration?(workflowRunId: string): void
 }>): React.JSX.Element {
-  const roleNames = new Map(roles.map((role) => [role.id, role.displayName]))
-  const sortedRuns = [...runs].sort((left, right) =>
-    right.run.updatedAt.localeCompare(left.run.updatedAt)
+  const [view, setView] = useState<MamRunRecordView>(() =>
+    focusedRunId ? 'all' : preferredMamRunRecordView(runs)
   )
+  const [query, setQuery] = useState(focusedRunId ?? '')
+  useEffect(() => {
+    if (!focusedRunId) return
+    setView('all')
+    setQuery(focusedRunId)
+  }, [focusedRunId])
+  const { locale } = useUiLocale()
+  const roleNames = new Map(roles.map((role) => [role.id, role.displayName]))
+  const counts = countMamRunRecords(runs)
+  const visibleRuns = filterMamRunRecords(runs, view, query)
   return (
-    <section aria-labelledby="runs-title" className="mx-auto w-full max-w-5xl space-y-6 p-6">
+    <section aria-labelledby="runs-title" className="mx-auto w-full max-w-5xl space-y-5 p-6">
       <div className="space-y-1">
         <h1 id="runs-title" className="text-xl font-semibold">
           Runs
         </h1>
         <p className="text-sm text-muted-foreground">
-          Task state and Attempt lineage rebuilt from authoritative Git events.
+          Separate current work, records that need attention, and immutable history.
         </p>
       </div>
 
-      {sortedRuns.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border p-10 text-center">
-          <History className="mx-auto mb-3 size-7 text-muted-foreground" />
-          <p className="text-sm font-medium">No Workflow Runs</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Attach a project with MAM state from Overview to inspect run history.
-          </p>
-        </div>
+      {runs.length === 0 ? (
+        <EmptyRuns />
       ) : (
-        <div className="space-y-4">
-          {sortedRuns.map((run) => (
-            <RunPanel
-              key={run.run.id}
-              run={run}
-              roleNames={roleNames}
-              pending={pending}
-              onRecoverAttempt={onRecoverAttempt}
-              onSelectAttempt={onSelectAttempt}
-              onGetAttemptDiff={onGetAttemptDiff}
-              onResolveApprovalGate={onResolveApprovalGate}
+        <>
+          <RunRecordToolbar
+            view={view}
+            query={query}
+            counts={counts}
+            onViewChange={setView}
+            onQueryChange={setQuery}
+          />
+          <p className="text-xs text-muted-foreground" aria-live="polite">
+            {formatRunCount(visibleRuns.length, runs.length, locale)}
+          </p>
+          {visibleRuns.length === 0 ? (
+            <EmptyFilteredRuns
+              query={query}
+              view={view}
+              onClear={() => {
+                setQuery('')
+                setView('all')
+              }}
             />
-          ))}
-        </div>
+          ) : (
+            <div className="space-y-3">
+              {visibleRuns.map((run, index) => (
+                <MamRunRecordPanel
+                  key={run.run.id}
+                  run={run}
+                  roleNames={roleNames}
+                  localSettings={localSettings}
+                  locale={locale}
+                  pending={pending}
+                  defaultOpen={index === 0}
+                  onAssignTask={onAssignTask}
+                  onStartAttempt={onStartAttempt}
+                  onCancelWorkflowRun={async (input) => {
+                    await onCancelWorkflowRun(input)
+                    setQuery('')
+                    setView('current')
+                  }}
+                  onRestartWorkflowRun={async (input) => {
+                    const snapshot = await onRestartWorkflowRun(input)
+                    const replacement = snapshot.runs.find(
+                      (candidate) =>
+                        !runs.some((existing) => existing.run.id === candidate.run.id) &&
+                        candidate.run.definitionId === run.run.definitionId
+                    )
+                    if (!replacement) {
+                      throw new Error('The replacement Run could not be identified.')
+                    }
+                    await onSaveLocalSettings({
+                      settings: activateMamLocalCollaboration({
+                        settings: localSettings,
+                        run: replacement,
+                        replaceRunId: run.run.id
+                      })
+                    })
+                    setQuery('')
+                    setView('current')
+                  }}
+                  {...(collaborationErrors.get(run.run.id)
+                    ? { executionError: collaborationErrors.get(run.run.id)! }
+                    : {})}
+                  onSaveLocalSettings={onSaveLocalSettings}
+                  onReassignTask={onReassignTask}
+                  onRecoverAttempt={onRecoverAttempt}
+                  onSelectAttempt={onSelectAttempt}
+                  onGetAttemptDiff={onGetAttemptDiff}
+                  onResolveApprovalGate={onResolveApprovalGate}
+                  {...(workflows.find(
+                    (definition) =>
+                      definition.id === run.run.definitionId &&
+                      definition.version === run.run.definitionVersion
+                  )
+                    ? {
+                        definition: workflows.find(
+                          (definition) =>
+                            definition.id === run.run.definitionId &&
+                            definition.version === run.run.definitionVersion
+                        )!
+                      }
+                    : {})}
+                  {...(onOpenIntegration
+                    ? { onOpenIntegration: () => onOpenIntegration(run.run.id) }
+                    : {})}
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
     </section>
   )
 }
 
-function RunPanel({
-  run,
-  roleNames,
-  pending,
-  onRecoverAttempt,
-  onSelectAttempt,
-  onGetAttemptDiff,
-  onResolveApprovalGate
+function RunRecordToolbar({
+  view,
+  query,
+  counts,
+  onViewChange,
+  onQueryChange
 }: Readonly<{
-  run: MamUiRunSnapshot
-  roleNames: ReadonlyMap<string, string>
-  pending: boolean
-  onRecoverAttempt(input: MamRecoverAttemptInput): Promise<void>
-  onSelectAttempt(input: MamSelectAttemptInput): Promise<void>
-  onGetAttemptDiff(input: MamGetAttemptDiffInput): Promise<MamAttemptDiff>
-  onResolveApprovalGate(input: MamResolveApprovalGateInput): Promise<void>
+  view: MamRunRecordView
+  query: string
+  counts: Readonly<Record<MamRunRecordView, number>>
+  onViewChange(view: MamRunRecordView): void
+  onQueryChange(value: string): void
 }>): React.JSX.Element {
-  const { locale } = useUiLocale()
   return (
-    <article className="overflow-hidden rounded-xl border border-border">
-      <header className="flex flex-wrap items-start justify-between gap-3 bg-card px-4 py-3">
-        <div className="min-w-0">
-          <h2 className="truncate text-sm font-semibold">{run.definitionName}</h2>
-          <p className="mt-1 truncate font-mono text-xs text-muted-foreground">{run.run.id}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">
-            Updated {formatTimestamp(run.run.updatedAt, locale)}
-          </span>
-          <MamStateBadge status={run.run.status} />
-        </div>
-      </header>
-
-      <div className="grid grid-cols-3 border-y border-border bg-muted/30 px-4 py-2 text-xs">
-        <RunMetric label="Tasks" value={run.tasks.length} />
-        <RunMetric label="Attempts" value={run.attempts.length} />
-        <RunMetric label="Ready" value={run.readyTaskIds.length} />
+    <div className="space-y-3 rounded-xl border border-border bg-card p-3">
+      <div className="flex flex-wrap gap-1" role="group" aria-label="Run status filter">
+        {MAM_RUN_RECORD_VIEWS.map((candidate) => (
+          <Button
+            key={candidate}
+            variant={view === candidate ? 'secondary' : 'ghost'}
+            size="xs"
+            aria-pressed={view === candidate}
+            onClick={() => onViewChange(candidate)}
+          >
+            {mamRunRecordViewLabel(candidate)}
+            <Badge variant="outline">{counts[candidate]}</Badge>
+          </Button>
+        ))}
       </div>
-
-      <MamApprovalGatePanel run={run} pending={pending} onResolve={onResolveApprovalGate} />
-
-      {run.tasks.length === 0 ? (
-        <p className="px-4 py-6 text-center text-xs text-muted-foreground">
-          This Run has no projected Tasks.
-        </p>
-      ) : (
-        <div>
-          {run.tasks.map((task) => {
-            const attempts = task.attemptIds.flatMap((attemptId) => {
-              const attempt = run.attempts.find((candidate) => candidate.id === attemptId)
-              return attempt ? [attempt] : []
-            })
-            return (
-              <details key={task.id} className="group border-b border-border last:border-b-0">
-                <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset">
-                  <ChevronDown className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{task.title}</p>
-                    <p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">
-                      {task.id}
-                    </p>
-                  </div>
-                  {task.executionWarningCount > 0 && (
-                    <span
-                      className="flex items-center gap-1 text-xs text-destructive"
-                      aria-label={`${task.executionWarningCount} execution warnings`}
-                    >
-                      <AlertTriangle className="size-3.5" /> {task.executionWarningCount}
-                    </span>
-                  )}
-                  <span className="hidden text-xs text-muted-foreground sm:inline">
-                    {task.roleProfileId
-                      ? (roleNames.get(task.roleProfileId) ?? task.roleProfileId)
-                      : 'Unassigned'}
-                  </span>
-                  <MamStateBadge status={task.status} />
-                </summary>
-
-                <div className="space-y-3 border-t border-border bg-muted/20 px-4 py-4 pl-11">
-                  <div className="flex flex-wrap gap-2">
-                    <Badge variant="outline">{task.kind.replaceAll('_', ' ')}</Badge>
-                    {task.dependencies.map((dependency) => (
-                      <Badge key={dependency} variant="secondary">
-                        depends on {dependency}
-                      </Badge>
-                    ))}
-                  </div>
-                  {task.specification && <p className="text-xs">{task.specification}</p>}
-                  <div className="grid gap-3 text-xs sm:grid-cols-2">
-                    <MamTaskContractList
-                      label="Inputs"
-                      values={(task.inputArtifacts ?? []).map(
-                        (artifact) => `${artifact.artifactId} v${artifact.version}`
-                      )}
-                    />
-                    <MamTaskContractList
-                      label="Expected outputs"
-                      values={(task.outputContracts ?? []).map(
-                        (contract) => `${contract.artifactType} · ${contract.format}`
-                      )}
-                    />
-                  </div>
-                  {attempts.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">No Attempts recorded.</p>
-                  ) : (
-                    <ol className="space-y-3 border-l border-border pl-4">
-                      {attempts.map((attempt, index) => (
-                        <li key={attempt.id} className="relative">
-                          <span className="absolute top-2 -left-[1.22rem] size-2 rounded-full border border-border bg-card" />
-                          <MamAttemptPanel
-                            workflowRunId={run.run.id}
-                            attempt={attempt}
-                            selected={task.selectedAttemptId === attempt.id}
-                            latest={index === attempts.length - 1}
-                            pending={pending}
-                            onRecoverAttempt={onRecoverAttempt}
-                            onSelectAttempt={onSelectAttempt}
-                            onGetAttemptDiff={onGetAttemptDiff}
-                          />
-                        </li>
-                      ))}
-                    </ol>
-                  )}
-                </div>
-              </details>
-            )
-          })}
-        </div>
-      )}
-    </article>
-  )
-}
-
-function RunMetric({
-  label,
-  value
-}: Readonly<{ label: string; value: number }>): React.JSX.Element {
-  return (
-    <div className="text-center">
-      <span className="font-semibold tabular-nums">{value}</span>{' '}
-      <span className="text-muted-foreground">{label}</span>
+      <div className="relative">
+        <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          className="pl-8"
+          type="search"
+          value={query}
+          aria-label="Search Runs by workflow or ID"
+          placeholder="Search Runs by workflow or ID"
+          onChange={(event) => onQueryChange(event.target.value)}
+        />
+      </div>
     </div>
   )
 }
 
-function formatTimestamp(value: string, locale: UiLocale): string {
-  return new Intl.DateTimeFormat(locale, {
-    dateStyle: 'medium',
-    timeStyle: 'short'
-  }).format(new Date(value))
+function EmptyRuns(): React.JSX.Element {
+  return (
+    <div className="rounded-xl border border-dashed border-border p-10 text-center">
+      <History className="mx-auto mb-3 size-7 text-muted-foreground" />
+      <p className="text-sm font-medium">No Workflow Runs</p>
+      <p className="mt-1 text-xs text-muted-foreground">
+        Attach a project with MAM state from Overview to inspect run history.
+      </p>
+    </div>
+  )
+}
+
+function EmptyFilteredRuns({
+  query,
+  view,
+  onClear
+}: Readonly<{
+  query: string
+  view: MamRunRecordView
+  onClear(): void
+}>): React.JSX.Element {
+  return (
+    <div className="rounded-xl border border-dashed border-border p-8 text-center">
+      <p className="text-sm font-medium">No matching Run records</p>
+      <p className="mt-1 text-xs text-muted-foreground">
+        {query
+          ? 'Try another workflow name or Run ID.'
+          : `There are no ${mamRunRecordViewLabel(view).toLocaleLowerCase()} Run records.`}
+      </p>
+      <Button className="mt-3" variant="outline" size="xs" onClick={onClear}>
+        Show all records
+      </Button>
+    </div>
+  )
+}
+
+function formatRunCount(shown: number, total: number, locale: 'en' | 'zh-CN'): string {
+  return locale === 'zh-CN'
+    ? `显示 ${shown} 条 · 共 ${total} 条`
+    : `${shown} shown · ${total} total`
 }

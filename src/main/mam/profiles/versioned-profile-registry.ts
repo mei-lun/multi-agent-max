@@ -5,6 +5,7 @@ import {
   readFileSync,
   readdirSync,
   renameSync,
+  unlinkSync,
   writeFileSync
 } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
@@ -101,6 +102,27 @@ export class VersionedProfileRegistry<T extends VersionedProfile> {
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
       throw error
+    }
+  }
+
+  deactivate(id: string): void {
+    const active = this.readActiveVersions()
+    if (!(id in active)) return
+    const { [id]: _removed, ...remaining } = active
+    this.writeActiveVersions(remaining)
+  }
+
+  discardInactive(id: string, version: number): void {
+    if (this.readActiveVersions()[id] === version) {
+      throw new VersionedProfileRegistryError(
+        'active_profile_discard_forbidden',
+        `${id} version ${version} is active`
+      )
+    }
+    try {
+      unlinkSync(this.versionPath(id, version))
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
     }
   }
 

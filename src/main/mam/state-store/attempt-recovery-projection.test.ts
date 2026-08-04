@@ -14,11 +14,14 @@ describe('Attempt recovery projection', () => {
     run.execute(assignmentCommand())
     run.execute(announcementCommand('attempt.old'))
     run.execute(recoveryCommand({ kind: 'start_new_attempt', newAttemptId: 'attempt.new' }))
+    run.execute(reassignmentCommand())
 
     expect(run.projection.attempts['attempt.old']?.status).toBe('blocked')
     expect(run.projection.attempts['attempt.new']?.status).toBe('recovery_planned')
     expect(run.projection.tasks['task.recovery']).toMatchObject({
       status: 'ready',
+      roleProfileId: 'role.reviewer',
+      roleProfileVersion: 2,
       activeAttemptIds: [],
       knownAttemptIds: ['attempt.old', 'attempt.new']
     })
@@ -38,6 +41,85 @@ describe('Attempt recovery projection', () => {
     expect(() => run.execute(announcementCommand('attempt.unsafe'))).toThrow(
       expect.objectContaining({ code: 'reconciliation_required' })
     )
+    expect(() =>
+      run.execute(recoveryCommand({ kind: 'start_new_attempt', newAttemptId: 'attempt.new' }))
+    ).toThrow(expect.objectContaining({ code: 'user_authority_required' }))
+
+    run.execute(reconciliationResolutionCommand())
+    expect(run.projection.tasks['task.recovery']?.status).toBe('ready')
+    expect(run.projection.attempts['attempt.old']?.status).toBe('blocked')
+    expect(run.projection.attempts['attempt.new']).toMatchObject({
+      previousAttemptId: 'attempt.old',
+      status: 'recovery_planned'
+    })
+  })
+
+  it('requires every concurrent interruption to be reconciled before reassignment', () => {
+    const run = new RecoveryRun()
+    run.execute(assignmentCommand())
+    run.execute(announcementCommand('attempt.first'))
+    run.execute(startCommand('attempt.first'))
+    run.execute(announcementCommand('attempt.second'))
+    run.execute(startCommand('attempt.second'))
+
+    run.execute(recoveryCommand({ kind: 'needs_reconciliation' }, 'attempt.first'))
+    expect(run.projection.tasks['task.recovery']).toMatchObject({
+      status: 'needs_attention',
+      activeAttemptIds: ['attempt.second']
+    })
+    expect(() => run.execute(resultCommand('attempt.first'))).toThrow(
+      expect.objectContaining({ code: 'stale_attempt' })
+    )
+    expect(() => run.execute(resultCommand('attempt.second'))).toThrow(
+      expect.objectContaining({ code: 'reconciliation_required' })
+    )
+    run.execute(recoveryCommand({ kind: 'needs_reconciliation' }, 'attempt.second'))
+    expect(run.projection.tasks['task.recovery']?.activeAttemptIds).toEqual([])
+
+    run.execute(reconciliationResolutionCommand('attempt.first', 'attempt.first-replacement'))
+    expect(run.projection.tasks['task.recovery']?.status).toBe('needs_attention')
+    expect(() => run.execute(reassignmentCommand())).toThrow(
+      expect.objectContaining({ code: 'invalid_transition' })
+    )
+
+    run.execute(reconciliationResolutionCommand('attempt.second', 'attempt.second-replacement'))
+    run.execute(reassignmentCommand())
+    expect(run.projection.tasks['task.recovery']).toMatchObject({
+      status: 'ready',
+      roleProfileId: 'role.reviewer',
+      roleProfileVersion: 2,
+      activeAttemptIds: []
+    })
+    expect(run.projection.attempts['attempt.first-replacement']).toMatchObject({
+      previousAttemptId: 'attempt.first',
+      status: 'blocked'
+    })
+    expect(run.projection.attempts['attempt.second-replacement']).toMatchObject({
+      previousAttemptId: 'attempt.second',
+      status: 'recovery_planned'
+    })
+  })
+
+  it('supersedes a recovery plan when another concurrent Attempt succeeds', () => {
+    const run = new RecoveryRun()
+    run.execute(assignmentCommand())
+    run.execute(announcementCommand('attempt.interrupted'))
+    run.execute(startCommand('attempt.interrupted'))
+    run.execute(announcementCommand('attempt.successful'))
+    run.execute(startCommand('attempt.successful'))
+    run.execute(
+      recoveryCommand(
+        { kind: 'start_new_attempt', newAttemptId: 'attempt.unneeded-replacement' },
+        'attempt.interrupted'
+      )
+    )
+
+    run.execute(resultCommand('attempt.successful'))
+    expect(run.projection.attempts['attempt.unneeded-replacement']?.status).toBe('blocked')
+    expect(run.projection.tasks['task.recovery']).toMatchObject({
+      status: 'submitted',
+      selectedAttemptId: 'attempt.successful'
+    })
   })
 })
 
@@ -54,8 +136,11 @@ class RecoveryRun {
             taskId: command.taskId,
             taskDefinition: {
               initialStatus: 'waiting_role_assignment' as const,
-              allowedRoleProfileIds: ['role.developer'],
-              roleCatalogVersions: new Map([['role.developer', new Set([1])]])
+              allowedRoleProfileIds: ['role.developer', 'role.reviewer'],
+              roleCatalogVersions: new Map([
+                ['role.developer', new Set([1])],
+                ['role.reviewer', new Set([2])]
+              ])
             }
           }
         : {})
@@ -87,14 +172,89 @@ function announcementCommand(attemptId: string): SchedulerCommand {
   }
 }
 
-function recoveryCommand(
-  directive: { kind: 'start_new_attempt'; newAttemptId: string } | { kind: 'needs_reconciliation' }
+function startCommand(attemptId: string): SchedulerCommand {
+  return {
+    ...baseCommand(`command.start.${attemptId}`),
+    actor: { kind: 'scheduler', schedulerId: 'scheduler.1' },
+    type: 'start_attempt',
+    attemptId,
+    roleInstanceId: `role-instance.${attemptId}`,
+    executorInvocationId: `executor-invocation.${attemptId}`,
+    effectiveConfigSnapshotId: `effective.${attemptId}`,
+    effectiveConfigHash: 'a'.repeat(64)
+  }
+}
+
+function resultCommand(attemptId: string): SchedulerCommand {
+  return {
+    ...baseCommand(`command.result.${attemptId}`),
+    actor: {
+      kind: 'executor',
+      roleInstanceId: `role-instance.${attemptId}`,
+      attemptId,
+      executorInvocationId: `executor-invocation.${attemptId}`
+    },
+    type: 'submit_attempt_result',
+    attemptId,
+    result: {
+      schemaVersion: '1.0.0',
+      status: 'submitted',
+      summary: 'Completed successfully.',
+      verifications: [],
+      risks: [],
+      followUps: [],
+      artifacts: [],
+      usage: { status: 'unknown' },
+      system: {
+        workflowRunId: 'run.recovery',
+        nodeRunId: 'node-run.recovery',
+        taskId: 'task.recovery',
+        attemptId,
+        roleInstanceId: `role-instance.${attemptId}`,
+        executorInvocationId: `executor-invocation.${attemptId}`,
+        effectiveConfigHash: 'a'.repeat(64),
+        submittedCommit: 'abcdef1',
+        createdAt: '2026-07-27T14:05:00Z'
+      }
+    }
+  }
+}
+
+function reassignmentCommand(): SchedulerCommand {
+  return {
+    ...baseCommand('command.reassign'),
+    actor: { kind: 'user', userId: 'user.owner' },
+    type: 'reassign_task',
+    previousRoleProfileId: 'role.developer',
+    previousRoleProfileVersion: 1,
+    roleProfileId: 'role.reviewer',
+    roleProfileVersion: 2
+  }
+}
+
+function reconciliationResolutionCommand(
+  previousAttemptId = 'attempt.old',
+  newAttemptId = 'attempt.new'
 ): SchedulerCommand {
   return {
-    ...baseCommand(`command.recover.${directive.kind}`),
+    ...baseCommand(`command.resolve-reconciliation.${previousAttemptId}`),
+    actor: { kind: 'user', userId: 'user.owner' },
+    type: 'recover_attempt',
+    previousAttemptId,
+    directive: { kind: 'start_new_attempt', newAttemptId },
+    reason: 'Verified external state and confirmed replay is safe.'
+  }
+}
+
+function recoveryCommand(
+  directive: { kind: 'start_new_attempt'; newAttemptId: string } | { kind: 'needs_reconciliation' },
+  previousAttemptId = 'attempt.old'
+): SchedulerCommand {
+  return {
+    ...baseCommand(`command.recover.${previousAttemptId}.${directive.kind}`),
     actor: { kind: 'scheduler', schedulerId: 'scheduler.1' },
     type: 'recover_attempt',
-    previousAttemptId: 'attempt.old',
+    previousAttemptId,
     directive,
     reason: 'The Executor process exited without a terminal result.'
   }

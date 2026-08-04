@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0.0",
-  "generatedAt": "2026-07-28T08:23:34.141Z",
+  "generatedAt": "2026-07-28T20:27:09.907Z",
   "sourceRoot": "/Users/mei/Documents/multi-agent-max",
   "sourceHead": "f78b2682061a351ec41330d766de6040e622261c",
   "targetRoot": "/Users/mei/Dev/Github-Poj/multi-agent-max",
@@ -24,9 +24,9 @@
       "notes": "Product authority",
       "sourceBytes": 65344,
       "sourceSha256": "15ad839bc585f27305bb8fd18e001b718879eafd8e27a016a18f4af797066bb3",
-      "targetBytes": 65344,
-      "targetSha256": "15ad839bc585f27305bb8fd18e001b718879eafd8e27a016a18f4af797066bb3",
-      "changedDuringMigration": false,
+      "targetBytes": 67133,
+      "targetSha256": "bb3b71dd09af2e878ae3a4ecf31f760f5421cccad76f165a3f8abd9074a1ed02",
+      "changedDuringMigration": true,
       "sourceGitStatus": "?? docs/final-reuse-integration-plan.md"
     },
     {
@@ -48,9 +48,9 @@
       "notes": "Requirement traceability",
       "sourceBytes": 17059,
       "sourceSha256": "a192ec6476cd94e15784138a4e9351b53d94b7137bb823c300cdfcaa385189a5",
-      "targetBytes": 17059,
-      "targetSha256": "a192ec6476cd94e15784138a4e9351b53d94b7137bb823c300cdfcaa385189a5",
-      "changedDuringMigration": false,
+      "targetBytes": 32009,
+      "targetSha256": "88a6faa365e08a67f8c226f45220b97c507ea5226e3a88f8acc3b247fe8b475a",
+      "changedDuringMigration": true,
       "sourceGitStatus": "?? docs/readme/MAM_REQUIREMENTS_DELTA_2026-07-27.md"
     },
     {
@@ -576,8 +576,8 @@
       "notes": "Replace terminal readiness with real structured-interface capability probes",
       "sourceBytes": 8254,
       "sourceSha256": "29a61b2f04e71a1eb7ae62d5c57e0a022a76df75628142a9ddce09420877766e",
-      "targetBytes": 8221,
-      "targetSha256": "88911dc40047f6b4d3458f6430794c1747d3d5a8098b5f902cec88d2ea3d0e61",
+      "targetBytes": 8548,
+      "targetSha256": "ed83b484c5ece26effbb60fa4a194c07a1a2139bf26683c4e38519641607e06d",
       "changedDuringMigration": true,
       "sourceGitStatus": ""
     },
@@ -684,8 +684,8 @@
       "notes": "Retain host-only private directories, exact credentials and minimal environment; remove containers and Extensions",
       "sourceBytes": 6878,
       "sourceSha256": "d156a5b9d51b90aec9cbbdc54a202cff9304ef1fe2156d881efd97cf0f9b7351",
-      "targetBytes": 10203,
-      "targetSha256": "743c7adfd8f91f7d316d200b3ead90cf007327d549f1dd6d85cd3d760be06082",
+      "targetBytes": 10276,
+      "targetSha256": "5462c8d45980cc6b7c3c21a1474189132cb7e0308f9d0f33657473a910ed49d9",
       "changedDuringMigration": true,
       "sourceGitStatus": "M src/main/mam/runtimes/pi/pi-role-materialization-files.ts"
     },

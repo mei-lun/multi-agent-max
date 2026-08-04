@@ -21,6 +21,7 @@ describe('MAM Profile Application commands', () => {
     temporaryDirectories.push(root)
     const profiles = new ProfileCatalog(join(root, 'catalog'))
     const settings = new MamLocalSettingsStore(join(root, 'local-settings.json'), 'machine.test')
+    const savedSecrets = new Map<string, string>()
     const query = new MamUiQueryService(
       {
         roles: profiles.roles,
@@ -41,7 +42,8 @@ describe('MAM Profile Application commands', () => {
       { userId: 'user.owner', schedulerId: 'scheduler.desktop', now: () => '2026-07-28T20:00:00Z' },
       undefined,
       profiles,
-      settings
+      settings,
+      { save: (secretRef, value) => savedSecrets.set(secretRef, value) }
     )
 
     const afterExecutor = service.saveProfile({
@@ -58,6 +60,14 @@ describe('MAM Profile Application commands', () => {
       { id: 'executor.codex', version: 1, kind: 'codex-cli' }
     ])
 
+    const afterRole = service.saveProfile({ kind: 'role', profile: roleProfile() })
+    expect(afterRole.roles).toMatchObject([
+      { id: 'role.requirements', displayName: 'Requirements' }
+    ])
+    const afterRoleDelete = service.deleteRoleProfile({ roleProfileId: 'role.requirements' })
+    expect(afterRoleDelete.roles).toEqual([])
+    expect(profiles.roles.listVersions('role.requirements')).toHaveLength(1)
+
     const afterSettings = service.saveLocalSettings({
       settings: {
         ...settings.get(),
@@ -69,6 +79,26 @@ describe('MAM Profile Application commands', () => {
       bindingIdentity: 'machine.test',
       gitExecutable: '/usr/local/bin/git'
     })
+
+    const afterConnection = service.saveModelConnection({
+      displayName: 'Relay coding model',
+      protocol: 'openai-completions',
+      baseUrl: 'https://relay.example.com/v1',
+      apiKey: 'sk-local-test-value',
+      remoteModelId: 'relay-model-v2'
+    })
+    const provider = afterConnection.providers[0]!
+    expect(provider).toMatchObject({
+      protocol: 'openai-completions',
+      baseUrl: 'https://relay.example.com/v1'
+    })
+    expect(afterConnection.models[0]).toMatchObject({
+      displayName: 'Relay coding model',
+      providerProfileId: provider.id,
+      remoteModelId: 'relay-model-v2'
+    })
+    expect(savedSecrets.get(provider.secretRef!)).toBe('sk-local-test-value')
+    expect(JSON.stringify(afterConnection)).not.toContain('sk-local-test-value')
 
     const skillDirectory = join(root, 'skill-package')
     mkdirSync(skillDirectory)
@@ -90,3 +120,38 @@ describe('MAM Profile Application commands', () => {
     ])
   })
 })
+
+function roleProfile() {
+  return {
+    schemaVersion: '1.0.0' as const,
+    id: 'role.requirements',
+    version: 1,
+    displayName: 'Requirements',
+    execution: { executorProfileId: 'executor.codex', modelProfileId: 'model.codex' },
+    systemPromptRef: 'inline:Write requirements.',
+    skillBindings: [{ skillId: 'skill.requirements' }],
+    mcpBindings: [],
+    knowledgeBaseBindings: [],
+    tools: [],
+    permissions: {
+      readPaths: [],
+      writePaths: [],
+      allowedCommands: [],
+      deniedCommands: [],
+      allowedNetworkHosts: [],
+      requireApprovalFor: []
+    },
+    budget: {
+      maxInputTokens: 10_000,
+      maxOutputTokens: 4_000,
+      maxCostUsd: 2,
+      maxDurationSeconds: 600
+    },
+    retry: { maxAttempts: 2, initialBackoffMs: 1_000, maxBackoffMs: 10_000 },
+    contextPolicy: {
+      maxContextTokens: 10_000,
+      compaction: 'disabled' as const,
+      includePreviousAttempts: true
+    }
+  }
+}

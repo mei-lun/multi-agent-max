@@ -32,6 +32,11 @@ describe('MAM UI command service with real Git state', () => {
           roleProfileId: 'role.builder',
           roleProfileVersion: 2,
           contentHash: 'a'.repeat(64)
+        },
+        {
+          roleProfileId: 'role.reviewer',
+          roleProfileVersion: 1,
+          contentHash: 'b'.repeat(64)
         }
       ],
       createdAt: '2026-07-28T21:00:00Z'
@@ -73,6 +78,20 @@ describe('MAM UI command service with real Git state', () => {
       roleProfileId: 'role.builder',
       assignedByUserId: 'user.owner'
     })
+    const reassigned = service.reassignTask({
+      workflowRunId: bundle.run.id,
+      taskId,
+      previousRoleProfileId: 'role.builder',
+      previousRoleProfileVersion: 2,
+      roleProfileId: 'role.reviewer',
+      roleProfileVersion: 1
+    })
+    expect(reassigned.runs[0]?.tasks[0]).toMatchObject({
+      status: 'ready',
+      roleProfileId: 'role.reviewer',
+      roleProfileVersion: 1,
+      assignedByUserId: 'user.owner'
+    })
 
     coordinator.executeAndPush({
       command: {
@@ -103,6 +122,20 @@ describe('MAM UI command service with real Git state', () => {
       ])
     )
     expect(recovered.runs[0]?.tasks[0]?.status).toBe('ready')
+    const corrected = service.reassignTask({
+      workflowRunId: bundle.run.id,
+      taskId,
+      previousRoleProfileId: 'role.reviewer',
+      previousRoleProfileVersion: 1,
+      roleProfileId: 'role.builder',
+      roleProfileVersion: 2
+    })
+    expect(corrected.runs[0]?.tasks[0]).toMatchObject({
+      status: 'ready',
+      roleProfileId: 'role.builder',
+      roleProfileVersion: 2,
+      attemptIds: ['attempt.crashed', 'attempt.replacement']
+    })
   })
 
   it('rejects a command before a project is attached', () => {
@@ -165,7 +198,7 @@ function workflow(): WorkflowDefinition {
         id: 'build',
         type: 'role_task',
         recommendedRoleProfileIds: ['role.builder'],
-        allowedRoleProfileIds: ['role.builder'],
+        allowedRoleProfileIds: ['role.builder', 'role.reviewer'],
         instruction: 'Build the command fixture.',
         workspaceMode: 'write',
         inputs: [],

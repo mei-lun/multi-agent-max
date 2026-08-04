@@ -10,7 +10,7 @@ export function mamProfileTemplate(
   if (kind === 'role') {
     return {
       schemaVersion: '1.0.0',
-      id: 'role.new',
+      id: availableId('role.new', snapshot.roles),
       version: 1,
       displayName: 'New role',
       execution: {
@@ -47,7 +47,7 @@ export function mamProfileTemplate(
   }
   if (kind === 'executor') {
     return {
-      id: 'executor.pi',
+      id: availableId('executor.pi', snapshot.executors),
       version: 1,
       kind: 'pi-rpc',
       executableRef: 'pi',
@@ -56,7 +56,7 @@ export function mamProfileTemplate(
   }
   if (kind === 'provider') {
     return {
-      id: 'provider.pi',
+      id: availableId('provider.pi', snapshot.providers),
       version: 1,
       protocol: 'openai-completions',
       secretRef: 'secret.pi'
@@ -64,7 +64,7 @@ export function mamProfileTemplate(
   }
   if (kind === 'model') {
     return {
-      id: 'model.default',
+      id: availableId('model.default', snapshot.models),
       version: 1,
       displayName: 'Default model',
       providerProfileId: snapshot.providers[0]?.id ?? 'provider.pi',
@@ -79,7 +79,7 @@ export function mamProfileTemplate(
   }
   if (kind === 'mcp') {
     return {
-      id: 'mcp.new',
+      id: availableId('mcp.new', snapshot.mcpServers),
       version: 1,
       displayName: 'New MCP server',
       transport: 'stdio',
@@ -88,7 +88,7 @@ export function mamProfileTemplate(
   }
   if (kind === 'knowledge') {
     return {
-      id: 'knowledge.project',
+      id: availableId('knowledge.project', snapshot.knowledgeBases),
       version: 1,
       displayName: 'Project files',
       kind: 'project-files',
@@ -106,4 +106,12 @@ export function mamProfileTemplate(
     enabled: true,
     importedAt: new Date(0).toISOString()
   }
+}
+
+function availableId(base: string, profiles: readonly Readonly<{ id: string }>[]): string {
+  const ids = new Set(profiles.map((profile) => profile.id))
+  if (!ids.has(base)) return base
+  let suffix = 2
+  while (ids.has(`${base}.${suffix}`)) suffix += 1
+  return `${base}.${suffix}`
 }

@@ -35,6 +35,7 @@ describe('native desktop package scripts', () => {
     const metadata = JSON.parse(readFileSync(join(projectDirectory, 'package.json'), 'utf8'))
     assert.equal(metadata.scripts['package:mac'], 'sh config/scripts/package-mac.sh')
     assert.match(metadata.scripts['package:win'], /package-windows\.ps1/)
+    assert.equal(metadata.build.electronDist, 'node_modules/electron/dist')
     assert.match(readFileSync(windowsScript, 'utf8'), /electron-builder[\s\S]*--win/)
   })
 

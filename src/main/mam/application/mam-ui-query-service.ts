@@ -1,5 +1,4 @@
 import type { RoleProfile } from '../../../shared/mam/domain/role'
-import type { ArtifactContract, ArtifactRef } from '../../../shared/mam/domain/artifact'
 import type { WorkflowRunBundle } from '../../../shared/mam/domain/run-bundle'
 import type { WorkflowDefinition } from '../../../shared/mam/domain/workflow'
 import type {
@@ -19,8 +18,16 @@ import {
   type MamUiSnapshot
 } from '../../../shared/mam/ui-projection'
 import type { WorkflowRunProjection } from '../state-store/git-state-projection'
+import type { DiagnosticsRecorder } from '../diagnostics/diagnostics-recorder'
 import { projectWorkflowRun } from './workflow-run-projection'
 import { reviewDisagreementResolution } from './review-disagreement-resolution'
+import {
+  indexAttemptInterruptions,
+  projectAttemptInterruption,
+  type AttemptInterruptionIndex
+} from './attempt-interruption-projection'
+import { projectBinding } from './mam-ui-project-binding'
+import { collectMamUiTaskDefinitions } from './mam-ui-task-definitions'
 
 type ActiveRegistry<T> = Readonly<{ listActive(): readonly T[] }>
 
@@ -42,7 +49,8 @@ export type MamUiRunSource = Readonly<{
   rebuild(workflowRunId: string): WorkflowRunProjection
   projectDirectory?: string
   stateDirectory?: string
-  remote?: string
+  remote?: string | undefined
+  collaborationMode?: 'local' | 'distributed'
   branch?: string
 }>
 
@@ -50,7 +58,9 @@ export class MamUiQueryService {
   constructor(
     private readonly profiles: MamUiProfileSource,
     private runs: MamUiRunSource | undefined,
-    private readonly now: () => string = () => new Date().toISOString()
+    private readonly now: () => string = () => new Date().toISOString(),
+    private readonly diagnostics?: Pick<DiagnosticsRecorder, 'list'> &
+      Partial<Pick<DiagnosticsRecorder, 'listInterruptionEvents'>>
   ) {}
 
   setRunSource(runs: MamUiRunSource): void {
@@ -59,6 +69,9 @@ export class MamUiQueryService {
 
   getSnapshot(): MamUiSnapshot {
     const generatedAt = this.now()
+    const interruptions = indexAttemptInterruptions(
+      this.diagnostics?.listInterruptionEvents?.() ?? this.diagnostics?.list() ?? []
+    )
     const runSnapshots: MamUiRunSnapshot[] = []
     const issues: MamUiSnapshot['issues'][number][] = []
     for (const workflowRunId of this.runs?.listWorkflowRunIds() ?? []) {
@@ -72,7 +85,9 @@ export class MamUiQueryService {
           })
           continue
         }
-        runSnapshots.push(createRunSnapshot(bundle, this.runs!.rebuild(workflowRunId), generatedAt))
+        runSnapshots.push(
+          createRunSnapshot(bundle, this.runs!.rebuild(workflowRunId), generatedAt, interruptions)
+        )
       } catch (error) {
         issues.push({
           code: errorCode(error),
@@ -100,28 +115,18 @@ export class MamUiQueryService {
   }
 }
 
-function projectBinding(runs: MamUiRunSource | undefined): object {
-  if (!runs?.projectDirectory || !runs.stateDirectory || !runs.remote || !runs.branch) return {}
-  return {
-    projectBinding: {
-      projectDirectory: runs.projectDirectory,
-      stateDirectory: runs.stateDirectory,
-      remote: runs.remote,
-      branch: runs.branch
-    }
-  }
-}
-
 function createRunSnapshot(
   bundle: WorkflowRunBundle,
   projection: WorkflowRunProjection,
-  generatedAt: string
+  generatedAt: string,
+  interruptions: AttemptInterruptionIndex
 ): MamUiRunSnapshot {
   const application = projectWorkflowRun(bundle, projection, generatedAt)
-  const taskDefinitions = collectTaskDefinitions(bundle, projection)
+  const taskDefinitions = collectMamUiTaskDefinitions(bundle, projection)
   return {
     run: application.run,
     definitionName: bundle.definition.name,
+    roleProfiles: [...(bundle.roleProfiles ?? [])],
     revision: projection.revision,
     stateHash: projection.stateHash,
     nodeRuns: [...application.nodeRuns],
@@ -157,29 +162,35 @@ function createRunSnapshot(
               ? 'waiting_role_assignment'
               : (definition?.initialStatus ?? 'waiting_dependencies')),
           ...(task?.roleProfileId ? { roleProfileId: task.roleProfileId } : {}),
+          ...(task?.roleProfileVersion ? { roleProfileVersion: task.roleProfileVersion } : {}),
           ...(task?.assignedByUserId ? { assignedByUserId: task.assignedByUserId } : {}),
           dependencies: [...(definition?.dependencies ?? [])],
           recommendedRoleProfileIds: [...(definition?.recommendedRoleProfileIds ?? [])],
           allowedRoleProfileIds: [...(definition?.allowedRoleProfileIds ?? [])],
           attemptIds: [...(task?.knownAttemptIds ?? [])],
           ...(task?.selectedAttemptId ? { selectedAttemptId: task.selectedAttemptId } : {}),
+          ...(definition?.reviewSubject ? { reviewSubject: definition.reviewSubject } : {}),
           reviewIds: [...(task?.reviewIds ?? [])],
           executionWarningCount: task?.executionWarnings.length ?? 0
         }
       }),
     attempts: Object.entries(projection.attempts)
       .sort(([left], [right]) => left.localeCompare(right))
-      .map(([id, attempt]) => ({
-        id,
-        taskId: attempt.taskId,
-        ...(attempt.previousAttemptId ? { previousAttemptId: attempt.previousAttemptId } : {}),
-        status: attempt.status,
-        ...(attempt.roleInstanceId ? { roleInstanceId: attempt.roleInstanceId } : {}),
-        ...(attempt.effectiveConfigHash
-          ? { effectiveConfigHash: attempt.effectiveConfigHash }
-          : {}),
-        ...(attempt.result ? { result: attempt.result } : {})
-      })),
+      .map(([id, attempt]) => {
+        const interruption = projectAttemptInterruption(bundle.run.id, attempt, interruptions)
+        return {
+          id,
+          taskId: attempt.taskId,
+          ...(attempt.previousAttemptId ? { previousAttemptId: attempt.previousAttemptId } : {}),
+          status: attempt.status,
+          ...(attempt.roleInstanceId ? { roleInstanceId: attempt.roleInstanceId } : {}),
+          ...(attempt.effectiveConfigHash
+            ? { effectiveConfigHash: attempt.effectiveConfigHash }
+            : {}),
+          ...(interruption ? { interruption } : {}),
+          ...(attempt.result ? { result: attempt.result } : {})
+        }
+      }),
     reviews: sortCreatedAt(Object.values(projection.reviews)),
     reviewAggregations: sortCreatedAt(Object.values(projection.reviewAggregations)),
     reviewDisagreementResolutions: Object.values(projection.reviewAggregations).flatMap(
@@ -192,78 +203,6 @@ function createRunSnapshot(
     mergeConflictTasks: sortCreatedAt(Object.values(projection.mergeConflictTasks)),
     mergeConflictResolutions: sortCompletedAt(Object.values(projection.mergeConflictResolutions))
   }
-}
-
-type UiTaskDefinition = Readonly<{
-  title: string
-  specification: string
-  inputArtifacts: readonly ArtifactRef[]
-  outputContracts: readonly ArtifactContract[]
-  kind: MamUiRunSnapshot['tasks'][number]['kind']
-  initialStatus: 'waiting_dependencies' | 'waiting_role_assignment'
-  dependencies: readonly string[]
-  recommendedRoleProfileIds: readonly string[]
-  allowedRoleProfileIds: readonly string[]
-}>
-
-function collectTaskDefinitions(
-  bundle: WorkflowRunBundle,
-  projection: WorkflowRunProjection
-): ReadonlyMap<string, UiTaskDefinition> {
-  const definitions = new Map<string, UiTaskDefinition>()
-  for (const task of bundle.taskCatalog) {
-    definitions.set(task.id, {
-      title: task.title,
-      specification: task.specification,
-      inputArtifacts: task.inputArtifacts,
-      outputContracts: task.outputContracts,
-      kind: 'static',
-      initialStatus: task.initialStatus,
-      dependencies: task.dependencies,
-      recommendedRoleProfileIds: task.recommendedRoleProfileIds,
-      allowedRoleProfileIds: task.allowedRoleProfileIds
-    })
-  }
-  for (const task of Object.values(projection.dynamicTasks)) {
-    definitions.set(task.id, {
-      title: task.title,
-      specification: task.specification,
-      inputArtifacts: task.inputArtifacts,
-      outputContracts: task.outputContracts,
-      kind: 'dynamic',
-      initialStatus: task.initialStatus,
-      dependencies: task.dependencies,
-      recommendedRoleProfileIds: task.recommendedRoleProfileIds,
-      allowedRoleProfileIds: task.allowedRoleProfileIds
-    })
-  }
-  for (const task of Object.values(projection.reviewTasks)) {
-    definitions.set(task.id, {
-      title: task.title,
-      specification: task.specification,
-      inputArtifacts: task.inputArtifacts,
-      outputContracts: task.outputContracts,
-      kind: 'review',
-      initialStatus: task.initialStatus,
-      dependencies: [],
-      recommendedRoleProfileIds: task.recommendedRoleProfileIds,
-      allowedRoleProfileIds: task.allowedRoleProfileIds
-    })
-  }
-  for (const task of Object.values(projection.mergeConflictTasks)) {
-    definitions.set(task.id, {
-      title: `Resolve merge conflict for ${task.parentTaskId}`,
-      specification: `Resolve pinned merge conflicts for ${task.queueEntryId}.`,
-      inputArtifacts: [],
-      outputContracts: [],
-      kind: 'merge_conflict',
-      initialStatus: task.initialStatus,
-      dependencies: [task.parentTaskId],
-      recommendedRoleProfileIds: task.recommendedRoleProfileIds,
-      allowedRoleProfileIds: task.allowedRoleProfileIds
-    })
-  }
-  return definitions
 }
 
 function sortCreatedAt<T extends Readonly<{ id: string; createdAt: string }>>(

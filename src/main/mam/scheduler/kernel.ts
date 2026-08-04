@@ -65,11 +65,29 @@ export class SchedulerKernel {
           planHash: command.planHash,
           roleCatalogHash: command.roleCatalogHash
         }
+      case 'cancel_workflow_run':
+        return {
+          ...base,
+          type: 'workflow_run_cancelled',
+          userId: command.actor.kind === 'user' ? command.actor.userId : '',
+          reason: command.reason
+        }
       case 'assign_task':
         return {
           ...base,
           type: 'task_assigned',
           taskId: command.taskId,
+          roleProfileId: command.roleProfileId,
+          roleProfileVersion: command.roleProfileVersion,
+          assignedByUserId: command.actor.kind === 'user' ? command.actor.userId : ''
+        }
+      case 'reassign_task':
+        return {
+          ...base,
+          type: 'task_reassigned',
+          taskId: command.taskId,
+          previousRoleProfileId: command.previousRoleProfileId,
+          previousRoleProfileVersion: command.previousRoleProfileVersion,
           roleProfileId: command.roleProfileId,
           roleProfileVersion: command.roleProfileVersion,
           assignedByUserId: command.actor.kind === 'user' ? command.actor.userId : ''
@@ -103,7 +121,8 @@ export class SchedulerKernel {
           taskId: command.taskId,
           previousAttemptId: command.previousAttemptId,
           directive: command.directive,
-          reason: command.reason
+          reason: command.reason,
+          ...(command.actor.kind === 'user' ? { recoveredByUserId: command.actor.userId } : {})
         }
       case 'submit_attempt_result':
         return {

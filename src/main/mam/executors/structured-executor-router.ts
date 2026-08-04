@@ -3,6 +3,7 @@ import type { GrokCliAdapter } from './grok-cli-adapter'
 import type { PiRpcAdapter } from './pi-rpc-adapter'
 import type { AttemptResult } from '../../../shared/mam/domain/attempt-result'
 import type { ExecutorEvent, ExecutorUsage } from '../../../shared/mam/executor-events'
+import type { ExecutorCapabilityBridge } from '../application/executor-capability-bridge'
 
 type CodexInput = Parameters<CodexHeadlessAdapter['execute']>[0]
 type GrokInput = Parameters<GrokCliAdapter['execute']>[0]
@@ -10,13 +11,14 @@ type PiInput = Parameters<PiRpcAdapter['execute']>[0]
 
 export type StructuredExecutorInput = CodexInput &
   Pick<GrokInput, 'systemPrompt'> &
-  Pick<PiInput, never>
+  Readonly<{ capabilityBridge?: ExecutorCapabilityBridge }>
 
 export type StructuredExecutorResult = Readonly<{
   invocation: unknown
   events: readonly ExecutorEvent[]
   usage: ExecutorUsage
-  result: AttemptResult
+  result?: AttemptResult
+  assistantText?: string | null
   stderr: string
 }>
 

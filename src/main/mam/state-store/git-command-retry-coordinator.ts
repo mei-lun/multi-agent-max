@@ -95,7 +95,7 @@ export class GitCommandRetryCoordinator {
       } catch (error) {
         if (
           !(error instanceof GitStateRepositoryError) ||
-          error.code !== 'remote_non_fast_forward' ||
+          !['remote_non_fast_forward', 'local_non_fast_forward'].includes(error.code) ||
           attemptNumber === maxAttempts
         ) {
           throw error

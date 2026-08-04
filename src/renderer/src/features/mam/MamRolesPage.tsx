@@ -1,18 +1,24 @@
-import { Bot, BrainCircuit, Database, ShieldCheck } from 'lucide-react'
+import { Bot, BrainCircuit, Database } from 'lucide-react'
 import type { MamUiSnapshot } from '../../../../shared/mam/ui-projection'
 import { Badge } from '../../components/ui/badge'
-import type { MamSaveProfileInput } from '../../../../shared/mam/application-command'
+import type {
+  MamDeleteRoleProfileInput,
+  MamSaveProfileInput
+} from '../../../../shared/mam/application-command'
+import { MamDeleteRoleDialog } from './MamDeleteRoleDialog'
 import { MamProfileEditorDialog } from './MamProfileEditorDialog'
 import { mamProfileTemplate } from './mam-profile-templates'
 
 export function MamRolesPage({
   snapshot,
   pending,
-  onSaveProfile
+  onSaveProfile,
+  onDeleteRoleProfile
 }: Readonly<{
   snapshot: MamUiSnapshot
   pending: boolean
   onSaveProfile(input: MamSaveProfileInput): Promise<void>
+  onDeleteRoleProfile(input: MamDeleteRoleProfileInput): Promise<void>
 }>): React.JSX.Element {
   const roles = snapshot.roles
   return (
@@ -23,12 +29,13 @@ export function MamRolesPage({
             Roles
           </h1>
           <p className="text-sm text-muted-foreground">
-            Versioned execution, resource, permission, and budget profiles.
+            Versioned execution, resource, and budget profiles.
           </p>
         </div>
         <MamProfileEditorDialog
           kind="role"
           template={mamProfileTemplate('role', snapshot)}
+          snapshot={snapshot}
           pending={pending}
           onSave={onSaveProfile}
         />
@@ -60,15 +67,6 @@ export function MamRolesPage({
                   label="Resources"
                   value={`${role.skillBindings.length} skills · ${role.mcpBindings.length} MCP · ${role.knowledgeBaseBindings.length} knowledge`}
                 />
-                <ProfileRow
-                  icon={ShieldCheck}
-                  label="Approval"
-                  value={
-                    role.permissions.requireApprovalFor.length > 0
-                      ? role.permissions.requireApprovalFor.join(', ')
-                      : 'No gated operations'
-                  }
-                />
               </dl>
 
               <div className="mt-4 flex flex-wrap gap-2 border-t border-border pt-3 text-xs text-muted-foreground">
@@ -77,13 +75,20 @@ export function MamRolesPage({
                 <span>${role.budget.maxCostUsd.toFixed(2)} budget</span>
                 <span aria-hidden="true">·</span>
                 <span>{role.retry.maxAttempts} attempts</span>
-                <span className="ml-auto">
+                <span className="ml-auto flex items-center gap-2">
                   <MamProfileEditorDialog
                     kind="role"
                     profile={role}
                     template={role}
+                    snapshot={snapshot}
                     pending={pending}
                     onSave={onSaveProfile}
+                  />
+                  <MamDeleteRoleDialog
+                    role={role}
+                    snapshot={snapshot}
+                    pending={pending}
+                    onDelete={onDeleteRoleProfile}
                   />
                 </span>
               </div>

@@ -5,19 +5,23 @@ import {
   MamLocalSettingsSchema,
   type MamLocalSettings
 } from '../../../../shared/mam/local-settings'
+import type { MamUiSnapshot } from '../../../../shared/mam/ui-projection'
 import { Badge } from '../../components/ui/badge'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
 import { Textarea } from '../../components/ui/textarea'
+import { MamLocalProfileBindings } from './MamLocalProfileBindings'
 import { MamWorkflowLabeledField } from './MamWorkflowFieldControls'
 
 export function MamLocalSettingsEditor({
   settings,
+  catalog,
   projectDirectory,
   pending,
   onSave
 }: Readonly<{
   settings: MamLocalSettings
+  catalog: Pick<MamUiSnapshot, 'executors' | 'providers' | 'mcpServers' | 'knowledgeBases'>
   projectDirectory?: string
   pending: boolean
   onSave(input: MamSaveLocalSettingsInput): Promise<void>
@@ -39,6 +43,14 @@ export function MamLocalSettingsEditor({
       const next = MamLocalSettingsSchema.parse(JSON.parse(source))
       setDraft(next)
       setError(undefined)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    }
+  }
+  const save = async (): Promise<void> => {
+    setError(undefined)
+    try {
+      await onSave({ settings: draft })
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
     }
@@ -77,10 +89,9 @@ export function MamLocalSettingsEditor({
           Attached now: <span className="font-mono">{projectDirectory}</span>
         </p>
       )}
+      <MamLocalProfileBindings settings={draft} catalog={catalog} onChange={update} />
       <details className="rounded-md border border-border p-3">
-        <summary className="cursor-pointer text-xs font-medium">
-          Executor, secret, Skill, and Knowledge bindings
-        </summary>
+        <summary className="cursor-pointer text-xs font-medium">Advanced local JSON</summary>
         <div className="mt-3 space-y-2">
           <p className="text-xs text-muted-foreground">
             A secret binding ID resolves from MAM_SECRET_ plus its uppercased ID, with punctuation
@@ -99,7 +110,7 @@ export function MamLocalSettingsEditor({
         </div>
       </details>
       <div className="flex justify-end">
-        <Button size="sm" disabled={pending} onClick={() => void onSave({ settings: draft })}>
+        <Button size="sm" disabled={pending} onClick={() => void save()}>
           <Save /> Save local settings
         </Button>
       </div>

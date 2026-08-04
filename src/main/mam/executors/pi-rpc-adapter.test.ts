@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { RpcClient, type RpcClientOptions } from '@earendil-works/pi-coding-agent'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   ExecutorProfile,
   LocalExecutorBinding
@@ -12,6 +12,7 @@ import type { MaterializedAttemptResources } from '../profiles/attempt-resource-
 import { profileContentHash } from '../profiles/profile-content-hash'
 import { ExecutorLocalPreflight, type ExecutorProbe } from './executor-local-preflight'
 import { PiRpcAdapter, type PiRpcClient } from './pi-rpc-adapter'
+import type { ExecutorCapabilityBridge } from '../application/executor-capability-bridge'
 
 const directories: string[] = []
 const fakeServer = resolve('src/main/mam/executors/test-fixtures/pi-rpc-fake-server.mjs')
@@ -21,7 +22,7 @@ afterEach(async () => {
 })
 
 describe('PiRpcAdapter', () => {
-  it('runs the official RPC client with isolated config and accepts only a standard result', async () => {
+  it('runs the official RPC client with isolated config and retains an optional standard result', async () => {
     const fixture = await createFixture()
     const clients: RpcClient[] = []
     const adapter = new PiRpcAdapter(
@@ -62,6 +63,8 @@ describe('PiRpcAdapter', () => {
     expect(started?.payload.environmentKeys).not.toContain('MAM_PI_EXECUTABLE')
     expect(execution.invocation.launchOptions.args).toContain('--no-extensions')
     expect(execution.invocation.launchOptions.args).not.toContain('--extension')
+    expect(execution.invocation.launchOptions.args).toContain('--tools')
+    expect(execution.invocation.launchOptions.args).toContain('read,bash,edit,write,grep,find,ls')
     expect(execution.invocation.agentDirectory).not.toBe(execution.invocation.sessionDirectory)
     expect(execution.stderr).toContain('[REDACTED]')
     expect(execution.stderr).not.toContain('mam-canary-secret')
@@ -75,7 +78,7 @@ describe('PiRpcAdapter', () => {
     expect(rpcLog).toContain('[REDACTED]')
   })
 
-  it('does not treat agent_settled as completion without a structured result', async () => {
+  it('allows the Application layer to validate workspace outputs without a structured result', async () => {
     const fixture = await createFixture()
     const client = new ControllablePiClient(null)
     const adapter = new PiRpcAdapter(
@@ -84,10 +87,28 @@ describe('PiRpcAdapter', () => {
       readyPreflight()
     )
 
-    await expect(adapter.execute(executionInput(fixture))).rejects.toMatchObject({
-      code: 'structured_result_missing'
-    })
+    await expect(adapter.execute(executionInput(fixture))).resolves.not.toHaveProperty('result')
     expect(client.stopped).toBe(true)
+  })
+
+  it('returns direct document text for a read-only Role without retaining streaming updates', async () => {
+    const fixture = await createFixture()
+    fixture.snapshot = readOnlySnapshot(fixture.snapshot)
+    fixture.resources = { ...fixture.resources, contentHash: fixture.snapshot.contentHash }
+    const client = new StreamingPiClient('# Deliverable\n\n## summary\nDone.')
+    const adapter = new PiRpcAdapter(
+      () => client,
+      () => '2026-07-28T08:01:00Z',
+      readyPreflight()
+    )
+
+    const execution = await adapter.execute(executionInput(fixture))
+
+    expect(execution.assistantText).toContain('# Deliverable')
+    expect(execution.events).toHaveLength(1)
+    expect(execution.events[0]?.sourceEventType).toBe('agent_settled')
+    expect(execution.invocation.launchOptions.args).toContain('--tools')
+    expect(execution.invocation.launchOptions.args).toContain('read,grep,find,ls')
   })
 
   it('exposes steer and abort only for an active invocation', async () => {
@@ -127,6 +148,39 @@ describe('PiRpcAdapter', () => {
         }
       })
     ).rejects.toMatchObject({ code: 'unexpected_credential' })
+  })
+
+  it('injects only the unified Application API tools for Role resource bindings', async () => {
+    const fixture = await createFixture()
+    fixture.snapshot = resourceSnapshot(fixture.snapshot)
+    fixture.resources = { ...fixture.resources, contentHash: fixture.snapshot.contentHash }
+    const execute = vi.fn(async () => ({ ok: true }))
+    const adapter = new PiRpcAdapter(
+      () => new ControllablePiClient(JSON.stringify(agentPayload())),
+      () => '2026-07-28T08:01:00Z',
+      readyPreflight()
+    )
+
+    const execution = await adapter.execute({
+      ...executionInput(fixture),
+      capabilityBridge: { execute } as unknown as ExecutorCapabilityBridge
+    })
+
+    const args = execution.invocation.launchOptions.args ?? []
+    expect(args).toContain('--extension')
+    expect(args).toContain('--tools')
+    expect(args.join(',')).toContain('mam_mcp,mam_knowledge_search,mam_knowledge_read')
+    expect(args.join(',')).not.toContain('mcp.search')
+    expect(execution.invocation.launchOptions.env).toMatchObject({
+      MAM_APPLICATION_API_ENDPOINT: expect.stringMatching(/^http:\/\/127\.0\.0\.1:/),
+      MAM_APPLICATION_API_TOKEN: expect.any(String)
+    })
+    const manifest = JSON.parse(await readFile(execution.invocation.manifestPath, 'utf8'))
+    expect(manifest).toMatchObject({
+      mcpServerIds: ['mcp.office'],
+      knowledgeBaseIds: ['knowledge.requirements'],
+      extensionIds: ['mam.application-api']
+    })
   })
 })
 
@@ -179,6 +233,10 @@ class ControllablePiClient implements PiRpcClient {
     this.resolveIdle()
   }
 
+  protected emitForTest(event: never): void {
+    for (const listener of this.listeners) listener(event)
+  }
+
   async getLastAssistantText(): Promise<string | null> {
     return this.result
   }
@@ -189,6 +247,23 @@ class ControllablePiClient implements PiRpcClient {
 
   getStderr(): string {
     return ''
+  }
+}
+
+class StreamingPiClient extends ControllablePiClient {
+  override async prompt(): Promise<void> {
+    for (let index = 0; index < 2_000; index += 1) {
+      this.emitForTest({
+        type: 'message_update',
+        assistantMessageEvent: {
+          type: 'text_delta',
+          contentIndex: 0,
+          delta: 'x',
+          partial: { content: [{ thinkingSignature: 'x'.repeat(index) }] }
+        }
+      } as never)
+    }
+    await super.prompt()
   }
 }
 
@@ -316,6 +391,39 @@ function effectiveSnapshot(): EffectiveRoleConfigSnapshot {
     createdAt: '2026-07-28T08:00:00Z'
   }
   return { ...base, contentHash: profileContentHash(base) }
+}
+
+function resourceSnapshot(snapshot: EffectiveRoleConfigSnapshot): EffectiveRoleConfigSnapshot {
+  const { contentHash: _, ...base } = snapshot
+  const resourceBase = {
+    ...base,
+    mcpBindings: [
+      {
+        serverProfileId: 'mcp.office',
+        version: 1,
+        contentHash: 'c'.repeat(64)
+      }
+    ],
+    knowledgeBaseBindings: [
+      {
+        knowledgeBaseProfileId: 'knowledge.requirements',
+        version: 1,
+        contentHash: 'd'.repeat(64),
+        status: 'available' as const
+      }
+    ],
+    tools: ['mcp.search', 'knowledge.search', 'knowledge.read']
+  }
+  return { ...resourceBase, contentHash: profileContentHash(resourceBase) }
+}
+
+function readOnlySnapshot(snapshot: EffectiveRoleConfigSnapshot): EffectiveRoleConfigSnapshot {
+  const { contentHash: _, ...base } = snapshot
+  const readOnlyBase = {
+    ...base,
+    permissions: { ...base.permissions, writePaths: [] }
+  }
+  return { ...readOnlyBase, contentHash: profileContentHash(readOnlyBase) }
 }
 
 function agentPayload() {

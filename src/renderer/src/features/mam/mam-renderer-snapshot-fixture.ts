@@ -18,6 +18,7 @@ export function mamUiRunFixture(): MamUiRunSnapshot {
       updatedAt: '2026-07-28T18:00:00Z'
     },
     definitionName: 'UI workflow',
+    roleProfiles: [],
     revision: hash,
     stateHash: hash,
     nodeRuns: [],
@@ -53,6 +54,7 @@ export function mamUiSnapshotFixture(): MamUiSnapshot {
       gitExecutable: 'git',
       executorBindings: [],
       secretBindings: [],
+      mcpConnections: [],
       skillBindings: [],
       knowledgeBindings: []
     },

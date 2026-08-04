@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, shell } from 'electron'
+import { app, BrowserWindow, dialog, safeStorage, shell } from 'electron'
 import { mkdirSync } from 'node:fs'
 import { isAbsolute, join } from 'node:path'
 import { ProfileCatalog } from './mam/profiles/profile-catalog'
@@ -20,6 +20,16 @@ import { PiRpcAdapter } from './mam/executors/pi-rpc-adapter'
 import { MAM_UI_SNAPSHOT_CHANGED_CHANNEL } from '../shared/mam/application-api'
 import { MamAttemptInspectionService } from './mam/application/mam-attempt-inspection-service'
 import { MamMergeQueueExecutionService } from './mam/application/mam-merge-queue-execution-service'
+import { EncryptedLocalSecretStore } from './mam/application/encrypted-local-secret-store'
+import {
+  ChainedAttemptSecretValueProvider,
+  EnvironmentAttemptSecretValueProvider,
+  type AttemptSecretValueProvider
+} from './mam/application/local-attempt-secrets'
+import { ensureBuiltinPiProfile } from './mam/profiles/builtin-pi-profile'
+import { MamDesignDraftStore } from './mam/application/mam-design-draft-store'
+import { MamDesignAssistantService } from './mam/application/mam-design-assistant-service'
+import { DesktopRuntimeLogger } from './mam/diagnostics/desktop-runtime-logger'
 
 let unregisterMamIpc: (() => void) | undefined
 
@@ -41,15 +51,35 @@ function createMainWindow(): void {
       sandbox: true
     }
   })
-  const profiles = new ProfileCatalog(join(app.getPath('userData'), 'mam', 'catalog'))
+  const mamRoot = join(app.getPath('userData'), 'mam')
+  const runtimeLogger = new DesktopRuntimeLogger(join(mamRoot, 'diagnostics', 'runtime.jsonl'))
+  const stopRuntimeHeartbeat = runtimeLogger.startHeartbeat()
+  runtimeLogger.record('main', 'window_create_start', { platform: process.platform })
+  const profiles = new ProfileCatalog(join(mamRoot, 'catalog'))
   const localSettings = new MamLocalSettingsStore(
-    join(app.getPath('userData'), 'mam', 'local-settings.json'),
+    join(mamRoot, 'local-settings.json'),
     process.env.MAM_BINDING_ID ?? 'machine.local'
   )
+  ensureBuiltinPiProfile(profiles, localSettings, join(mamRoot, 'executors', 'pi'))
+  const localSecrets = new EncryptedLocalSecretStore(join(mamRoot, 'secrets.enc.json'), {
+    encrypt: (value) => {
+      if (!safeStorage.isEncryptionAvailable()) throw new Error('OS secret encryption unavailable')
+      return safeStorage.encryptString(value)
+    },
+    decrypt: (value) => safeStorage.decryptString(value)
+  })
+  const secretValues = new ChainedAttemptSecretValueProvider([
+    localSecrets,
+    new EnvironmentAttemptSecretValueProvider()
+  ])
   const diagnostics = new DiagnosticsRecorder(
     join(app.getPath('userData'), 'mam', 'diagnostics', 'events.json')
   )
   const initialRepository = configuredStateRepository(localSettings)
+  runtimeLogger.record('main', 'repository_attached', {
+    attached: Boolean(initialRepository),
+    collaborationMode: initialRepository?.collaborationMode
+  })
   const service = new MamUiQueryService(
     {
       roles: profiles.roles,
@@ -62,7 +92,9 @@ function createMainWindow(): void {
       knowledgeBases: profiles.knowledgeBases,
       localSettings
     },
-    initialRepository
+    initialRepository,
+    undefined,
+    diagnostics
   )
   const commands = new MamUiCommandService(
     service,
@@ -72,7 +104,14 @@ function createMainWindow(): void {
     },
     initialRepository,
     profiles,
-    localSettings
+    localSettings,
+    localSecrets
+  )
+  const designs = new MamDesignAssistantService(
+    service,
+    profiles,
+    new MamDesignDraftStore(join(mamRoot, 'design-draft.json')),
+    { resolve: (secretRef) => resolveDesignSecret(secretRef, localSettings, secretValues) }
   )
   const workflowRuns = new MamWorkflowRunCommandService(
     service,
@@ -94,6 +133,7 @@ function createMainWindow(): void {
     ),
     diagnostics,
     workspaceRoot: join(app.getPath('userData'), 'mam', 'attempt-worktrees'),
+    secretValues,
     ...(initialRepository ? { repository: initialRepository } : {}),
     onStateChanged: () => {
       if (!window.isDestroyed()) window.webContents.send(MAM_UI_SNAPSHOT_CHANGED_CHANNEL)
@@ -113,6 +153,7 @@ function createMainWindow(): void {
     window,
     service,
     commands,
+    designs,
     workflowRuns,
     attempts,
     attemptInspection,
@@ -154,17 +195,34 @@ function createMainWindow(): void {
       })
       if (result.canceled || !result.filePath) return undefined
       return diagnostics.exportBundle(result.filePath)
-    }
+    },
+    runtimeLogger
   )
 
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('https://')) void shell.openExternal(url)
     return { action: 'deny' }
   })
+  window.on('unresponsive', () => runtimeLogger.record('window', 'unresponsive'))
+  window.on('responsive', () => runtimeLogger.record('window', 'responsive'))
+  window.webContents.on('did-start-loading', () =>
+    runtimeLogger.record('renderer', 'did_start_loading')
+  )
+  window.webContents.on('did-finish-load', () =>
+    runtimeLogger.record('renderer', 'did_finish_load')
+  )
+  window.webContents.on('render-process-gone', (_event, details) =>
+    runtimeLogger.record('renderer', 'render_process_gone', {
+      reason: details.reason,
+      exitCode: details.exitCode
+    })
+  )
   window.webContents.on('will-navigate', (event) => event.preventDefault())
   installDesktopSmokeProbe(window)
   window.once('ready-to-show', () => window.show())
   window.on('closed', () => {
+    runtimeLogger.record('main', 'window_closed')
+    stopRuntimeHeartbeat()
     unregisterMamIpc?.()
     unregisterMamIpc = undefined
   })
@@ -185,6 +243,20 @@ function configuredStateRepository(
   return GitStateRepository.attach(projectDirectory, undefined, {
     gitClient: createGitCommandClient(settings.get().gitExecutable)
   })
+}
+
+function resolveDesignSecret(
+  secretRef: string,
+  settings: MamLocalSettingsStore,
+  secretValues: AttemptSecretValueProvider
+): string | undefined {
+  const local = settings.get()
+  const binding = local.secretBindings.find((candidate) => candidate.secretRef === secretRef) ?? {
+    id: secretRef,
+    secretRef,
+    bindingIdentity: local.bindingIdentity
+  }
+  return secretValues.resolve(binding)
 }
 
 function configureSmokeUserData(): void {

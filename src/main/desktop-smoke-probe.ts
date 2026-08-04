@@ -14,6 +14,7 @@ type SmokeState = Readonly<{
   savedWorkflowVersion?: number
   resourcesReady?: boolean
   settingsReady?: boolean
+  designReady?: boolean
 }>
 
 export function installDesktopSmokeProbe(window: BrowserWindow): void {
@@ -56,7 +57,8 @@ async function probe(window: BrowserWindow): Promise<void> {
           recoveryState.recoveryReplacementStatus === 'recovery_planned')) &&
       (!process.env.MAM_DESKTOP_SMOKE_SAVE_WORKFLOW || savedWorkflowVersion === 2) &&
       navigationState.resourcesReady &&
-      navigationState.settingsReady
+      navigationState.settingsReady &&
+      navigationState.designReady
     process.stdout.write(`MAM_DESKTOP_SMOKE ${JSON.stringify({ passed, ...state })}\n`)
     app.exit(passed ? 0 : 1)
   } catch (error) {
@@ -68,7 +70,7 @@ async function probe(window: BrowserWindow): Promise<void> {
 async function probeNavigationSurfaces(
   window: BrowserWindow,
   chinese: boolean
-): Promise<Pick<SmokeState, 'resourcesReady' | 'settingsReady'>> {
+): Promise<Pick<SmokeState, 'resourcesReady' | 'settingsReady' | 'designReady'>> {
   return window.webContents.executeJavaScript(`(async () => {
     const open = async (label) => {
       const button = [...document.querySelectorAll('button')]
@@ -78,9 +80,33 @@ async function probeNavigationSurfaces(
       await new Promise((resolve) => setTimeout(resolve, 100));
       return document.querySelector('h1')?.textContent?.trim() === label;
     };
+    const snapshot = await window.mam.getUiSnapshot();
+    const designLabel = ${JSON.stringify(chinese ? '设计助手' : 'Design Assistant')};
+    const designButton = [...document.querySelectorAll('button')]
+      .find((element) => element.textContent?.trim() === designLabel);
+    designButton?.click();
+    let designReady = false;
+    const designHeadings = ${JSON.stringify([
+      'Design Assistant',
+      'No compatible Model Profile',
+      '设计助手',
+      '没有兼容的模型配置'
+    ])};
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      designReady = designButton?.getAttribute('aria-current') === 'page' &&
+        designHeadings.includes(document.querySelector('main h1')?.textContent?.trim());
+      if (designReady) break;
+    }
     return {
+      designReady,
       resourcesReady: await open(${JSON.stringify(chinese ? '资源' : 'Resources')}),
-      settingsReady: await open(${JSON.stringify(chinese ? '设置' : 'Settings')})
+      settingsReady: await open(${JSON.stringify(chinese ? '设置' : 'Settings')}) &&
+        document.body.innerText.includes(${JSON.stringify(chinese ? '添加模型连接' : 'Add model connection')}) &&
+        document.body.innerText.includes('pi-rpc') &&
+        snapshot.localSettings.executorBindings.some(
+          (binding) => binding.executorProfileId === 'executor.pi' && binding.executablePath.endsWith('cli.js')
+        )
     };
   })()`)
 }
@@ -183,9 +209,13 @@ async function waitForRenderer(window: BrowserWindow): Promise<SmokeState> {
 function readRendererState(window: BrowserWindow): Promise<SmokeState> {
   return window.webContents.executeJavaScript(`(() => ({
     hasApi: ['getUiSnapshot', 'getAttemptDiff', 'selectProject', 'assignTask', 'recoverAttempt', 'saveWorkflow',
-      'createWorkflowRun', 'startAttempt', 'executeNextMerge', 'onUiSnapshotChanged',
+      'createWorkflowRun', 'cancelWorkflowRun', 'restartWorkflowRun', 'startAttempt',
+      'executeNextMerge', 'onUiSnapshotChanged',
       'submitReview', 'resolveReviewDisagreement', 'resolveApprovalGate', 'selectAttempt', 'saveProfile',
-      'saveLocalSettings', 'importSkill', 'exportDiagnostics']
+      'saveLocalSettings', 'saveModelConnection', 'fetchModelCatalog', 'deleteRoleProfile',
+      'getDesignDraft', 'selectDesignModel', 'sendDesignMessage', 'cancelDesignMessage',
+      'resetDesignDraft', 'updateDesignProposal', 'applyDesignProposal',
+      'importSkill', 'exportDiagnostics']
       .every((name) => typeof window.mam?.[name] === 'function'),
     language: document.documentElement.lang,
     title: document.title,

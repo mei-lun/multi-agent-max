@@ -52,6 +52,35 @@ describe('Git event projection', () => {
       replayWorkflowRun('run.1', [{ ...event, parentRevision: 'f'.repeat(64) }])
     ).toThrow(expect.objectContaining({ code: 'parent_revision_mismatch' }))
   })
+
+  it('rebuilds a cancelled Run from an append-only user event', () => {
+    const kernel = new SchedulerKernel()
+    const createBatch = kernel.execute(createRunCommand(), {
+      schedulerId: 'scheduler.1',
+      validArtifactHashes: new Set(),
+      processedCommandIds: new Set(),
+      mergeQueueEntries: new Map()
+    })
+    const created = replayWorkflowRun('run.1', createBatch.events)
+    const cancelBatch = kernel.execute(
+      {
+        schemaVersion: '1.0.0',
+        commandId: 'command.cancel',
+        issuedAt: '2026-07-27T12:02:00Z',
+        workflowRunId: 'run.1',
+        actor: { kind: 'user', userId: 'user.owner' },
+        type: 'cancel_workflow_run',
+        reason: 'Start over.'
+      },
+      schedulerContextFromProjection(created, { schedulerId: 'scheduler.1' })
+    )
+    const cancelled = replayWorkflowRun('run.1', [...createBatch.events, ...cancelBatch.events])
+
+    expect(cancelled.cancellation).toMatchObject({
+      userId: 'user.owner',
+      reason: 'Start over.'
+    })
+  })
 })
 
 function createRunCommand(): SchedulerCommand {

@@ -7,35 +7,12 @@ import {
 } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import type { RequestOptions } from '@modelcontextprotocol/sdk/shared/protocol.js'
-import { z } from 'zod'
-import type { McpServerProfile } from '../../../shared/mam/domain/resource-profile'
+import {
+  McpLocalConnectionSchema,
+  type McpLocalConnection,
+  type McpServerProfile
+} from '../../../shared/mam/domain/resource-profile'
 import type { McpCapabilityRequest, McpConnector } from './mcp-capability-gateway'
-
-const ConnectionBaseSchema = z.object({
-  connectionRef: z.string().min(1)
-})
-
-export const McpLocalConnectionSchema = z.discriminatedUnion('transport', [
-  ConnectionBaseSchema.extend({
-    transport: z.literal('stdio'),
-    command: z.string().min(1),
-    args: z.array(z.string()),
-    cwd: z.string().min(1).optional(),
-    environment: z.record(z.string(), z.string())
-  }).strict(),
-  ConnectionBaseSchema.extend({
-    transport: z.literal('http'),
-    url: z.url(),
-    headers: z.record(z.string(), z.string())
-  }).strict(),
-  ConnectionBaseSchema.extend({
-    transport: z.literal('sse'),
-    url: z.url(),
-    headers: z.record(z.string(), z.string())
-  }).strict()
-])
-
-export type McpLocalConnection = z.infer<typeof McpLocalConnectionSchema>
 export type McpConnectionResolver = (
   connectionRef: string
 ) => McpLocalConnection | undefined | Promise<McpLocalConnection | undefined>

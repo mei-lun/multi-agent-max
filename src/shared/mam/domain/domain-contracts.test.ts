@@ -14,6 +14,32 @@ describe('MAM domain contracts', () => {
     )
   })
 
+  it('migrates legacy resource restrictions to resource selections', () => {
+    const parsed = RoleProfileSchema.parse({
+      ...roleProfile(),
+      mcpBindings: [
+        {
+          serverProfileId: 'mcp.office',
+          allowedTools: ['office.write'],
+          allowedResources: [],
+          allowedPrompts: ['prompt.requirements']
+        }
+      ],
+      knowledgeBaseBindings: [
+        {
+          knowledgeBaseProfileId: 'knowledge.product',
+          collections: ['requirements'],
+          allowedOperations: ['search', 'read'],
+          retrievalPolicy: { topK: 5, maxContextTokens: 8_000 },
+          required: true
+        }
+      ]
+    })
+
+    expect(parsed.mcpBindings).toEqual([{ serverProfileId: 'mcp.office' }])
+    expect(parsed.knowledgeBaseBindings).toEqual([{ knowledgeBaseProfileId: 'knowledge.product' }])
+  })
+
   it('records exact resource versions in an Attempt snapshot and rejects secret values', () => {
     const snapshot = effectiveSnapshot()
     expect(EffectiveRoleConfigSnapshotSchema.parse(snapshot)).toMatchObject({

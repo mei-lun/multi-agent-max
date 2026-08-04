@@ -8,6 +8,29 @@ import { MamUiQueryService } from './mam-ui-query-service'
 const hash = 'a'.repeat(64)
 
 describe('MAM UI query service', () => {
+  it('keeps a local-only project connected without inventing a remote', () => {
+    const bundle = runBundle()
+    const service = new MamUiQueryService(
+      { roles: { listActive: () => [] }, workflows: { listActive: () => [] } },
+      {
+        listWorkflowRunIds: () => [],
+        loadRunBundle: () => undefined,
+        rebuild: () => emptyWorkflowRunProjection(bundle.run.id),
+        projectDirectory: '/projects/local-only',
+        stateDirectory: '/projects/.local-only-mam-state',
+        collaborationMode: 'local',
+        branch: 'mam-state'
+      }
+    )
+
+    expect(service.getSnapshot().projectBinding).toEqual({
+      projectDirectory: '/projects/local-only',
+      stateDirectory: '/projects/.local-only-mam-state',
+      collaborationMode: 'local',
+      branch: 'mam-state'
+    })
+  })
+
   it('builds a deterministic Renderer snapshot without exposing state stores', () => {
     const bundle = runBundle()
     const projection = {
@@ -70,6 +93,62 @@ describe('MAM UI query service', () => {
       code: 'corrupt_event_batch',
       workflowRunId: bundle.run.id,
       message: 'State batch is corrupt'
+    })
+  })
+
+  it('projects the executor diagnostic beside a reconciled Attempt', () => {
+    const bundle = createWorkflowRunBundle({
+      runId: 'run.interrupted-ui',
+      definition: taskWorkflow(),
+      roleCatalog: [{ roleProfileId: 'role.builder', roleProfileVersion: 1, contentHash: hash }],
+      createdAt: '2026-07-28T17:00:00Z'
+    })
+    const projection = {
+      ...emptyWorkflowRunProjection(bundle.run.id),
+      attempts: {
+        'attempt.interrupted': {
+          taskId: 'build',
+          status: 'needs_reconciliation' as const,
+          executorInvocationId: 'invocation.interrupted',
+          lastEventId: 'event.attempt-interrupted'
+        }
+      }
+    }
+    const service = new MamUiQueryService(
+      { roles: { listActive: () => [] }, workflows: { listActive: () => [] } },
+      {
+        listWorkflowRunIds: () => [bundle.run.id],
+        loadRunBundle: () => bundle,
+        rebuild: () => projection
+      },
+      () => '2026-07-28T19:00:00Z',
+      {
+        list: () => [
+          {
+            at: '2026-07-28T18:00:00Z',
+            workflowRunId: bundle.run.id,
+            nodeId: 'build',
+            roleInstanceId: 'role-instance.builder',
+            executorInvocationId: 'invocation.interrupted',
+            kind: 'executor' as const,
+            payload: {
+              status: 'execution_interrupted',
+              errorCode: 'structured_result_invalid',
+              message: 'Pi result is not JSON',
+              worktreeRetained: true
+            }
+          }
+        ]
+      }
+    )
+
+    expect(service.getSnapshot().runs[0]?.attempts[0]?.interruption).toEqual({
+      stage: 'result_validation',
+      code: 'structured_result_invalid',
+      detail: 'Pi result is not JSON',
+      summary: 'The Role finished, but MAM could not accept a complete result.',
+      nextStep: 'Choose Retry this Task. MAM will create a fresh Attempt and keep the old record.',
+      worktreeRetained: true
     })
   })
 
@@ -142,6 +221,60 @@ describe('MAM UI query service', () => {
       allowedRoleProfileIds: ['role.builder'],
       attemptIds: []
     })
+  })
+
+  it('projects the immutable Review subject for evidence inspection', () => {
+    const bundle = runBundle()
+    const subject = {
+      taskId: 'task.build',
+      attemptId: 'attempt.build',
+      resultHash: hash,
+      artifactHashes: [hash],
+      submittedCommit: 'abcdef1234567'
+    }
+    const projection = {
+      ...emptyWorkflowRunProjection(bundle.run.id),
+      reviewTasks: {
+        'review-task.ui': {
+          schemaVersion: '1.0.0' as const,
+          id: 'review-task.ui',
+          workflowRunId: bundle.run.id,
+          nodeRunId: 'node-review.ui',
+          reviewNodeId: 'review.ui',
+          subject,
+          initialStatus: 'waiting_role_assignment' as const,
+          title: 'Review submitted work',
+          specification: 'Inspect the submitted work and record a decision.',
+          inputArtifacts: [],
+          outputContracts: [
+            {
+              schemaVersion: '1.0.0' as const,
+              artifactType: 'artifact.review-report',
+              format: 'json-schema' as const,
+              required: true,
+              maxBytes: 1024,
+              jsonSchema: { type: 'object' }
+            }
+          ],
+          recommendedRoleProfileIds: [],
+          allowedRoleProfileIds: ['role.reviewer']
+        }
+      }
+    }
+    const service = new MamUiQueryService(
+      { roles: { listActive: () => [] }, workflows: { listActive: () => [] } },
+      {
+        listWorkflowRunIds: () => [bundle.run.id],
+        loadRunBundle: () => bundle,
+        rebuild: () => projection
+      },
+      () => '2026-07-28T19:00:00Z'
+    )
+
+    expect(
+      service.getSnapshot().runs[0]?.tasks.find((task) => task.id === 'review-task.ui')
+        ?.reviewSubject
+    ).toEqual(subject)
   })
 })
 

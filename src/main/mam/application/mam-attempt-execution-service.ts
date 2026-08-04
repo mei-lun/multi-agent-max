@@ -18,7 +18,7 @@ import {
   type AttemptSecretValueProvider
 } from './local-attempt-secrets'
 import { resolveSystemPrompt } from './system-prompt-resolver'
-import { runPreparedAttempt } from './mam-attempt-background-runner'
+import { launchPreparedAttempt } from './mam-attempt-background-launcher'
 import {
   attemptExecutionPrompt,
   conflictAttemptWorktree,
@@ -31,6 +31,8 @@ import { profileContentHash } from '../profiles/profile-content-hash'
 import { ConflictResolutionWorktreeManager } from './conflict-resolution-worktree-manager'
 import type { ExecutorKind } from '../../../shared/mam/domain/execution-profile'
 import type { MamAttemptExecutionServiceOptions } from './mam-attempt-execution-service-options'
+import { schedulerEnvelope } from './scheduler-envelope'
+import { resolveAttemptStartIdentity } from './attempt-start-identity'
 
 export class MamAttemptExecutionService {
   private readonly query: MamUiQueryService
@@ -93,19 +95,22 @@ export class MamAttemptExecutionService {
       }
       throw error
     }
-    void runPreparedAttempt({
-      prepared,
-      executor: this.executor,
-      artifacts: this.artifacts,
-      worktrees: this.worktrees(),
-      conflicts: this.conflictWorktrees(),
-      git: createGitCommandClient(this.settings.get().gitExecutable),
-      repository: this.requireRepository(),
-      diagnostics: this.diagnostics,
-      schedulerId: this.schedulerId,
-      now: this.now,
-      createId: this.createId
-    }).finally(this.onStateChanged)
+    launchPreparedAttempt(
+      {
+        prepared,
+        executor: this.executor,
+        artifacts: this.artifacts,
+        worktrees: this.worktrees(),
+        conflicts: this.conflictWorktrees(),
+        git: createGitCommandClient(this.settings.get().gitExecutable),
+        repository: this.requireRepository(),
+        diagnostics: this.diagnostics,
+        schedulerId: this.schedulerId,
+        now: this.now,
+        createId: this.createId
+      },
+      this.onStateChanged
+    )
     return this.query.getSnapshot()
   }
 
@@ -121,6 +126,12 @@ export class MamAttemptExecutionService {
     if (!['ready', 'changes_requested', 'running'].includes(projectedTask.status)) {
       throw new Error(`task_not_startable:${projectedTask.status}`)
     }
+    const attemptIdentity = resolveAttemptStartIdentity({
+      projection,
+      taskId,
+      taskStatus: projectedTask.status,
+      createAttemptId: () => this.createId('attempt')
+    })
     const role =
       bundle.roleProfiles?.find(
         (candidate) =>
@@ -150,7 +161,7 @@ export class MamAttemptExecutionService {
     )
     const preflight = this.preflight.check(profile, binding)
     if (!preflight.ok) throw new Error(preflight.issues.map((issue) => issue.message).join('; '))
-    const attemptId = this.createId('attempt')
+    const attemptId = attemptIdentity.attemptId
     const task = resolveExecutableTask(bundle, projection, taskId, projectedTask.status)
     const createdAt = this.now()
     const resolved = await new AttemptConfigResolver(this.catalog).resolve({
@@ -200,22 +211,24 @@ export class MamAttemptExecutionService {
         })
     const roleInstanceId = this.createId('role-instance')
     const executorInvocationId = this.createId('executor-invocation')
-    const previousAttemptId = projectedTask.knownAttemptIds.at(-1)
     return {
       workflowRunId,
       taskId,
       attemptId,
-      ...(projectedTask.status === 'changes_requested' && previousAttemptId
-        ? { previousAttemptId }
+      ...(attemptIdentity.previousAttemptId
+        ? { previousAttemptId: attemptIdentity.previousAttemptId }
         : {}),
       roleInstanceId,
       executorInvocationId,
+      retryMaxAttempts: role.retry.maxAttempts,
       nodeId: task.nodeId,
       task,
       profile,
       binding,
       snapshot: resolved.snapshot,
       resources: materialized,
+      resolvedConfig: resolved,
+      mcpConnections: settings.mcpConnections,
       credentialValues,
       systemPrompt,
       prompt: attemptExecutionPrompt(task, worktree.branch),
@@ -282,21 +295,5 @@ export class MamAttemptExecutionService {
   private requireRepository(): GitStateRepository {
     if (!this.repository) throw new Error('project_not_attached')
     return this.repository
-  }
-}
-
-function schedulerEnvelope(
-  prepared: PreparedAttempt,
-  commandId: string,
-  issuedAt: string,
-  schedulerId: string
-) {
-  return {
-    schemaVersion: '1.0.0' as const,
-    commandId,
-    issuedAt,
-    workflowRunId: prepared.workflowRunId,
-    taskId: prepared.taskId,
-    actor: { kind: 'scheduler' as const, schedulerId }
   }
 }

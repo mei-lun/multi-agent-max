@@ -38,6 +38,14 @@ export class DiagnosticsRecorder {
     return structuredClone(this.events)
   }
 
+  listInterruptionEvents(): readonly DiagnosticEvent[] {
+    return structuredClone(
+      this.events.filter(
+        (event) => event.kind === 'executor' && event.payload.status === 'execution_interrupted'
+      )
+    )
+  }
+
   exportBundle(pathInput: string, events: readonly DiagnosticEvent[] = this.events): string {
     const path = resolve(pathInput)
     mkdirSync(dirname(path), { recursive: true, mode: 0o700 })

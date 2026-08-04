@@ -76,6 +76,39 @@ describe('MAM Workflow Run command service', () => {
       })
     ).toThrow(expect.objectContaining({ code: 'project_not_attached' }))
   })
+
+  it('cancels immutable history and starts a fresh replacement Run', () => {
+    const repository = GitStateRepository.attach(createProject())
+    const definition = workflow()
+    const role = roleProfile(3)
+    const catalog = testCatalog(definition, role)
+    const query = new MamUiQueryService(catalog, repository, () => '2026-07-28T22:05:00Z')
+    let runNumber = 0
+    let commandNumber = 0
+    const service = new MamWorkflowRunCommandService(
+      query,
+      catalog,
+      'scheduler.desktop',
+      repository,
+      () => '2026-07-28T22:00:00Z',
+      (kind) =>
+        kind === 'run' ? `run.restart.${++runNumber}` : `command.restart.${++commandNumber}`
+    )
+    service.create({
+      definitionId: definition.id,
+      definitionVersion: definition.version,
+      inputArtifacts: []
+    })
+
+    const snapshot = service.restart({ workflowRunId: 'run.restart.1' })
+
+    expect(snapshot.runs.map((run) => [run.run.id, run.run.status])).toEqual([
+      ['run.restart.1', 'cancelled'],
+      ['run.restart.2', 'running']
+    ])
+    expect(repository.rebuild('run.restart.1').cancellation).toBeDefined()
+    expect(repository.loadRunBundle('run.restart.2')?.definition).toEqual(definition)
+  })
 })
 
 function testCatalog(definition: WorkflowDefinition, role: RoleProfile): MamWorkflowRunCatalog {

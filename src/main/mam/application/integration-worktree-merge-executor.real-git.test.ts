@@ -16,6 +16,40 @@ afterEach(() => {
 })
 
 describe('IntegrationWorktreeMergeExecutor with Git', () => {
+  it('updates local target refs without a remote', () => {
+    const fixture = repositoryFixture(false)
+    const result = new IntegrationWorktreeMergeExecutor().execute({
+      repositoryPath: fixture.repository,
+      integrationRoot: join(fixture.root, 'integration'),
+      remoteName: undefined,
+      entry: queueEntry(fixture.sourceCommit, 'tasks/feature'),
+      validationCommands: []
+    })
+
+    expect(result).toMatchObject({ status: 'merged', targetCommitBefore: fixture.targetCommit })
+    if (result.status !== 'merged') throw new Error(JSON.stringify(result))
+    expect(git(fixture.repository, ['rev-parse', 'refs/heads/develop'])).toBe(result.mergeCommit)
+  })
+
+  it('creates a missing local develop branch from main before integration', () => {
+    const fixture = repositoryFixture(false)
+    git(fixture.repository, ['switch', 'tasks/feature'])
+    git(fixture.repository, ['branch', 'main', fixture.targetCommit])
+    git(fixture.repository, ['branch', '-D', 'develop'])
+
+    const result = new IntegrationWorktreeMergeExecutor().execute({
+      repositoryPath: fixture.repository,
+      integrationRoot: join(fixture.root, 'integration-missing-develop'),
+      remoteName: undefined,
+      entry: queueEntry(fixture.sourceCommit, 'tasks/feature'),
+      validationCommands: []
+    })
+
+    expect(result).toMatchObject({ status: 'merged', targetCommitBefore: fixture.targetCommit })
+    if (result.status !== 'merged') throw new Error(JSON.stringify(result))
+    expect(git(fixture.repository, ['rev-parse', 'refs/heads/develop'])).toBe(result.mergeCommit)
+  })
+
   it('fetches, merges, validates, and pushes only the pinned task commit', () => {
     const fixture = repositoryFixture(false)
     const integrationRoot = join(fixture.root, 'integration')

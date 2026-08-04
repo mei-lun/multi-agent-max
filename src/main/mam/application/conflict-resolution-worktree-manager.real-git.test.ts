@@ -15,6 +15,33 @@ afterEach(() => {
 })
 
 describe('ConflictResolutionWorktreeManager with Git', () => {
+  it('updates the local target ref when no remote is configured', () => {
+    const fixture = conflictRepository()
+    const task = conflictTask(fixture)
+    const manager = new ConflictResolutionWorktreeManager()
+    const input = {
+      repositoryPath: fixture.repository,
+      integrationRoot: join(fixture.root, 'integration'),
+      remoteName: undefined,
+      task
+    }
+    const prepared = manager.prepare(input)
+    writeFileSync(join(prepared.worktreePath, 'shared.txt'), 'resolved locally\n')
+    git(prepared.worktreePath, ['add', 'shared.txt'])
+    git(prepared.worktreePath, ['commit', '-m', 'resolve local conflict'])
+    const resolutionCommit = git(prepared.worktreePath, ['rev-parse', 'HEAD'])
+
+    const result = manager.finalize({
+      ...input,
+      resolutionAttemptId: 'attempt.conflict.local',
+      resolutionCommit,
+      completedAt: '2026-07-28T18:10:00Z'
+    })
+
+    expect(result).toMatchObject({ status: 'merged', mergeCommit: resolutionCommit })
+    expect(git(fixture.repository, ['rev-parse', 'refs/heads/develop'])).toBe(resolutionCommit)
+  })
+
   it('reproduces the pinned conflict and pushes a validated two-parent resolution', () => {
     const fixture = conflictRepository()
     const task = conflictTask(fixture)

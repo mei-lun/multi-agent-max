@@ -182,22 +182,8 @@ function roleProfile(): RoleProfile {
     },
     systemPromptRef: 'prompt.role',
     skillBindings: [{ skillId: 'skill.allowed' }],
-    mcpBindings: [
-      {
-        serverProfileId: 'mcp.allowed',
-        allowedTools: ['tool.read'],
-        allowedResources: [],
-        allowedPrompts: []
-      }
-    ],
-    knowledgeBaseBindings: [
-      {
-        knowledgeBaseProfileId: 'knowledge.required',
-        allowedOperations: ['search'],
-        retrievalPolicy: { topK: 5, maxContextTokens: 4_000 },
-        required: true
-      }
-    ],
+    mcpBindings: [{ serverProfileId: 'mcp.allowed' }],
+    knowledgeBaseBindings: [{ knowledgeBaseProfileId: 'knowledge.required' }],
     tools: [],
     permissions: {
       readPaths: ['.'],

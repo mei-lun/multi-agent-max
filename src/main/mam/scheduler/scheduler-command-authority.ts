@@ -16,6 +16,9 @@ import {
 } from './merge-queue-command-authority'
 import { assertConditionCommandAuthority } from './condition-command-authority'
 import { assertSystemNodeCommandAuthority } from './system-node-command-authority'
+import { assertTaskAssignmentAuthority } from './task-assignment-command-authority'
+import { assertAttemptRecoveryAuthority } from './attempt-recovery-command-authority'
+import { assertActiveExecutorCommand } from './attempt-executor-command-authority'
 
 export type AttemptBinding = Readonly<{
   roleInstanceId: string
@@ -40,7 +43,9 @@ export type SchedulerTaskContext = Readonly<{
     | 'cancelled'
     | 'needs_attention'
   assignedRoleProfileId?: string
+  assignedRoleProfileVersion?: number
   activeAttemptIds: ReadonlySet<string>
+  reconcilingAttemptIds?: ReadonlySet<string>
   knownAttemptIds: ReadonlySet<string>
   submittedAttemptIds: ReadonlySet<string>
   attemptBindings: ReadonlyMap<string, AttemptBinding>
@@ -58,6 +63,8 @@ export type SchedulerTaskContext = Readonly<{
 
 export type SchedulerKernelContext = Readonly<{
   schedulerId: string
+  runCancelled?: boolean
+  hasActiveAttempts?: boolean
   task?: SchedulerTaskContext
   approvalGates?: ReadonlyMap<
     string,
@@ -82,6 +89,17 @@ export function assertSchedulerCommandAuthority(
 ): void {
   if (command.type === 'create_workflow_run') {
     return assertScheduler(command, context)
+  }
+  if (command.type === 'cancel_workflow_run') {
+    assertUser(command)
+    if (context.runCancelled) reject('run_already_cancelled', 'Workflow Run is already cancelled')
+    if (context.hasActiveAttempts) {
+      reject('active_attempts_present', 'Recover active Attempts before cancelling this Run')
+    }
+    return
+  }
+  if (context.runCancelled && command.type !== 'resolve_state_conflict') {
+    reject('run_cancelled', 'Workflow Run is cancelled')
   }
   if (command.type === 'resolve_approval_gate') {
     assertUser(command)
@@ -113,20 +131,8 @@ export function assertSchedulerCommandAuthority(
   }
 
   const task = requireTask(command, context)
-  if (command.type === 'assign_task') {
-    assertUser(command)
-    if (task.status !== 'waiting_role_assignment') {
-      reject('invalid_transition', 'only an unassigned task can receive a Role Assignment')
-    }
-    if (
-      task.allowedRoleProfileIds.size > 0 &&
-      !task.allowedRoleProfileIds.has(command.roleProfileId)
-    ) {
-      reject('role_not_allowed', 'Role is outside the Task allowlist')
-    }
-    if (!task.roleCatalogVersions.get(command.roleProfileId)?.has(command.roleProfileVersion)) {
-      reject('role_not_in_run_catalog', 'Role version is outside the frozen Run catalog')
-    }
+  if (command.type === 'assign_task' || command.type === 'reassign_task') {
+    assertTaskAssignmentAuthority({ command, task, reject })
     return
   }
   if (command.type === 'select_attempt') {
@@ -170,19 +176,7 @@ export function assertSchedulerCommandAuthority(
     return
   }
   if (command.type === 'recover_attempt') {
-    assertScheduler(command, context)
-    if (!task.knownAttemptIds.has(command.previousAttemptId)) {
-      reject('attempt_not_found', 'recovery target does not belong to this task')
-    }
-    if (!task.activeAttemptIds.has(command.previousAttemptId)) {
-      reject('stale_attempt', 'only an active Attempt can enter recovery')
-    }
-    if (
-      command.directive.kind === 'start_new_attempt' &&
-      task.knownAttemptIds.has(command.directive.newAttemptId)
-    ) {
-      reject('duplicate_attempt', 'recovery must create a new Attempt')
-    }
+    assertAttemptRecoveryAuthority({ command, task, schedulerId: context.schedulerId, reject })
     return
   }
   if (command.type === 'mark_merge_ready') {
@@ -225,6 +219,9 @@ export function assertSchedulerCommandAuthority(
   }
 
   assertExecutor(command, task)
+  if (command.type === 'submit_attempt_result' || command.type === 'report_progress') {
+    assertActiveExecutorCommand({ command, task, reject })
+  }
   if (command.type === 'submit_attempt_result') {
     const system = command.result.system
     const binding = task.attemptBindings.get(command.attemptId)!

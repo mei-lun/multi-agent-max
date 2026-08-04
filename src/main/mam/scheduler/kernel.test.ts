@@ -6,11 +6,51 @@ import type { SchedulerKernelContext } from './scheduler-command-authority'
 const hash = 'd'.repeat(64)
 
 describe('SchedulerKernel', () => {
+  it('records user cancellation and rejects cancellation while an Attempt is active', () => {
+    const kernel = new SchedulerKernel()
+    const context: SchedulerKernelContext = {
+      schedulerId: 'scheduler.1',
+      validArtifactHashes: new Set(),
+      processedCommandIds: new Set(),
+      mergeQueueEntries: new Map()
+    }
+    expect(kernel.execute(cancelRunCommand(), context).events[0]).toMatchObject({
+      type: 'workflow_run_cancelled',
+      userId: 'user.owner'
+    })
+    expect(() =>
+      kernel.execute(cancelRunCommand(), { ...context, hasActiveAttempts: true })
+    ).toThrow(expect.objectContaining({ code: 'active_attempts_present' }))
+    expect(() => kernel.execute(cancelRunCommand(), { ...context, runCancelled: true })).toThrow(
+      expect.objectContaining({ code: 'run_already_cancelled' })
+    )
+  })
+
   it('requires user authority for Role Assignment', () => {
     const kernel = new SchedulerKernel()
     expect(() =>
       kernel.execute(assignCommand('scheduler'), taskContext('waiting_role_assignment'))
     ).toThrow(expect.objectContaining({ code: 'user_authority_required' }))
+  })
+
+  it('records a compare-and-set Role reassignment before execution', () => {
+    const kernel = new SchedulerKernel()
+    expect(kernel.execute(reassignCommand(), taskContext('ready')).events[0]).toMatchObject({
+      type: 'task_reassigned',
+      previousRoleProfileId: 'role.developer',
+      previousRoleProfileVersion: 1,
+      roleProfileId: 'role.reviewer',
+      roleProfileVersion: 2
+    })
+    expect(() =>
+      kernel.execute({ ...reassignCommand(), previousRoleProfileVersion: 2 }, taskContext('ready'))
+    ).toThrow(expect.objectContaining({ code: 'assignment_changed' }))
+    expect(() => kernel.execute(reassignCommand(), taskContext('ready', ['attempt.1']))).toThrow(
+      expect.objectContaining({ code: 'active_attempt_reassignment_forbidden' })
+    )
+    expect(() => kernel.execute(reassignCommand(), taskContext('needs_attention'))).toThrow(
+      expect.objectContaining({ code: 'invalid_transition' })
+    )
   })
 
   it('records concurrent execution as a warning instead of rejecting it', () => {
@@ -74,6 +114,18 @@ describe('SchedulerKernel', () => {
   })
 })
 
+function cancelRunCommand() {
+  return {
+    schemaVersion: '1.0.0' as const,
+    commandId: 'command.cancel',
+    issuedAt: '2026-07-27T12:00:00Z',
+    workflowRunId: 'run.1',
+    actor: { kind: 'user' as const, userId: 'user.owner' },
+    type: 'cancel_workflow_run' as const,
+    reason: 'Start over.'
+  }
+}
+
 function taskContext(
   status: NonNullable<SchedulerKernelContext['task']>['status'],
   activeAttemptIds: string[] = [],
@@ -85,13 +137,18 @@ function taskContext(
       workflowRunId: 'run.1',
       taskId: 'task.1',
       status,
-      ...(status === 'waiting_role_assignment' ? {} : { assignedRoleProfileId: 'role.developer' }),
+      ...(status === 'waiting_role_assignment'
+        ? {}
+        : { assignedRoleProfileId: 'role.developer', assignedRoleProfileVersion: 1 }),
       activeAttemptIds: new Set(activeAttemptIds),
       knownAttemptIds: new Set(activeAttemptIds),
       submittedAttemptIds: new Set(),
       reviewDecisions: new Map(),
-      allowedRoleProfileIds: new Set(['role.developer']),
-      roleCatalogVersions: new Map([['role.developer', new Set([1])]]),
+      allowedRoleProfileIds: new Set(['role.developer', 'role.reviewer']),
+      roleCatalogVersions: new Map([
+        ['role.developer', new Set([1])],
+        ['role.reviewer', new Set([2])]
+      ]),
       attemptBindings: new Map(
         includeBinding
           ? [
@@ -142,6 +199,22 @@ function announceCommand() {
     claimId: 'claim.2',
     attemptId: 'attempt.2',
     executorInstanceId: 'executor.2'
+  }
+}
+
+function reassignCommand() {
+  return {
+    schemaVersion: '1.0.0',
+    commandId: 'command.reassign.user',
+    issuedAt: '2026-07-27T10:00:00Z',
+    workflowRunId: 'run.1',
+    taskId: 'task.1',
+    actor: { kind: 'user', userId: 'user.owner' },
+    type: 'reassign_task',
+    previousRoleProfileId: 'role.developer',
+    previousRoleProfileVersion: 1,
+    roleProfileId: 'role.reviewer',
+    roleProfileVersion: 2
   }
 }
 

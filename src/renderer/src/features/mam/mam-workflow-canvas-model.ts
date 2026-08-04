@@ -149,7 +149,7 @@ export function createWorkflowNode(
       id,
       type,
       ...roleSelection,
-      targetBranch: 'main',
+      targetBranch: 'develop',
       orderBy: 'merge_ready_at',
       strategy: 'no_ff',
       conflictPolicy: 'coordinator_attempt',

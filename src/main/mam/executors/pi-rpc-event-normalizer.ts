@@ -11,7 +11,7 @@ export function normalizePiRpcEvent(input: {
   executorInvocationId: string
   timestamp: string
 }): ExecutorEvent {
-  const event = asRecord(input.event)
+  const event = asRecord(compactPiRpcEvent(input.event))
   const sourceEventType = typeof event.type === 'string' ? event.type : 'unknown'
   const { type: _type, ...payload } = event
   return ExecutorEventSchema.parse({
@@ -23,6 +23,47 @@ export function normalizePiRpcEvent(input: {
     sourceEventType,
     payload: redactPiRpcValue(payload)
   })
+}
+
+/**
+ * Pi repeats the complete assistant message in every streaming update. Keep
+ * only the delta and small lifecycle metadata so one response cannot make
+ * diagnostics grow quadratically.
+ */
+export function compactPiRpcEvent(value: unknown): unknown {
+  const event = asRecord(value)
+  const type = typeof event.type === 'string' ? event.type : ''
+  if (type === 'message_update') {
+    const update = asRecord(event.assistantMessageEvent)
+    return {
+      type,
+      assistantMessageEvent: {
+        type: update.type,
+        contentIndex: update.contentIndex,
+        ...(typeof update.delta === 'string' ? { delta: update.delta } : {})
+      }
+    }
+  }
+  if (type === 'message_start' || type === 'message_end') {
+    const message = asRecord(event.message)
+    return {
+      type,
+      message: {
+        role: message.role,
+        contentTypes: Array.isArray(message.content)
+          ? message.content.map((item) => asRecord(item).type).filter(Boolean)
+          : []
+      }
+    }
+  }
+  if (type === 'turn_end') {
+    return { type }
+  }
+  if (type === 'agent_end') {
+    const messages = Array.isArray(event.messages) ? event.messages : []
+    return { type, messageCount: messages.length }
+  }
+  return value
 }
 
 export function normalizePiRpcUsage(stats: SessionStats): ExecutorUsage {

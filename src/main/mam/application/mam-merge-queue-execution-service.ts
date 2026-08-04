@@ -11,6 +11,7 @@ import { IntegrationWorktreeMergeExecutor } from './integration-worktree-merge-e
 import { MergeQueue } from './merge-queue-service'
 import type { MamUiQueryService } from './mam-ui-query-service'
 import { advanceDeterministicNodes } from './deterministic-node-advancement'
+import { publishMergeReadinessForApprovedTasks } from './merge-readiness-publisher'
 
 export class MamMergeQueueExecutionService {
   private repository: GitStateRepository | undefined
@@ -71,6 +72,13 @@ export class MamMergeQueueExecutionService {
       schedulerId: this.schedulerId
     })
     advanceDeterministicNodes({
+      repository,
+      workflowRunId: request.workflowRunId,
+      schedulerId: this.schedulerId,
+      nextCommandId: this.createId,
+      now: this.now
+    })
+    publishMergeReadinessForApprovedTasks({
       repository,
       workflowRunId: request.workflowRunId,
       schedulerId: this.schedulerId,

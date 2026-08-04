@@ -15,6 +15,11 @@ import {
 } from '../application/workflow-run-factory'
 import { GitCommandConflictStore } from './git-command-conflict-store'
 import { GitCommandRetryCoordinator } from './git-command-retry-coordinator'
+import {
+  createGitCommandClient,
+  GitCommandError,
+  type GitCommandClient
+} from './git-command-client'
 import { GitStateRepository } from './git-state-repository'
 
 const temporaryDirectories: string[] = []
@@ -26,6 +31,216 @@ afterEach(() => {
 })
 
 describe('GitStateRepository with real Git clones', () => {
+  it('bootstraps mam-state while the project HEAD remains unborn', () => {
+    const root = mkdtempSync(join(tmpdir(), 'mam-empty-project-'))
+    temporaryDirectories.push(root)
+    const origin = join(root, 'origin.git')
+    const project = join(root, 'project')
+    const state = join(root, 'state')
+    mkdirSync(project)
+    git(root, ['init', '--bare', origin])
+    git(project, ['init'])
+    const initialBranch = git(project, ['symbolic-ref', '--short', 'HEAD'])
+    writeFileSync(join(project, 'staged.txt'), 'keep staged\n')
+    git(project, ['add', 'staged.txt'])
+    git(project, ['remote', 'add', 'origin', origin])
+
+    const repository = GitStateRepository.attach(project, state)
+
+    expect(repository.collaborationMode).toBe('distributed')
+    expect(repository.remote).toBe('origin')
+    expect(git(project, ['symbolic-ref', '--short', 'HEAD'])).toBe(initialBranch)
+    expect(() => git(project, ['rev-parse', '--verify', 'HEAD^{commit}'])).toThrow()
+    expect(git(project, ['status', '--short', '--', 'staged.txt'])).toBe('A  staged.txt')
+    expect(git(state, ['branch', '--show-current'])).toBe('mam-state')
+    expect(git(origin, ['show', 'refs/heads/mam-state:.workflow/.gitkeep'])).toBe('')
+    expect(git(origin, ['rev-parse', 'refs/heads/mam-state'])).toBe(repository.currentCommit())
+    expect(repository.listWorkflowRunIds()).toEqual([])
+  })
+
+  it('reattaches a second unborn project to the existing mam-state branch', () => {
+    const root = mkdtempSync(join(tmpdir(), 'mam-empty-project-pair-'))
+    temporaryDirectories.push(root)
+    const origin = join(root, 'origin.git')
+    const projectA = join(root, 'project-a')
+    const projectB = join(root, 'project-b')
+    mkdirSync(projectA)
+    mkdirSync(projectB)
+    git(root, ['init', '--bare', origin])
+    for (const project of [projectA, projectB]) {
+      git(project, ['init'])
+      git(project, ['remote', 'add', 'origin', origin])
+    }
+
+    const repositoryA = GitStateRepository.attach(projectA, join(root, 'state-a'))
+    const repositoryB = GitStateRepository.attach(projectB, join(root, 'state-b'))
+
+    expect(repositoryB.currentCommit()).toBe(repositoryA.currentCommit())
+    expect(git(origin, ['rev-list', '--count', 'refs/heads/mam-state'])).toBe('1')
+    for (const project of [projectA, projectB]) {
+      expect(() => git(project, ['rev-parse', '--verify', 'HEAD^{commit}'])).toThrow()
+    }
+  })
+
+  it('keeps state local when an unborn project has no remote', () => {
+    const root = mkdtempSync(join(tmpdir(), 'mam-empty-project-no-remote-'))
+    temporaryDirectories.push(root)
+    const project = join(root, 'project')
+    const state = join(root, 'state')
+    mkdirSync(project)
+    git(project, ['init'])
+    configureIdentity(project)
+    const initialBranch = git(project, ['symbolic-ref', '--short', 'HEAD'])
+    writeFileSync(join(project, 'staged.txt'), 'keep staged\n')
+    git(project, ['add', 'staged.txt'])
+
+    const repository = GitStateRepository.attach(project, state)
+    const initialStateCommit = repository.currentCommit()
+    initializeRun(new GitCommandRetryCoordinator(repository))
+
+    expect(repository.collaborationMode).toBe('local')
+    expect(repository.remote).toBeUndefined()
+    expect(repository.currentCommit()).not.toBe(initialStateCommit)
+    expect(repository.listWorkflowRunIds()).toEqual(['run.git'])
+    expect(git(state, ['branch', '--show-current'])).toBe('mam-state')
+    expect(git(project, ['symbolic-ref', '--short', 'HEAD'])).toBe(initialBranch)
+    expect(() => git(project, ['rev-parse', '--verify', 'HEAD^{commit}'])).toThrow()
+    expect(git(project, ['status', '--short', '--', 'staged.txt'])).toBe('A  staged.txt')
+
+    const reattached = GitStateRepository.attach(project, state)
+    expect(reattached.currentCommit()).toBe(repository.currentCommit())
+    expect(reattached.rebuild('run.git').eventIds).toHaveLength(1)
+  })
+
+  it('allows separate local state worktrees to publish to one local branch', () => {
+    const root = mkdtempSync(join(tmpdir(), 'mam-local-state-pair-'))
+    temporaryDirectories.push(root)
+    const project = join(root, 'project')
+    mkdirSync(project)
+    git(project, ['init'])
+    configureIdentity(project)
+    writeFileSync(join(project, 'README.md'), '# local pair\n')
+    git(project, ['add', 'README.md'])
+    git(project, ['commit', '-m', 'base'])
+
+    const repositoryA = GitStateRepository.attach(project, join(root, 'state-a'))
+    const coordinatorA = new GitCommandRetryCoordinator(repositoryA)
+    const bundle = initializeRun(coordinatorA)
+    const repositoryB = GitStateRepository.attach(project, join(root, 'state-b'))
+    const coordinatorB = new GitCommandRetryCoordinator(repositoryB)
+
+    const resultB = coordinatorB.executeAndPush({
+      command: assignmentCommand('command.assign.local', taskId(bundle, 'task-a')),
+      schedulerId: 'scheduler.local'
+    })
+
+    repositoryA.alignToRemote()
+    expect(resultB.retryCount).toBe(0)
+    expect(repositoryA.rebuild('run.git').stateHash).toBe(resultB.projection.stateHash)
+  })
+
+  it('retries a stale local state publication on the current local branch', () => {
+    const root = mkdtempSync(join(tmpdir(), 'mam-local-state-retry-'))
+    temporaryDirectories.push(root)
+    const project = join(root, 'project')
+    mkdirSync(project)
+    git(project, ['init'])
+    configureIdentity(project)
+    writeFileSync(join(project, 'README.md'), '# local retry\n')
+    git(project, ['add', 'README.md'])
+    git(project, ['commit', '-m', 'base'])
+
+    const repositoryA = GitStateRepository.attach(project, join(root, 'state-a'))
+    const coordinatorA = new GitCommandRetryCoordinator(repositoryA)
+    const bundle = initializeRun(coordinatorA)
+    const repositoryB = GitStateRepository.attach(project, join(root, 'state-b'))
+    const coordinatorB = new GitCommandRetryCoordinator(repositoryB)
+    const preparedA = coordinatorA.prepare({
+      command: assignmentCommand('command.assign.local.a', taskId(bundle, 'task-a')),
+      schedulerId: 'scheduler.local'
+    })
+    const preparedB = coordinatorB.prepare({
+      command: assignmentCommand('command.assign.local.b', taskId(bundle, 'task-b')),
+      schedulerId: 'scheduler.local'
+    })
+
+    coordinatorA.publish(preparedA)
+    const resultB = coordinatorB.publish(preparedB)
+
+    expect(resultB.retryCount).toBe(1)
+    expect(resultB.projection.tasks[taskId(bundle, 'task-a')]).toMatchObject({
+      roleProfileId: 'role.developer'
+    })
+    expect(resultB.projection.tasks[taskId(bundle, 'task-b')]).toMatchObject({
+      roleProfileId: 'role.developer'
+    })
+  })
+
+  it('distinguishes an unavailable remote from a missing mam-state branch', () => {
+    const root = mkdtempSync(join(tmpdir(), 'mam-empty-project-bad-remote-'))
+    temporaryDirectories.push(root)
+    const project = join(root, 'project')
+    const state = join(root, 'state')
+    mkdirSync(project)
+    git(project, ['init'])
+    git(project, ['remote', 'add', 'origin', join(root, 'missing-origin.git')])
+
+    expect(() => GitStateRepository.attach(project, state)).toThrow(
+      expect.objectContaining({ code: 'git_remote_unavailable' })
+    )
+    expect(existsSync(state)).toBe(false)
+  })
+
+  it('cleans a failed initial push so project selection can retry', () => {
+    const root = mkdtempSync(join(tmpdir(), 'mam-empty-project-push-retry-'))
+    temporaryDirectories.push(root)
+    const origin = join(root, 'origin.git')
+    const project = join(root, 'project')
+    const state = join(root, 'state')
+    mkdirSync(project)
+    git(root, ['init', '--bare', origin])
+    git(project, ['init'])
+    git(project, ['remote', 'add', 'origin', origin])
+    const delegate = createGitCommandClient()
+    let rejectPush = true
+    const gitClient: GitCommandClient = {
+      ...delegate,
+      run: (cwd, args) => {
+        if (rejectPush && args[0] === 'push') {
+          rejectPush = false
+          throw new GitCommandError(args, 1, 'simulated push failure')
+        }
+        return delegate.run(cwd, args)
+      }
+    }
+
+    expect(() => GitStateRepository.attach(project, state, { gitClient })).toThrow(
+      expect.objectContaining({ code: 'state_branch_initialization_failed' })
+    )
+    expect(existsSync(state)).toBe(false)
+
+    const repository = GitStateRepository.attach(project, state, { gitClient })
+    expect(git(origin, ['rev-parse', 'refs/heads/mam-state'])).toBe(repository.currentCommit())
+  })
+
+  it('does not treat a damaged HEAD as an unborn branch', () => {
+    const root = mkdtempSync(join(tmpdir(), 'mam-project-invalid-head-'))
+    temporaryDirectories.push(root)
+    const origin = join(root, 'origin.git')
+    const project = join(root, 'project')
+    const state = join(root, 'state')
+    mkdirSync(project)
+    git(root, ['init', '--bare', origin])
+    git(project, ['init'])
+    git(project, ['remote', 'add', 'origin', origin])
+    writeFileSync(join(project, '.git', 'HEAD'), 'invalid-head\n')
+
+    expect(() => GitStateRepository.attach(project, state)).toThrow(
+      expect.objectContaining({ code: 'not_git_repository' })
+    )
+    expect(existsSync(state)).toBe(false)
+  })
+
   it('re-executes a stale command and converges without changing either project branch', () => {
     const fixture = createGitFixture()
     const repositoryA = GitStateRepository.attach(fixture.cloneA, fixture.stateA)

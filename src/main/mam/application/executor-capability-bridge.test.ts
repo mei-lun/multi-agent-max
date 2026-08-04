@@ -76,7 +76,7 @@ describe('Executor capability bridge', () => {
       query: 'scheduler',
       collection: 'guides',
       topK: 2,
-      maxContextTokens: 1000
+      maxContextTokens: 8000
     })
     expect(knowledgeConnector.read).toHaveBeenCalledWith(fixture.knowledgeResource, {
       documentRef: 'scheduler.md',
@@ -148,11 +148,7 @@ function attemptFixture() {
     indexRevision: 'index.7'
   }
   const knowledgeBinding: RoleKnowledgeBaseBinding = {
-    knowledgeBaseProfileId: knowledgeProfile.id,
-    collections: ['guides'],
-    allowedOperations: ['search', 'read'],
-    retrievalPolicy: { topK: 5, maxContextTokens: 1000 },
-    required: true
+    knowledgeBaseProfileId: knowledgeProfile.id
   }
   const hash = 'a'.repeat(64)
   const ref = { id: 'profile', version: 1, contentHash: hash }
@@ -183,9 +179,6 @@ function attemptFixture() {
     mcpBindings: [
       {
         serverProfileId: mcpProfile.id,
-        allowedTools: ['mcp.search'],
-        allowedResources: [],
-        allowedPrompts: [],
         version: mcpProfile.version,
         contentHash: profileContentHash(mcpProfile)
       }
@@ -254,12 +247,7 @@ function attemptFixture() {
     skills: [],
     mcpResources: [
       {
-        binding: {
-          serverProfileId: mcpProfile.id,
-          allowedTools: ['mcp.search'],
-          allowedResources: [],
-          allowedPrompts: []
-        },
+        binding: { serverProfileId: mcpProfile.id },
         profile: mcpProfile
       }
     ],

@@ -15,13 +15,13 @@ import type {
 } from '../../../shared/mam/domain/merge-conflict-task'
 import { EMPTY_SCHEDULER_REVISION } from '../../../shared/mam/scheduler-protocol'
 import type {
-  AttemptBinding,
   SchedulerKernelContext,
   SchedulerTaskContext
 } from '../scheduler/scheduler-command-authority'
 import { withProjectionHash } from './git-state-stable-hash'
 import type { ConditionProjection } from './condition-projection'
 import type { SystemNodeExecutionProjection } from './system-node-execution-projection'
+import { projectTaskAttemptCommandContext } from './task-attempt-command-context'
 
 export type ProjectedTaskStatus = SchedulerTaskContext['status']
 
@@ -77,6 +77,12 @@ export type WorkflowRunProjection = Readonly<{
     definitionVersion: number
     planHash: string
     roleCatalogHash: string
+  }>
+  cancellation?: Readonly<{
+    userId: string
+    reason: string
+    cancelledAt: string
+    lastEventId: string
   }>
   tasks: Readonly<Record<string, TaskProjection>>
   attempts: Readonly<Record<string, AttemptProjection>>
@@ -205,6 +211,10 @@ export function schedulerContextFromProjection(
       : undefined
   return {
     schedulerId: input.schedulerId,
+    runCancelled: Boolean(projection.cancellation),
+    hasActiveAttempts: Object.values(projection.attempts).some(
+      (attempt) => attempt.status === 'announced' || attempt.status === 'running'
+    ),
     ...(task ? { task } : {}),
     ...(input.approvalGates ? { approvalGates: input.approvalGates } : {}),
     validArtifactHashes: input.validArtifactHashes ?? new Set(),
@@ -250,17 +260,7 @@ function toTaskContext(
     mergeResolutionCandidate?: MergeConflictResolution
   }>
 ): SchedulerTaskContext {
-  const bindings = new Map<string, AttemptBinding>()
-  for (const attemptId of task?.knownAttemptIds ?? []) {
-    const attempt = attempts[attemptId]
-    if (attempt?.roleInstanceId && attempt.executorInvocationId && attempt.effectiveConfigHash) {
-      bindings.set(attemptId, {
-        roleInstanceId: attempt.roleInstanceId,
-        executorInvocationId: attempt.executorInvocationId,
-        effectiveConfigHash: attempt.effectiveConfigHash
-      })
-    }
-  }
+  const attemptContext = projectTaskAttemptCommandContext(task, attempts)
   const reviewDecisions = new Map(
     (task?.reviewIds ?? []).flatMap((reviewId) => {
       const review = reviews[reviewId]
@@ -274,14 +274,8 @@ function toTaskContext(
     taskId,
     status: task?.status ?? definition?.initialStatus ?? 'waiting_dependencies',
     ...(task?.roleProfileId ? { assignedRoleProfileId: task.roleProfileId } : {}),
-    activeAttemptIds: new Set(task?.activeAttemptIds ?? []),
-    knownAttemptIds: new Set(task?.knownAttemptIds ?? []),
-    submittedAttemptIds: new Set(
-      (task?.knownAttemptIds ?? []).filter(
-        (attemptId) => attempts[attemptId]?.status === 'submitted'
-      )
-    ),
-    attemptBindings: bindings,
+    ...(task?.roleProfileVersion ? { assignedRoleProfileVersion: task.roleProfileVersion } : {}),
+    ...attemptContext,
     allowedRoleProfileIds: new Set(definition?.allowedRoleProfileIds ?? []),
     roleCatalogVersions:
       definition?.roleCatalogVersions ??

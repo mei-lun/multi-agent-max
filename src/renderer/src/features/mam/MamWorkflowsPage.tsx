@@ -1,7 +1,10 @@
 import { ArrowRight, Network, Pencil } from 'lucide-react'
 import { useState } from 'react'
-import type { MamSaveWorkflowInput } from '../../../../shared/mam/application-command'
-import type { MamCreateWorkflowRunInput } from '../../../../shared/mam/application-command'
+import type {
+  MamCreateWorkflowRunInput,
+  MamSaveLocalSettingsInput,
+  MamSaveWorkflowInput
+} from '../../../../shared/mam/application-command'
 import type { WorkflowDefinition } from '../../../../shared/mam/domain/workflow'
 import type { MamUiSnapshot } from '../../../../shared/mam/ui-projection'
 import { Badge } from '../../components/ui/badge'
@@ -14,15 +17,20 @@ export function MamWorkflowsPage({
   snapshot,
   pending,
   onSaveWorkflow,
-  onCreateWorkflowRun
+  onCreateWorkflowRun,
+  onSaveLocalSettings,
+  openNewWorkflow = false
 }: Readonly<{
   snapshot: MamUiSnapshot
   pending: boolean
   onSaveWorkflow(input: MamSaveWorkflowInput): Promise<void>
-  onCreateWorkflowRun(input: MamCreateWorkflowRunInput): Promise<void>
+  onCreateWorkflowRun(input: MamCreateWorkflowRunInput): Promise<MamUiSnapshot>
+  onSaveLocalSettings(input: MamSaveLocalSettingsInput): Promise<void>
+  openNewWorkflow?: boolean
 }>): React.JSX.Element {
-  const [editing, setEditing] = useState<WorkflowDefinition>()
   const workflows = snapshot.workflows
+  const [editing, setEditing] = useState<WorkflowDefinition>()
+  const [newWorkflowOpen, setNewWorkflowOpen] = useState(openNewWorkflow)
   if (editing) {
     return (
       <MamWorkflowEditor
@@ -50,6 +58,9 @@ export function MamWorkflowsPage({
         </div>
         <MamNewWorkflowDialog
           existingIds={workflows.map((workflow) => workflow.id)}
+          roles={snapshot.roles}
+          open={newWorkflowOpen}
+          onOpenChange={setNewWorkflowOpen}
           onCreate={setEditing}
         />
       </div>
@@ -77,8 +88,11 @@ export function MamWorkflowsPage({
                   <Badge variant="outline">v{workflow.version}</Badge>
                   <MamStartWorkflowRunDialog
                     workflow={workflow}
+                    existingRunIds={snapshot.runs.map((run) => run.run.id)}
+                    localSettings={snapshot.localSettings}
                     disabled={pending || !snapshot.projectBinding}
                     onCreate={onCreateWorkflowRun}
+                    onSaveLocalSettings={onSaveLocalSettings}
                   />
                   <Button
                     variant="outline"

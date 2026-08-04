@@ -1,4 +1,4 @@
-import { AlertTriangle, Play } from 'lucide-react'
+import { AlertTriangle, Loader2, Play } from 'lucide-react'
 import { useState } from 'react'
 import type { MamStartAttemptInput } from '../../../../shared/mam/application-command'
 import { Button } from '../../components/ui/button'
@@ -25,10 +25,16 @@ export function MamStartAttemptDialog({
   onStart(input: MamStartAttemptInput): Promise<void>
 }>): React.JSX.Element {
   const [open, setOpen] = useState(false)
+  const [error, setError] = useState<string>()
   const { locale } = useUiLocale()
   const start = async (): Promise<void> => {
-    await onStart(input)
-    setOpen(false)
+    setError(undefined)
+    try {
+      await onStart(input)
+      setOpen(false)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    }
   }
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -62,13 +68,24 @@ export function MamStartAttemptDialog({
           </p>
         )}
         <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)}>
+          <Button variant="ghost" onClick={() => setOpen(false)}>
             Cancel
           </Button>
-          <Button disabled={pending} onClick={() => void start()}>
-            Start Attempt
+          <Button disabled={pending} aria-busy={pending} onClick={() => void start()}>
+            {pending ? <Loader2 className="animate-spin" /> : <Play />}
+            {pending ? 'Starting Attempt…' : 'Start Attempt'}
           </Button>
         </DialogFooter>
+        {pending && (
+          <p className="text-xs text-muted-foreground" role="status" aria-live="polite">
+            Preparing the Attempt and worktree…
+          </p>
+        )}
+        {error && (
+          <p className="text-xs text-destructive" role="alert">
+            {error}
+          </p>
+        )}
       </DialogContent>
     </Dialog>
   )

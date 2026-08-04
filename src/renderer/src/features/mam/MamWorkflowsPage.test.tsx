@@ -9,6 +9,7 @@ describe('MAM Workflows page', () => {
     snapshot.projectBinding = {
       projectDirectory: '/project',
       stateDirectory: '/state',
+      collaborationMode: 'distributed',
       remote: 'origin',
       branch: 'mam-state'
     }
@@ -29,7 +30,8 @@ describe('MAM Workflows page', () => {
         snapshot={snapshot}
         pending={false}
         onSaveWorkflow={async () => undefined}
-        onCreateWorkflowRun={async () => undefined}
+        onCreateWorkflowRun={async () => snapshot}
+        onSaveLocalSettings={async () => undefined}
       />
     )
 

@@ -11,11 +11,45 @@ import { KnowledgeBaseProfileSchema, McpServerProfileSchema } from './domain/res
 import { MamSkillDefinitionSchema } from './domain/skill-definition'
 import { MamLocalSettingsSchema } from './local-settings'
 import { ArtifactRefSchema } from './domain/artifact'
+import { MamModelConnectionProtocolSchema } from './model-catalog'
+
+export const MamSaveModelConnectionInputSchema = z
+  .object({
+    displayName: z.string().trim().min(1).max(160),
+    protocol: MamModelConnectionProtocolSchema,
+    baseUrl: z.url().optional(),
+    apiKey: z.string().trim().min(1).max(20_000).optional(),
+    remoteModelId: z.string().trim().min(1).max(400)
+  })
+  .strict()
+
+export const MamDeleteRoleProfileInputSchema = z
+  .object({ roleProfileId: MamEntityIdSchema })
+  .strict()
+
+export const MamCancelWorkflowRunInputSchema = z
+  .object({ workflowRunId: MamEntityIdSchema })
+  .strict()
+
+export const MamRestartWorkflowRunInputSchema = z
+  .object({ workflowRunId: MamEntityIdSchema })
+  .strict()
 
 export const MamAssignTaskInputSchema = z
   .object({
     workflowRunId: MamEntityIdSchema,
     taskId: MamEntityIdSchema,
+    roleProfileId: MamEntityIdSchema,
+    roleProfileVersion: z.number().int().positive()
+  })
+  .strict()
+
+export const MamReassignTaskInputSchema = z
+  .object({
+    workflowRunId: MamEntityIdSchema,
+    taskId: MamEntityIdSchema,
+    previousRoleProfileId: MamEntityIdSchema,
+    previousRoleProfileVersion: z.number().int().positive(),
     roleProfileId: MamEntityIdSchema,
     roleProfileVersion: z.number().int().positive()
   })
@@ -119,6 +153,7 @@ export const MamSaveLocalSettingsInputSchema = z
   .strict()
 
 export type MamAssignTaskInput = z.infer<typeof MamAssignTaskInputSchema>
+export type MamReassignTaskInput = z.infer<typeof MamReassignTaskInputSchema>
 export type MamRecoverAttemptInput = z.infer<typeof MamRecoverAttemptInputSchema>
 export type MamStartAttemptInput = z.infer<typeof MamStartAttemptInputSchema>
 export type MamExecuteNextMergeInput = z.infer<typeof MamExecuteNextMergeInputSchema>
@@ -132,3 +167,7 @@ export type MamResolveApprovalGateInput = z.infer<typeof MamResolveApprovalGateI
 export type MamSelectAttemptInput = z.infer<typeof MamSelectAttemptInputSchema>
 export type MamSaveProfileInput = z.infer<typeof MamSaveProfileInputSchema>
 export type MamSaveLocalSettingsInput = z.infer<typeof MamSaveLocalSettingsInputSchema>
+export type MamSaveModelConnectionInput = z.infer<typeof MamSaveModelConnectionInputSchema>
+export type MamDeleteRoleProfileInput = z.infer<typeof MamDeleteRoleProfileInputSchema>
+export type MamCancelWorkflowRunInput = z.infer<typeof MamCancelWorkflowRunInputSchema>
+export type MamRestartWorkflowRunInput = z.infer<typeof MamRestartWorkflowRunInputSchema>

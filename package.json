@@ -82,6 +82,7 @@
     "appId": "com.multiagentmax.desktop",
     "productName": "Multi-Agent Max",
     "asar": true,
+    "electronDist": "node_modules/electron/dist",
     "directories": {
       "output": "release"
     },

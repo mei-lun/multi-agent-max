@@ -140,11 +140,7 @@ async function testRoot(): Promise<string> {
 function knowledgeResource(root: string): ResolvedKnowledgeResource {
   return {
     binding: {
-      knowledgeBaseProfileId: 'knowledge.docs',
-      collections: ['guides'],
-      allowedOperations: ['search', 'read'],
-      retrievalPolicy: { topK: 5, maxContextTokens: 1000 },
-      required: true
+      knowledgeBaseProfileId: 'knowledge.docs'
     },
     profile: {
       id: 'knowledge.docs',

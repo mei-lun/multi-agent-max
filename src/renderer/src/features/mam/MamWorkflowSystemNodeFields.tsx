@@ -7,6 +7,7 @@ import {
   MamWorkflowArtifactRefList
 } from './MamWorkflowArtifactFields'
 import { MamWorkflowLabeledField, MamWorkflowStringListField } from './MamWorkflowFieldControls'
+import { MamWorkflowDataContractDetails } from './MamWorkflowDataContractDetails'
 
 type SystemNode = Exclude<WorkflowNode, { recommendedRoleProfileIds: string[] }>
 
@@ -81,18 +82,20 @@ export function MamWorkflowSystemNodeFields({
             onChange={(event) => onChange({ ...node, transform: event.target.value })}
           />
         </MamWorkflowLabeledField>
-        <MamWorkflowArtifactRefList
-          label="Input Artifacts"
-          references={node.inputs}
-          minimum={1}
-          onChange={(inputs) => onChange({ ...node, inputs })}
-        />
-        <MamWorkflowArtifactContractList
-          label="Output Artifact contracts"
-          contracts={node.outputs}
-          minimum={1}
-          onChange={(outputs) => onChange({ ...node, outputs })}
-        />
+        <MamWorkflowDataContractDetails>
+          <MamWorkflowArtifactRefList
+            label="Input Artifacts"
+            references={node.inputs}
+            minimum={1}
+            onChange={(inputs) => onChange({ ...node, inputs })}
+          />
+          <MamWorkflowArtifactContractList
+            label="Output Artifact contracts"
+            contracts={node.outputs}
+            minimum={1}
+            onChange={(outputs) => onChange({ ...node, outputs })}
+          />
+        </MamWorkflowDataContractDetails>
       </div>
     )
   }
@@ -119,20 +122,24 @@ export function MamWorkflowSystemNodeFields({
             onChange={(event) => onChange({ ...node, workingDirectory: event.target.value })}
           />
         </MamWorkflowLabeledField>
-        <MamWorkflowArtifactContractList
-          label="Output Artifact contracts"
-          contracts={node.outputs}
-          onChange={(outputs) => onChange({ ...node, outputs })}
-        />
+        <MamWorkflowDataContractDetails>
+          <MamWorkflowArtifactContractList
+            label="Output Artifact contracts"
+            contracts={node.outputs}
+            onChange={(outputs) => onChange({ ...node, outputs })}
+          />
+        </MamWorkflowDataContractDetails>
       </div>
     )
   }
   return (
-    <MamWorkflowArtifactRefList
-      label="Completion inputs"
-      references={node.inputs}
-      onChange={(inputs) => onChange({ ...node, inputs })}
-    />
+    <MamWorkflowDataContractDetails>
+      <MamWorkflowArtifactRefList
+        label="Completion inputs"
+        references={node.inputs}
+        onChange={(inputs) => onChange({ ...node, inputs })}
+      />
+    </MamWorkflowDataContractDetails>
   )
 }
 

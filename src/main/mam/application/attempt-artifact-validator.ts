@@ -6,6 +6,8 @@ import type { ArtifactContract, ArtifactVersion } from '../../../shared/mam/doma
 import type { ArtifactRef } from '../../../shared/mam/domain/artifact'
 import type { LocalArtifactStore } from '../artifacts/local-artifact-store'
 
+export type AttemptArtifactContent = Readonly<{ bytes: Buffer; value: unknown }>
+
 export type ValidatedAttemptArtifacts = Readonly<{
   result: AttemptResult
   validHashes: ReadonlySet<string>
@@ -29,6 +31,7 @@ export class AttemptArtifactValidator {
     attemptId: string
     roleInstanceId: string
     inputArtifacts: readonly ArtifactRef[]
+    contentOverrides?: ReadonlyMap<string, AttemptArtifactContent>
   }): Promise<ValidatedAttemptArtifacts> {
     const claims = input.result.artifacts
     assertClaimsCoverContracts(claims, input.outputContracts)
@@ -38,7 +41,9 @@ export class AttemptArtifactValidator {
       const contract = input.outputContracts.find(
         (candidate) => candidate.artifactType === claim.contractId
       )!
-      const content = await readClaimedContent(input.workspacePath, claim.contentRef, contract)
+      const content =
+        input.contentOverrides?.get(claim.contractId) ??
+        (await readClaimedContent(input.workspacePath, claim.contentRef, contract))
       const sourceHash = createHash('sha256').update(content.bytes).digest('hex')
       if (sourceHash !== claim.sha256) throw new Error('artifact_claim_hash_mismatch')
       const version = await this.store.put({
@@ -83,7 +88,7 @@ async function readClaimedContent(
   workspacePath: string,
   contentRef: string,
   contract: ArtifactContract
-): Promise<Readonly<{ bytes: Buffer; value: unknown }>> {
+): Promise<AttemptArtifactContent> {
   if (isAbsolute(contentRef)) throw new Error('artifact_content_ref_must_be_relative')
   const root = await realpath(resolve(workspacePath))
   const candidate = resolve(root, contentRef)

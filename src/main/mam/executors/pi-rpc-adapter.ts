@@ -13,19 +13,16 @@ import type { EffectiveRoleConfigSnapshot } from '../../../shared/mam/domain/rol
 import type { ExecutorEvent, ExecutorUsage } from '../../../shared/mam/executor-events'
 import {
   AgentAttemptResultPayloadSchema,
-  agentAttemptResultJsonSchema,
   buildAttemptResult,
   type AttemptResultAuthority
 } from '../artifacts/attempt-result-builder'
 import type { MaterializedAttemptResources } from '../profiles/attempt-resource-materializer'
 import { ExecutorLocalPreflight } from './executor-local-preflight'
-import {
-  acceptedPiResultEvent,
-  normalizePiRpcEvent,
-  normalizePiRpcUsage
-} from './pi-rpc-event-normalizer'
+import { normalizePiRpcEvent, normalizePiRpcUsage } from './pi-rpc-event-normalizer'
 import { preparePiRpcInvocation, type PiRpcInvocation } from './pi-rpc-invocation'
 import { PiRpcLogWriter } from './pi-rpc-log-writer'
+import type { ExecutorCapabilityBridge } from '../application/executor-capability-bridge'
+import { startPiApplicationApiBridge } from './pi-application-api-bridge-server'
 
 export type PiRpcClient = Readonly<{
   start(): Promise<void>
@@ -44,12 +41,19 @@ export type PiRpcExecutionResult = Readonly<{
   invocation: PiRpcInvocation
   events: readonly ExecutorEvent[]
   usage: ExecutorUsage
-  result: AttemptResult
+  result?: AttemptResult
+  assistantText?: string | null
   stderr: string
 }>
 
 type PiClientFactory = (options: RpcClientOptions) => PiRpcClient | Promise<PiRpcClient>
 type ActivePiInvocation = Readonly<{ client: PiRpcClient; logger: PiRpcLogWriter }>
+
+function eventType(event: unknown): string | undefined {
+  if (!event || typeof event !== 'object' || Array.isArray(event)) return undefined
+  const type = (event as { type?: unknown }).type
+  return typeof type === 'string' ? type : undefined
+}
 
 export class PiRpcAdapterError extends Error {
   constructor(
@@ -81,78 +85,99 @@ export class PiRpcAdapter {
     prompt: string
     credentialValues: Readonly<Record<string, string>>
     authority: AttemptResultAuthority
+    capabilityBridge?: ExecutorCapabilityBridge
   }): Promise<PiRpcExecutionResult> {
     this.validateExecution(input)
-    const invocation = await preparePiRpcInvocation({
-      ...input,
-      executorBinding: input.binding
-    })
-    const logger = new PiRpcLogWriter(
-      invocation.rpcLogPath,
-      Object.values(input.credentialValues),
-      this.now
-    )
-    const client = await this.createClient(invocation.launchOptions)
-    const events: ExecutorEvent[] = []
-    const unsubscribe = client.onEvent((event) => {
-      void logger.append('event', event)
-      events.push(
-        normalizePiRpcEvent({
-          event,
-          executorInvocationId: input.executorInvocationId,
-          timestamp: this.now()
-        })
-      )
-    })
-    this.activeInvocations.set(input.executorInvocationId, { client, logger })
-    try {
-      await client.start()
-      const structuredPrompt = resultPrompt(input.prompt)
-      await logger.append('command', { type: 'prompt', message: structuredPrompt })
-      const idle = client.waitForIdle(input.snapshot.budget.maxDurationSeconds * 1000)
-      await client.prompt(structuredPrompt)
-      await idle
-      const [resultText, stats] = await Promise.all([
-        client.getLastAssistantText(),
-        client.getSessionStats()
-      ])
-      const usage = normalizePiRpcUsage(stats)
-      const payload = parseStructuredResult(resultText, usage)
-      const authority = {
-        ...input.authority,
-        executorInvocationId: input.executorInvocationId,
-        effectiveConfigHash: input.snapshot.contentHash
-      }
-      events.push(
-        acceptedPiResultEvent({
-          executorInvocationId: input.executorInvocationId,
-          timestamp: this.now()
-        })
-      )
-      await client.stop()
-      const stderr = client.getStderr()
-      if (stderr) await logger.append('stderr', stderr)
-      return {
-        invocation,
-        events,
-        usage,
-        result: buildAttemptResult(payload, authority),
-        stderr
-      }
-    } catch (error) {
-      await client.stop().catch(() => undefined)
-      const stderr = client.getStderr()
-      if (stderr) await logger.append('stderr', stderr)
-      if (error instanceof PiRpcAdapterError) throw error
-      const message = error instanceof Error ? error.message : String(error)
-      if (/timeout/i.test(message)) fail('executor_timeout', message)
-      fail('executor_process_failed', `${message}${stderr ? `; ${firstLine(stderr)}` : ''}`)
-    } finally {
-      this.activeInvocations.delete(input.executorInvocationId)
-      unsubscribe()
-      await client.stop().catch(() => undefined)
-      await logger.flush()
+    const hasResourceBindings =
+      input.snapshot.mcpBindings.length > 0 || input.snapshot.knowledgeBaseBindings.length > 0
+    if (hasResourceBindings && !input.capabilityBridge) {
+      fail('application_api_bridge_unavailable', 'Pi resource bindings require the Application API')
     }
+    const applicationApi = input.capabilityBridge
+      ? await startPiApplicationApiBridge(input.capabilityBridge)
+      : undefined
+    try {
+      const invocation = await preparePiRpcInvocation({
+        ...input,
+        executorBinding: input.binding,
+        ...(applicationApi ? { applicationApi } : {})
+      })
+      const logger = new PiRpcLogWriter(
+        invocation.rpcLogPath,
+        Object.values(input.credentialValues),
+        this.now
+      )
+      const client = await this.createClient(invocation.launchOptions)
+      const events: ExecutorEvent[] = []
+      const unsubscribe = client.onEvent((event) => {
+        void logger.append('event', event).catch(() => undefined)
+        if (eventType(event) === 'message_update') return
+        events.push(
+          normalizePiRpcEvent({
+            event,
+            executorInvocationId: input.executorInvocationId,
+            timestamp: this.now()
+          })
+        )
+      })
+      this.activeInvocations.set(input.executorInvocationId, { client, logger })
+      try {
+        await client.start()
+        const workPrompt = workspacePrompt(input.prompt, input.snapshot.permissions.writePaths.length > 0)
+        await logger.append('command', { type: 'prompt', message: workPrompt })
+        const idle = client.waitForIdle(input.snapshot.budget.maxDurationSeconds * 1000)
+        await client.prompt(workPrompt)
+        await idle
+        const [resultText, stats] = await Promise.all([
+          client.getLastAssistantText(),
+          client.getSessionStats()
+        ])
+        const usage = normalizePiRpcUsage(stats)
+        const result = tryParseStructuredResult(resultText, usage, {
+          ...input.authority,
+          executorInvocationId: input.executorInvocationId,
+          effectiveConfigHash: input.snapshot.contentHash
+        })
+        if (result) {
+          events.push({
+            schemaVersion: '1.0.0',
+            type: 'invocation_completed',
+            timestamp: this.now(),
+            executorKind: 'pi-rpc',
+            executorInvocationId: input.executorInvocationId,
+            sourceEventType: 'mam.standard_result.accepted',
+            payload: {}
+          })
+        }
+        await client.stop()
+        const stderr = client.getStderr()
+        if (stderr) await logger.append('stderr', stderr)
+        return {
+          invocation,
+          events,
+          usage,
+          ...(result ? { result } : {}),
+          ...(resultText ? { assistantText: resultText } : {}),
+          stderr
+        }
+      } catch (error) {
+        await client.stop().catch(() => undefined)
+        const stderr = client.getStderr()
+        if (stderr) await logger.append('stderr', stderr)
+        if (error instanceof PiRpcAdapterError) throw error
+        const message = error instanceof Error ? error.message : String(error)
+        if (/timeout/i.test(message)) fail('executor_timeout', message)
+        fail('executor_process_failed', `${message}${stderr ? `; ${firstLine(stderr)}` : ''}`)
+      } finally {
+        this.activeInvocations.delete(input.executorInvocationId)
+        unsubscribe()
+        await client.stop().catch(() => undefined)
+        await logger.flush()
+      }
+    } finally {
+      await applicationApi?.dispose()
+    }
+    fail('executor_process_failed', 'Pi execution ended without a standard result')
   }
 
   async steer(executorInvocationId: string, message: string): Promise<void> {
@@ -209,38 +234,47 @@ export class PiRpcAdapter {
   }
 }
 
-function resultPrompt(prompt: string): string {
+function workspacePrompt(prompt: string, canWriteWorkspace: boolean): string {
+  const completionInstruction = canWriteWorkspace
+    ? [
+        'Use the enabled tools to complete the Task in the workspace.',
+        'Do not describe shell commands as chat text; execute them with the available tools.',
+        'MAM validates the workspace outputs and creates its internal completion record after you finish.'
+      ]
+    : [
+        'This Role has no workspace write access.',
+        'For a document, report, or other textual output, return the complete deliverable directly as your final response.',
+        'Do not claim that unavailable tools prevented completion and do not describe commands as chat text.'
+      ]
   return [
     prompt,
     '',
-    'Return exactly one JSON object matching this schema. Do not use Markdown fences or prose.',
-    JSON.stringify(agentAttemptResultJsonSchema())
+    ...completionInstruction
   ].join('\n')
 }
 
-function parseStructuredResult(resultText: string | null, usage: ExecutorUsage) {
-  if (!resultText) {
-    fail('structured_result_missing', 'Pi became idle without a standard Attempt Result')
-  }
-  let parsed: unknown
+function tryParseStructuredResult(
+  resultText: string | null,
+  usage: ExecutorUsage,
+  authority: AttemptResultAuthority
+): AttemptResult | undefined {
+  if (!resultText) return undefined
   try {
-    parsed = JSON.parse(resultText)
-  } catch (error) {
-    fail('structured_result_invalid', `Pi result is not JSON: ${String(error)}`)
-  }
-  try {
-    const payload = AgentAttemptResultPayloadSchema.parse(parsed)
-    return AgentAttemptResultPayloadSchema.parse({
-      ...payload,
-      usage: {
-        status: usage.status,
-        ...(usage.inputTokens === undefined ? {} : { inputTokens: usage.inputTokens }),
-        ...(usage.outputTokens === undefined ? {} : { outputTokens: usage.outputTokens }),
-        ...(usage.costUsd === undefined ? {} : { costUsd: usage.costUsd })
-      }
-    })
-  } catch (error) {
-    fail('structured_result_invalid', `Pi result does not match the schema: ${String(error)}`)
+    const parsed = AgentAttemptResultPayloadSchema.parse(JSON.parse(resultText))
+    return buildAttemptResult(
+      {
+        ...parsed,
+        usage: {
+          status: usage.status,
+          ...(usage.inputTokens === undefined ? {} : { inputTokens: usage.inputTokens }),
+          ...(usage.outputTokens === undefined ? {} : { outputTokens: usage.outputTokens }),
+          ...(usage.costUsd === undefined ? {} : { costUsd: usage.costUsd })
+        }
+      },
+      authority
+    )
+  } catch {
+    return undefined
   }
 }
 

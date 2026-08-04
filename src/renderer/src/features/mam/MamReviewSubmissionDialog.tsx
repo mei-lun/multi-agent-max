@@ -63,15 +63,15 @@ export function MamReviewSubmissionDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button size="xs">
-          <Send /> Submit decision
+          <Send /> Review and decide
         </Button>
       </DialogTrigger>
       <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-2xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Submit structured Review</DialogTitle>
+          <DialogTitle>Record Review decision</DialogTitle>
           <DialogDescription>
-            The Main process binds this decision to the immutable subject and active reviewer
-            Attempt. Renderer input cannot replace those authority fields.
+            Approve the result, request specific changes, or block it based on the evidence you
+            inspected.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">

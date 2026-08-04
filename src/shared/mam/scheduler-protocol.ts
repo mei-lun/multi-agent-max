@@ -15,6 +15,14 @@ import { createMergeQueueCommandSchemas } from './merge-queue-scheduler-command'
 import { MergeConflictResolutionSchema } from './domain/merge-conflict-task'
 import * as conditionProtocol from './condition-scheduler-protocol'
 import * as systemNodeProtocol from './system-node-scheduler-protocol'
+import {
+  createTaskAssignmentCommandSchemas,
+  createTaskAssignmentEventSchemas
+} from './task-assignment-scheduler-protocol'
+import {
+  createWorkflowRunLifecycleCommandSchemas,
+  createWorkflowRunLifecycleEventSchemas
+} from './workflow-run-lifecycle-scheduler-protocol'
 
 export const EMPTY_SCHEDULER_REVISION =
   '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945'
@@ -48,6 +56,8 @@ const commandEnvelope = {
 
 const taskCommandEnvelope = { ...commandEnvelope, taskId: MamEntityIdSchema }
 const mergeQueueCommands = createMergeQueueCommandSchemas(commandEnvelope, taskCommandEnvelope)
+const taskAssignmentCommands = createTaskAssignmentCommandSchemas(taskCommandEnvelope)
+const workflowRunLifecycleCommands = createWorkflowRunLifecycleCommandSchemas(commandEnvelope)
 
 const AttemptRecoveryDirectiveSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('start_new_attempt'), newAttemptId: MamEntityIdSchema }).strict(),
@@ -55,24 +65,8 @@ const AttemptRecoveryDirectiveSchema = z.discriminatedUnion('kind', [
 ])
 
 export const SchedulerCommandSchema = z.discriminatedUnion('type', [
-  z
-    .object({
-      ...commandEnvelope,
-      type: z.literal('create_workflow_run'),
-      definitionId: MamEntityIdSchema,
-      definitionVersion: z.number().int().positive(),
-      planHash: Sha256Schema,
-      roleCatalogHash: Sha256Schema
-    })
-    .strict(),
-  z
-    .object({
-      ...taskCommandEnvelope,
-      type: z.literal('assign_task'),
-      roleProfileId: MamEntityIdSchema,
-      roleProfileVersion: z.number().int().positive()
-    })
-    .strict(),
+  ...workflowRunLifecycleCommands,
+  ...taskAssignmentCommands,
   z
     .object({
       ...taskCommandEnvelope,
@@ -196,18 +190,8 @@ function event<T extends string, S extends z.ZodRawShape>(type: T, fields: S) {
 }
 
 export const SchedulerEventSchema = z.discriminatedUnion('type', [
-  event('workflow_run_created', {
-    definitionId: MamEntityIdSchema,
-    definitionVersion: z.number().int().positive(),
-    planHash: Sha256Schema,
-    roleCatalogHash: Sha256Schema
-  }),
-  event('task_assigned', {
-    taskId: MamEntityIdSchema,
-    roleProfileId: MamEntityIdSchema,
-    roleProfileVersion: z.number().int().positive(),
-    assignedByUserId: MamEntityIdSchema
-  }),
+  ...createWorkflowRunLifecycleEventSchemas(eventEnvelope),
+  ...createTaskAssignmentEventSchemas(eventEnvelope),
   event('execution_announced', {
     taskId: MamEntityIdSchema,
     claimId: MamEntityIdSchema,
@@ -228,7 +212,8 @@ export const SchedulerEventSchema = z.discriminatedUnion('type', [
     taskId: MamEntityIdSchema,
     previousAttemptId: MamEntityIdSchema,
     directive: AttemptRecoveryDirectiveSchema,
-    reason: z.string().min(1).max(4000)
+    reason: z.string().min(1).max(4000),
+    recoveredByUserId: MamEntityIdSchema.optional()
   }),
   event('attempt_result_submitted', {
     taskId: MamEntityIdSchema,

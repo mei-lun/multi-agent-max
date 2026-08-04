@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { rmSync } from 'node:fs'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { buildAttemptResult } from '../artifacts/attempt-result-builder'
 import { LocalArtifactStore } from '../artifacts/local-artifact-store'
 import { DiagnosticsRecorder } from '../diagnostics/diagnostics-recorder'
@@ -30,6 +30,35 @@ afterEach(() => {
 })
 
 describe('MAM Attempt execution with real Git state', () => {
+  it('builds the standard result from a code Task worktree instead of assistant text', async () => {
+    const fixture = createAttemptExecutionAcceptanceFixture()
+    fixtures.push(fixture)
+    const completed = completionSignal()
+    const service = executionService(
+      fixture,
+      sequentialIds(),
+      completed.resolve,
+      workspaceOnlyExecution
+    )
+
+    await service.start({ workflowRunId: fixture.bundle.run.id, taskId: fixture.taskId })
+    await completed.promise
+
+    const attempt = fixture.query.getSnapshot().runs[0]!.attempts[0]!
+    expect(attempt).toMatchObject({
+      status: 'submitted',
+      result: {
+        summary: 'MAM verified 1 workspace output artifact(s).',
+        artifacts: [
+          {
+            contractId: 'artifact.patch',
+            type: 'artifact.patch'
+          }
+        ]
+      }
+    })
+  })
+
   it('preflights, freezes config, runs in a task worktree, validates Artifact, and submits', async () => {
     const fixture = createAttemptExecutionAcceptanceFixture()
     fixtures.push(fixture)
@@ -39,11 +68,12 @@ describe('MAM Attempt execution with real Git state', () => {
     })
     const ids = sequentialIds()
     const diagnostics = new DiagnosticsRecorder()
+    const execute = vi.fn(fakeExecution)
     const service = new MamAttemptExecutionService({
       query: fixture.query,
       catalog: fixture.catalog,
       settings: fixture.settings,
-      executor: { execute: fakeExecution },
+      executor: { execute },
       resources: new AttemptResourceMaterializer(join(fixture.root, 'attempt-resources')),
       artifacts: new AttemptArtifactValidator(
         new LocalArtifactStore(join(fixture.root, 'artifacts'))
@@ -63,7 +93,9 @@ describe('MAM Attempt execution with real Git state', () => {
       taskId: fixture.taskId
     })
     expect(started.runs[0]?.attempts[0]).toMatchObject({ status: 'running' })
+    expect(execute).not.toHaveBeenCalled()
     await completed
+    expect(execute).toHaveBeenCalledOnce()
 
     const finished = fixture.query.getSnapshot().runs[0]!
     const attempt = finished.attempts[0]!
@@ -179,6 +211,81 @@ describe('MAM Attempt execution with real Git state', () => {
     expect(Object.values(replacement.reviewPanels)).toHaveLength(2)
   })
 
+  it('records an interrupted Executor, confirms reconciliation, and consumes the planned Attempt', async () => {
+    const fixture = createAttemptExecutionAcceptanceFixture()
+    fixtures.push(fixture)
+    const ids = sequentialIds()
+    const interrupted = completionSignal()
+    const started = await executionService(fixture, ids, interrupted.resolve, async () => {
+      throw new Error('executor stopped with api_key=do-not-persist')
+    }).start({ workflowRunId: fixture.bundle.run.id, taskId: fixture.taskId })
+    const interruptedAttemptId = started.runs[0]!.attempts[0]!.id
+    await interrupted.promise
+
+    const needsAttention = fixture.repository.rebuild(fixture.bundle.run.id)
+    expect(needsAttention.tasks[fixture.taskId]).toMatchObject({
+      status: 'needs_attention',
+      activeAttemptIds: []
+    })
+    expect(needsAttention.attempts[interruptedAttemptId]?.status).toBe('needs_reconciliation')
+    expect(
+      JSON.stringify(fixture.repository.events.listEvents(fixture.bundle.run.id))
+    ).not.toContain('do-not-persist')
+
+    const commands = new MamUiCommandService(
+      fixture.query,
+      {
+        userId: 'user.owner',
+        schedulerId: 'scheduler.desktop',
+        now: () => '2026-07-28T23:06:00Z',
+        createId: ids
+      },
+      fixture.repository
+    )
+    const recovered = commands.recoverAttempt({
+      workflowRunId: fixture.bundle.run.id,
+      taskId: fixture.taskId,
+      previousAttemptId: interruptedAttemptId,
+      resolution: 'start_new_attempt',
+      reason: 'Checked the retained worktree and confirmed that replay is safe.'
+    })
+    const plannedAttempt = recovered.runs[0]!.attempts.find(
+      (attempt) => attempt.status === 'recovery_planned'
+    )!
+    commands.reassignTask({
+      workflowRunId: fixture.bundle.run.id,
+      taskId: fixture.taskId,
+      previousRoleProfileId: 'role.builder',
+      previousRoleProfileVersion: 1,
+      roleProfileId: fixture.reviewerRole.id,
+      roleProfileVersion: fixture.reviewerRole.version
+    })
+
+    const completed = completionSignal()
+    const replacementStarted = await executionService(fixture, ids, completed.resolve).start({
+      workflowRunId: fixture.bundle.run.id,
+      taskId: fixture.taskId
+    })
+    expect(replacementStarted.runs[0]!.attempts).toHaveLength(2)
+    expect(
+      replacementStarted.runs[0]!.attempts.find((attempt) => attempt.id === plannedAttempt.id)
+    ).toMatchObject({
+      previousAttemptId: interruptedAttemptId,
+      status: 'running'
+    })
+    await completed.promise
+
+    const replacement = fixture.repository.rebuild(fixture.bundle.run.id)
+    expect(replacement.attempts[plannedAttempt.id]).toMatchObject({
+      previousAttemptId: interruptedAttemptId,
+      status: 'submitted'
+    })
+    expect(replacement.tasks[fixture.taskId]).toMatchObject({
+      roleProfileId: fixture.reviewerRole.id,
+      roleProfileVersion: fixture.reviewerRole.version
+    })
+  })
+
   it('keeps an assigned Task retryable when local Executor preflight fails', async () => {
     const fixture = createAttemptExecutionAcceptanceFixture()
     fixtures.push(fixture)
@@ -267,6 +374,18 @@ async function fakeExecution(input: Parameters<MamAttemptExecutionServiceExecuto
       },
       input.authority
     ),
+    stderr: ''
+  }
+}
+
+async function workspaceOnlyExecution(
+  input: Parameters<MamAttemptExecutionServiceExecutor['execute']>[0]
+) {
+  await writeFile(join(input.workspacePath, 'README.md'), '# after\n')
+  return {
+    invocation: {},
+    events: [],
+    usage: { status: 'known' as const, inputTokens: 10, outputTokens: 20, costUsd: 0.01 },
     stderr: ''
   }
 }

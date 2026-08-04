@@ -38,8 +38,8 @@ export function createMergeQueueEntry(input: {
   if (!attemptId || !attempt || attempt.status !== 'submitted' || !attempt.result) {
     fail('merge_attempt_invalid', 'Merge candidate has no latest submitted Attempt Result')
   }
-  const submittedCommit = attempt.result.system.submittedCommit
-  if (!submittedCommit)
+  const reviewedCommit = attempt.result.system.submittedCommit
+  if (!reviewedCommit)
     fail('merge_commit_required', 'Code merge candidate has no submitted commit')
   const resultHash = profileContentHash(attempt.result)
   const reviews = task.reviewIds.flatMap((reviewId) => {
@@ -60,19 +60,20 @@ export function createMergeQueueEntry(input: {
   }
   if (
     aggregation.subject.resultHash !== resultHash ||
-    aggregation.subject.submittedCommit !== submittedCommit
+    aggregation.subject.submittedCommit !== reviewedCommit
   ) {
     fail('merge_revision_mismatch', 'Approved Review targets another result revision')
   }
   assertValidationEvidence(node.validations, input.validationEvidence)
+  const promotion = promotionSource(input.bundle, input.projection, node.id, input.taskId)
   const ready = {
     workflowRunId: input.bundle.run.id,
     mergeNodeId: node.id,
     taskId: input.taskId,
     attemptId,
     targetBranch: node.targetBranch,
-    sourceBranch: input.sourceBranch,
-    submittedCommit,
+    sourceBranch: promotion?.targetBranch ?? input.sourceBranch,
+    submittedCommit: promotion?.mergeCommit ?? reviewedCommit,
     resultHash,
     mergeReadyAt: input.mergeReadyAt,
     reviewDecisionIds: aggregation.sourceDecisionIds,
@@ -88,6 +89,40 @@ export function createMergeQueueEntry(input: {
     readyRevisionHash,
     status: 'queued'
   })
+}
+
+function promotionSource(
+  bundle: WorkflowRunBundle,
+  projection: WorkflowRunProjection,
+  mergeNodeId: string,
+  taskId: string
+): MergeQueueEntry | undefined {
+  const ancestors = ancestorNodeIds(bundle, mergeNodeId)
+  return Object.values(projection.mergeQueueEntries)
+    .filter(
+      (entry) =>
+        entry.taskId === taskId &&
+        entry.status === 'merged' &&
+        ancestors.has(entry.mergeNodeId) &&
+        Boolean(entry.mergeCommit)
+    )
+    .sort((left, right) => right.completedAt!.localeCompare(left.completedAt!))[0]
+}
+
+function ancestorNodeIds(bundle: WorkflowRunBundle, nodeId: string): ReadonlySet<string> {
+  const predecessors = new Map<string, string[]>()
+  for (const edge of bundle.definition.edges) {
+    predecessors.set(edge.to, [...(predecessors.get(edge.to) ?? []), edge.from])
+  }
+  const ancestors = new Set<string>()
+  const pending = [...(predecessors.get(nodeId) ?? [])]
+  while (pending.length > 0) {
+    const candidate = pending.shift()!
+    if (ancestors.has(candidate)) continue
+    ancestors.add(candidate)
+    pending.push(...(predecessors.get(candidate) ?? []))
+  }
+  return ancestors
 }
 
 export class MergeQueue {

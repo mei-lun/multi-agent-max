@@ -195,7 +195,7 @@ function settleSystemNodes(
         node.type === 'parallel' ||
         node.type === 'join' ||
         node.type === 'finish' ||
-        (node.type === 'git_merge' && mergeNodeHasCompleted(node.id, projection)) ||
+        (node.type === 'git_merge' && mergeNodeHasCompleted(node.id, projection, bundle)) ||
         (node.type === 'approval_gate' && Boolean(projection.resolvedApprovalGates[node.id]))
       if (autoPass) {
         passed.add(node.id)

@@ -38,7 +38,7 @@ export type IntegrationMergeResult =
 export type IntegrationMergeInput = Readonly<{
   repositoryPath: string
   integrationRoot: string
-  remoteName: string
+  remoteName: string | undefined
   entry: MergeQueueEntry
   validationCommands: readonly string[]
 }>
@@ -68,22 +68,40 @@ export class IntegrationWorktreeMergeExecutor {
         'check-ref-format',
         `refs/heads/${input.entry.sourceBranch}`
       ])
-      this.git.run(input.repositoryPath, [
-        'fetch',
-        '--no-tags',
-        input.remoteName,
-        `+refs/heads/${input.entry.targetBranch}:refs/remotes/${input.remoteName}/${input.entry.targetBranch}`,
-        `+refs/heads/${input.entry.sourceBranch}:refs/remotes/${input.remoteName}/${input.entry.sourceBranch}`
-      ])
+      if (input.remoteName) {
+        this.git.run(input.repositoryPath, [
+          'fetch',
+          '--no-tags',
+          input.remoteName,
+          `+refs/heads/${input.entry.sourceBranch}:refs/remotes/${input.remoteName}/${input.entry.sourceBranch}`
+        ])
+        for (const branch of targetBaseBranches(input.entry.targetBranch)) {
+          this.git.succeeds(input.repositoryPath, [
+            'fetch',
+            '--no-tags',
+            input.remoteName,
+            `+refs/heads/${branch}:refs/remotes/${input.remoteName}/${branch}`
+          ])
+        }
+      }
+      const targetRef = resolveTargetRef(this.git, input)
+      const sourceRef = branchRef(input.remoteName, input.entry.sourceBranch)
       targetCommitBefore = this.git.run(input.repositoryPath, [
         'rev-parse',
         '--verify',
-        `refs/remotes/${input.remoteName}/${input.entry.targetBranch}^{commit}`
+        `${targetRef}^{commit}`
       ])
+      if (!input.remoteName && targetRef !== branchRef(undefined, input.entry.targetBranch)) {
+        this.git.run(input.repositoryPath, [
+          'update-ref',
+          `refs/heads/${input.entry.targetBranch}`,
+          targetCommitBefore
+        ])
+      }
       const fetchedSourceCommit = this.git.run(input.repositoryPath, [
         'rev-parse',
         '--verify',
-        `refs/remotes/${input.remoteName}/${input.entry.sourceBranch}^{commit}`
+        `${sourceRef}^{commit}`
       ])
       this.git.run(input.repositoryPath, [
         'merge-base',
@@ -115,11 +133,20 @@ export class IntegrationWorktreeMergeExecutor {
         }
         const mergeCommit = this.git.run(worktreePath, ['rev-parse', '--verify', 'HEAD^{commit}'])
         stage = 'push'
-        this.git.run(worktreePath, [
-          'push',
-          input.remoteName,
-          `HEAD:refs/heads/${input.entry.targetBranch}`
-        ])
+        if (input.remoteName) {
+          this.git.run(worktreePath, [
+            'push',
+            input.remoteName,
+            `HEAD:refs/heads/${input.entry.targetBranch}`
+          ])
+        } else {
+          this.git.run(input.repositoryPath, [
+            'update-ref',
+            `refs/heads/${input.entry.targetBranch}`,
+            mergeCommit,
+            targetCommitBefore
+          ])
+        }
         outcome = { status: 'merged', mergeCommit, targetCommitBefore, validations }
       }
     } catch (error) {
@@ -186,7 +213,7 @@ function assertInput(input: IntegrationMergeInput, worktreePath: string): void {
   if (!/^[0-9a-f]{7,64}$/.test(input.entry.submittedCommit)) {
     throw new Error('Submitted commit must be a hexadecimal object ID')
   }
-  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(input.remoteName)) {
+  if (input.remoteName && !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(input.remoteName)) {
     throw new Error('Git remote name is invalid')
   }
   if (existsSync(worktreePath)) throw new Error('Integration worktree path already exists')
@@ -195,6 +222,31 @@ function assertInput(input: IntegrationMergeInput, worktreePath: string): void {
   if (JSON.stringify(expected) !== JSON.stringify(actual)) {
     throw new Error('Validation commands do not match Merge Queue evidence')
   }
+}
+
+function branchRef(remoteName: string | undefined, branch: string): string {
+  return remoteName ? `refs/remotes/${remoteName}/${branch}` : `refs/heads/${branch}`
+}
+
+function resolveTargetRef(git: GitCommandClient, input: IntegrationMergeInput): string {
+  const candidates = [
+    ...targetBaseBranches(input.entry.targetBranch).map((branch) =>
+      branchRef(input.remoteName, branch)
+    ),
+    ...targetBaseBranches(input.entry.targetBranch).map((branch) => branchRef(undefined, branch)),
+    'HEAD'
+  ]
+  const target = [...new Set(candidates)].find((candidate) =>
+    git.succeeds(input.repositoryPath, ['rev-parse', '--verify', `${candidate}^{commit}`])
+  )
+  if (!target) throw new Error(`No base commit is available for ${input.entry.targetBranch}`)
+  return target
+}
+
+function targetBaseBranches(targetBranch: string): readonly string[] {
+  if (targetBranch === 'develop') return ['develop', 'main', 'master']
+  if (targetBranch === 'main') return ['main', 'develop', 'master']
+  return [targetBranch, 'develop', 'main', 'master']
 }
 
 function worktreeName(entryId: string): string {

@@ -19,6 +19,7 @@ import {
   MamWorkflowStringListField
 } from './MamWorkflowFieldControls'
 import { MamWorkflowRoleSelectionFields } from './MamWorkflowRoleSelectionFields'
+import { MamWorkflowDataContractDetails } from './MamWorkflowDataContractDetails'
 
 type RoleNode = Extract<
   WorkflowNode,
@@ -70,17 +71,19 @@ export function MamWorkflowRoleNodeFields({
             </SelectContent>
           </Select>
         </MamWorkflowLabeledField>
-        <MamWorkflowArtifactRefList
-          label="Input Artifacts"
-          references={node.inputs}
-          onChange={(inputs) => onChange({ ...node, inputs })}
-        />
-        <MamWorkflowArtifactContractList
-          label="Output Artifact contracts"
-          contracts={node.outputs}
-          minimum={1}
-          onChange={(outputs) => onChange({ ...node, outputs })}
-        />
+        <MamWorkflowDataContractDetails>
+          <MamWorkflowArtifactRefList
+            label="Input Artifacts"
+            references={node.inputs}
+            onChange={(inputs) => onChange({ ...node, inputs })}
+          />
+          <MamWorkflowArtifactContractList
+            label="Output Artifact contracts"
+            contracts={node.outputs}
+            minimum={1}
+            onChange={(outputs) => onChange({ ...node, outputs })}
+          />
+        </MamWorkflowDataContractDetails>
       </div>
     )
   }
@@ -94,14 +97,16 @@ export function MamWorkflowRoleNodeFields({
           value={node.maxTasks}
           onChange={(maxTasks) => onChange({ ...node, maxTasks })}
         />
-        <MamWorkflowArtifactContractList
-          label="Task plan contract"
-          contracts={[node.planContract]}
-          minimum={1}
-          onChange={([planContract]) => {
-            if (planContract) onChange({ ...node, planContract })
-          }}
-        />
+        <MamWorkflowDataContractDetails>
+          <MamWorkflowArtifactContractList
+            label="Task plan contract"
+            contracts={[node.planContract]}
+            minimum={1}
+            onChange={([planContract]) => {
+              if (planContract) onChange({ ...node, planContract })
+            }}
+          />
+        </MamWorkflowDataContractDetails>
       </div>
     )
   }
@@ -123,20 +128,22 @@ export function MamWorkflowRoleNodeFields({
             onChange={(maxRevisionAttempts) => onChange({ ...node, maxRevisionAttempts })}
           />
         </div>
-        <MamWorkflowArtifactRefList
-          label="Review subjects"
-          references={node.inputs}
-          minimum={1}
-          onChange={(inputs) => onChange({ ...node, inputs })}
-        />
-        <MamWorkflowArtifactContractList
-          label="Review report contract"
-          contracts={[node.reportContract]}
-          minimum={1}
-          onChange={([reportContract]) => {
-            if (reportContract) onChange({ ...node, reportContract })
-          }}
-        />
+        <MamWorkflowDataContractDetails>
+          <MamWorkflowArtifactRefList
+            label="Review subjects"
+            references={node.inputs}
+            minimum={1}
+            onChange={(inputs) => onChange({ ...node, inputs })}
+          />
+          <MamWorkflowArtifactContractList
+            label="Review report contract"
+            contracts={[node.reportContract]}
+            minimum={1}
+            onChange={([reportContract]) => {
+              if (reportContract) onChange({ ...node, reportContract })
+            }}
+          />
+        </MamWorkflowDataContractDetails>
       </div>
     )
   }

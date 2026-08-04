@@ -28,24 +28,35 @@ export function projectWorkflowRun(
     const task = tasksByNode.get(planNode.id)
     return projectNodeRun(original, task, planNode.dependencies, bundle, projection, passed, route)
   })
-  const status = projectedRunStatus(bundle, nodeRuns)
-  const run = { ...bundle.run, status, nodeRuns, updatedAt }
+  const visibleNodeRuns = projection.cancellation
+    ? nodeRuns.map((nodeRun) =>
+        ['passed', 'approved', 'failed', 'blocked', 'cancelled'].includes(nodeRun.status)
+          ? nodeRun
+          : { ...nodeRun, status: 'cancelled' as const }
+      )
+    : nodeRuns
+  const status = projection.cancellation
+    ? ('cancelled' as const)
+    : projectedRunStatus(bundle, nodeRuns)
+  const run = { ...bundle.run, status, nodeRuns: visibleNodeRuns, updatedAt }
   return {
     run,
-    nodeRuns,
-    readyTaskIds: [
-      ...bundle.taskCatalog,
-      ...Object.values(projection.dynamicTasks),
-      ...Object.values(projection.reviewTasks)
-    ]
-      .filter(
-        (task) =>
-          !projection.tasks[task.id] &&
-          taskContextDefinition(bundle, projection, task.id)?.initialStatus ===
-            'waiting_role_assignment'
-      )
-      .map((task) => task.id)
-      .sort()
+    nodeRuns: visibleNodeRuns,
+    readyTaskIds: projection.cancellation
+      ? []
+      : [
+          ...bundle.taskCatalog,
+          ...Object.values(projection.dynamicTasks),
+          ...Object.values(projection.reviewTasks)
+        ]
+          .filter(
+            (task) =>
+              !projection.tasks[task.id] &&
+              taskContextDefinition(bundle, projection, task.id)?.initialStatus ===
+                'waiting_role_assignment'
+          )
+          .map((task) => task.id)
+          .sort()
   }
 }
 
@@ -75,7 +86,7 @@ function projectNodeRun(
   const node = bundle.definition.nodes.find((candidate) => candidate.id === original.nodeId)!
   if (node.type === 'review_gate') return reviewNodeRun(original, node.id, projection)
   if (node.type === 'approval_gate') return { ...original, status: 'waiting_for_approval' }
-  if (node.type === 'git_merge') return mergeNodeRun(original, node.id, projection)
+  if (node.type === 'git_merge') return mergeNodeRun(original, node.id, projection, bundle)
   return { ...original, status: 'ready' }
 }
 

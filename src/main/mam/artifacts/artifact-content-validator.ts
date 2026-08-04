@@ -49,7 +49,7 @@ export function validateAndEncodeArtifactContent(
         return invalidContent('Markdown Artifact must be text')
       }
       const missing = contract.requiredSections!.filter(
-        (section) => !new RegExp(`^#{1,6}\\s+${escapeRegex(section)}\\s*$`, 'im').test(content)
+        (section) => !new RegExp(`^#{1,6}\\s+.*${escapeRegex(section)}.*$`, 'im').test(content)
       )
       if (missing.length > 0) {
         return invalidContent(`missing Markdown sections: ${missing.join(',')}`)

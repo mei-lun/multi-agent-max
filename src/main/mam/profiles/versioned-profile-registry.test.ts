@@ -40,6 +40,14 @@ describe('VersionedProfileRegistry', () => {
     expect(restarted.contentHash(saved)).toBe(hash)
   })
 
+  it('deactivates a Role without deleting its immutable versions', async () => {
+    const registry = new VersionedProfileRegistry(await createRoot(), ProviderProfileSchema)
+    const saved = registry.save(provider(1))
+    registry.deactivate(saved.id)
+    expect(registry.getActive(saved.id)).toBeUndefined()
+    expect(registry.listVersions(saved.id)).toEqual([saved])
+  })
+
   it('rejects secret values and accepts only secret references', async () => {
     const registry = new VersionedProfileRegistry(await createRoot(), ProviderProfileSchema)
     expect(() => registry.save({ ...provider(1), secretValue: 'plaintext' })).toThrow()

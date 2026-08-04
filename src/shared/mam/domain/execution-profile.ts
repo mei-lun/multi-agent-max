@@ -106,6 +106,7 @@ export const LocalExecutorBindingSchema = z
   .strict()
 
 export type ExecutorKind = z.infer<typeof ExecutorKindSchema>
+export type ProviderProtocol = z.infer<typeof ProviderProtocolSchema>
 export type ExecutorProfile = z.infer<typeof ExecutorProfileSchema>
 export type ProviderProfile = z.infer<typeof ProviderProfileSchema>
 export type ModelProfile = z.infer<typeof ModelProfileSchema>

@@ -1,176 +1,261 @@
-import { GitBranch, GitCommit, ShieldCheck } from 'lucide-react'
-import type { MamUiRunSnapshot } from '../../../../shared/mam/ui-projection'
-import { MamMergeStatusBadge } from './mam-status-badge'
+import { AlertTriangle, GitCommit, GitMerge, History, Loader2 } from 'lucide-react'
+import { useState } from 'react'
+import type { MamLocalSettings } from '../../../../shared/mam/local-settings'
+import type { MamUiRunSnapshot, MamUiSnapshot } from '../../../../shared/mam/ui-projection'
+import { Badge } from '../../components/ui/badge'
 import { Button } from '../../components/ui/button'
 import { useUiLocale } from '../../i18n/ui-locale'
+import { MamIntegrationEntryCard } from './MamIntegrationEntryCard'
+import {
+  mamIntegrationEmptyState,
+  mamIntegrationItems,
+  mamIntegrationSection,
+  mamIntegrationSectionCounts,
+  type MamIntegrationItem,
+  type MamIntegrationSection
+} from './mam-integration-view-model'
 
-type QueueItem = Readonly<{
-  run: MamUiRunSnapshot
-  entry: MamUiRunSnapshot['mergeQueueEntries'][number]
-}>
+const SECTION_COPY: Readonly<
+  Record<MamIntegrationSection, { title: string; detail: string; icon: typeof GitMerge }>
+> = {
+  attention: {
+    title: 'Needs attention',
+    detail: 'Conflicts and failed integrations require a decision before the Run can continue.',
+    icon: AlertTriangle
+  },
+  integrating: {
+    title: 'Integrating now',
+    detail: 'Scheduler owns the active Git operation and its validation evidence.',
+    icon: Loader2
+  },
+  queued: {
+    title: 'Waiting for integration',
+    detail: 'Immutable reviewed revisions in deterministic Scheduler order.',
+    icon: GitMerge
+  },
+  history: {
+    title: 'Recent integration history',
+    detail: 'Completed and superseded entries remain available for audit.',
+    icon: History
+  }
+}
 
 export function MamMergeQueuePage({
   runs,
+  workflows = [],
+  localSettings,
+  focusedRunId,
   pending,
-  onExecuteNextMerge
+  onExecuteNextMerge,
+  onOpenRun = () => {},
+  onOpenRuns = () => {},
+  onOpenWorkflows = () => {},
+  onOpenReviews = () => {},
+  onShowAllRuns = () => {}
 }: Readonly<{
   runs: readonly MamUiRunSnapshot[]
+  workflows?: MamUiSnapshot['workflows']
+  localSettings?: MamLocalSettings
+  focusedRunId?: string
   pending: boolean
   onExecuteNextMerge(input: { workflowRunId: string }): Promise<void>
+  onOpenRun?(workflowRunId: string): void
+  onOpenRuns?(): void
+  onOpenWorkflows?(): void
+  onOpenReviews?(): void
+  onShowAllRuns?(): void
 }>): React.JSX.Element {
   const { locale } = useUiLocale()
-  const items = runs
-    .flatMap((run) => run.mergeQueueEntries.map((entry) => ({ run, entry })))
-    .sort(compareQueueItems)
+  const [error, setError] = useState<string>()
+  const scopedRuns = runs.filter((run) => !focusedRunId || run.run.id === focusedRunId)
+  const focusedRun = focusedRunId ? scopedRuns[0] : undefined
+  const allItems = mamIntegrationItems(runs)
+  const items = mamIntegrationItems(runs, focusedRunId)
+  const counts = mamIntegrationSectionCounts(items)
+  const firstQueuedId = allItems.find((item) => item.entry.status === 'queued')?.entry.id
+  const automaticRunIds = new Set(localSettings?.automaticWorkflowRunIds ?? [])
+  const execute = async (workflowRunId: string): Promise<void> => {
+    setError(undefined)
+    try {
+      await onExecuteNextMerge({ workflowRunId })
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    }
+  }
   return (
     <section aria-labelledby="merge-queue-title" className="mx-auto w-full max-w-5xl space-y-6 p-6">
-      <div className="space-y-1">
-        <h1 id="merge-queue-title" className="text-xl font-semibold">
-          Merge Queue
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Immutable reviewed revisions in Scheduler-controlled integration order.
+      <PageHeader {...(focusedRun ? { focusedRun } : {})} onShowAllRuns={onShowAllRuns} />
+      {error && (
+        <p
+          role="alert"
+          className="rounded-lg border border-destructive p-3 text-xs text-destructive"
+        >
+          {error}
         </p>
-      </div>
-
+      )}
       {items.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border p-10 text-center">
-          <GitCommit className="mx-auto mb-3 size-7 text-muted-foreground" />
-          <p className="text-sm font-medium">No merge-ready revisions</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Entries appear after Review and validation evidence are current.
-          </p>
-        </div>
+        <EmptyIntegrationState
+          runs={scopedRuns}
+          workflows={workflows}
+          onOpenRuns={() => (focusedRunId ? onOpenRun(focusedRunId) : onOpenRuns())}
+          onOpenReviews={onOpenReviews}
+          onOpenWorkflows={onOpenWorkflows}
+        />
       ) : (
-        <div className="space-y-3">
-          {items.map(({ run, entry }) => {
-            const conflict = run.mergeConflictTasks.find((task) => task.id === entry.conflictTaskId)
-            const resolution = run.mergeConflictResolutions.find(
-              (candidate) => candidate.conflictTaskId === entry.conflictTaskId
-            )
-            return (
-              <article
-                key={`${run.run.id}:${entry.id}`}
-                className="rounded-xl border border-border bg-card p-4 text-card-foreground"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0 space-y-1">
-                    <div className="flex items-center gap-2">
-                      <h2 className="truncate text-sm font-semibold">{entry.taskId}</h2>
-                      <MamMergeStatusBadge status={entry.status} />
-                    </div>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {run.definitionName} · {run.run.id}
-                    </p>
-                  </div>
-                  <time className="shrink-0 text-xs text-muted-foreground">
-                    {new Date(entry.mergeReadyAt).toLocaleString(locale)}
-                  </time>
-                </div>
-
-                <dl className="mt-4 grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-3">
-                  <QueueFact icon={GitBranch} label="Target" value={entry.targetBranch} />
-                  <QueueFact icon={GitBranch} label="Source" value={entry.sourceBranch} />
-                  <QueueFact
-                    icon={GitCommit}
-                    label="Reviewed commit"
-                    value={entry.submittedCommit}
-                    mono
-                  />
-                  <QueueFact
-                    icon={ShieldCheck}
-                    label="Review decisions"
-                    value={String(entry.reviewDecisionIds.length)}
-                  />
-                  <QueueFact
-                    icon={ShieldCheck}
-                    label="Validation evidence"
-                    value={String(Object.keys(entry.validationEvidence).length)}
-                  />
-                  {entry.mergeCommit && (
-                    <QueueFact
-                      icon={GitCommit}
-                      label="Merge commit"
-                      value={entry.mergeCommit}
-                      mono
-                    />
-                  )}
-                </dl>
-
-                {conflict && (
-                  <div className="mt-4 border-t border-border pt-3 text-xs">
-                    <p className="font-medium">Coordinator conflict lineage</p>
-                    <p className="mt-1 text-muted-foreground">
-                      {conflict.conflictingPaths.length} conflicting path
-                      {conflict.conflictingPaths.length === 1 ? '' : 's'} · Task {conflict.id}
-                    </p>
-                    {resolution && (
-                      <p className="mt-1 text-muted-foreground">
-                        Resolved by Attempt {resolution.resolutionAttemptId}
-                      </p>
-                    )}
-                  </div>
-                )}
-                {entry.status === 'queued' && firstQueuedEntry(run)?.id === entry.id && (
-                  <div className="mt-4 border-t border-border pt-3">
-                    <Button
-                      size="sm"
-                      disabled={pending}
-                      onClick={() => void onExecuteNextMerge({ workflowRunId: run.run.id })}
-                    >
-                      Execute next merge
-                    </Button>
-                  </div>
-                )}
-              </article>
-            )
-          })}
-        </div>
+        <>
+          <IntegrationSummary counts={counts} />
+          {(['attention', 'integrating', 'queued', 'history'] as const).map((section) => (
+            <IntegrationSection
+              key={section}
+              section={section}
+              items={items.filter((item) => mamIntegrationSection(item) === section)}
+              locale={locale}
+              pending={pending}
+              automaticRunIds={automaticRunIds}
+              {...(firstQueuedId ? { firstQueuedId } : {})}
+              onExecute={execute}
+              onOpenRun={onOpenRun}
+            />
+          ))}
+        </>
       )}
     </section>
   )
 }
 
-function firstQueuedEntry(run: MamUiRunSnapshot) {
-  return [...run.mergeQueueEntries].sort(compareEntries).find((entry) => entry.status === 'queued')
-}
-
-function compareEntries(
-  left: MamUiRunSnapshot['mergeQueueEntries'][number],
-  right: MamUiRunSnapshot['mergeQueueEntries'][number]
-): number {
+function PageHeader({
+  focusedRun,
+  onShowAllRuns
+}: Readonly<{ focusedRun?: MamUiRunSnapshot; onShowAllRuns(): void }>): React.JSX.Element {
   return (
-    left.mergeReadyAt.localeCompare(right.mergeReadyAt) ||
-    left.taskId.localeCompare(right.taskId) ||
-    left.id.localeCompare(right.id)
-  )
-}
-
-function QueueFact({
-  icon: Icon,
-  label,
-  value,
-  mono = false
-}: Readonly<{
-  icon: typeof GitBranch
-  label: string
-  value: string
-  mono?: boolean
-}>): React.JSX.Element {
-  return (
-    <div className="min-w-0">
-      <dt className="flex items-center gap-1.5 text-muted-foreground">
-        <Icon className="size-3.5" /> {label}
-      </dt>
-      <dd className={mono ? 'mt-1 truncate font-mono' : 'mt-1 truncate'}>{value}</dd>
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="space-y-1">
+        <h1 id="merge-queue-title" className="text-xl font-semibold">
+          Integration activity
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          Monitor Scheduler-controlled delivery and resolve integration exceptions across Runs.
+        </p>
+      </div>
+      {focusedRun && (
+        <div className="flex items-center gap-2">
+          <Badge variant="secondary">{focusedRun.definitionName}</Badge>
+          <Button variant="outline" size="xs" onClick={onShowAllRuns}>
+            Show all Runs
+          </Button>
+        </div>
+      )}
     </div>
   )
 }
 
-function compareQueueItems(left: QueueItem, right: QueueItem): number {
+function IntegrationSummary({
+  counts
+}: Readonly<{ counts: ReturnType<typeof mamIntegrationSectionCounts> }>): React.JSX.Element {
   return (
-    left.entry.mergeReadyAt.localeCompare(right.entry.mergeReadyAt) ||
-    left.entry.taskId.localeCompare(right.entry.taskId) ||
-    left.entry.id.localeCompare(right.entry.id)
+    <dl className="grid overflow-hidden rounded-xl border border-border bg-card sm:grid-cols-4">
+      {(['attention', 'integrating', 'queued', 'history'] as const).map((section) => (
+        <div
+          key={section}
+          className="border-b border-border p-3 last:border-b-0 sm:border-r sm:border-b-0 sm:last:border-r-0"
+        >
+          <dt className="text-xs text-muted-foreground">{SECTION_COPY[section].title}</dt>
+          <dd className="mt-1 text-xl font-semibold tabular-nums">{counts[section]}</dd>
+        </div>
+      ))}
+    </dl>
+  )
+}
+
+function IntegrationSection({
+  section,
+  items,
+  locale,
+  pending,
+  automaticRunIds,
+  firstQueuedId,
+  onExecute,
+  onOpenRun
+}: Readonly<{
+  section: MamIntegrationSection
+  items: readonly MamIntegrationItem[]
+  locale: ReturnType<typeof useUiLocale>['locale']
+  pending: boolean
+  automaticRunIds: ReadonlySet<string>
+  firstQueuedId?: string
+  onExecute(workflowRunId: string): Promise<void>
+  onOpenRun(workflowRunId: string): void
+}>): React.JSX.Element | null {
+  if (items.length === 0) return null
+  const copy = SECTION_COPY[section]
+  const Icon = copy.icon
+  const content = (
+    <div className="mt-3 space-y-3">
+      {items.map((item) => (
+        <MamIntegrationEntryCard
+          key={`${item.run.run.id}:${item.entry.id}`}
+          item={item}
+          locale={locale}
+          pending={pending}
+          automatic={automaticRunIds.has(item.run.run.id)}
+          canExecute={item.entry.id === firstQueuedId}
+          onExecute={() => onExecute(item.run.run.id)}
+          onOpenRun={() => onOpenRun(item.run.run.id)}
+        />
+      ))}
+    </div>
+  )
+  if (section === 'history') {
+    return (
+      <details className="group/history">
+        <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-semibold">
+          <Icon className="size-4" /> {copy.title} <Badge variant="outline">{items.length}</Badge>
+        </summary>
+        <p className="mt-1 text-xs text-muted-foreground">{copy.detail}</p>
+        {content}
+      </details>
+    )
+  }
+  return (
+    <section aria-label={copy.title}>
+      <h2 className="flex items-center gap-2 text-sm font-semibold">
+        <Icon className={section === 'integrating' ? 'size-4 animate-spin' : 'size-4'} />
+        {copy.title} <Badge variant="outline">{items.length}</Badge>
+      </h2>
+      <p className="mt-1 text-xs text-muted-foreground">{copy.detail}</p>
+      {content}
+    </section>
+  )
+}
+
+function EmptyIntegrationState({
+  runs,
+  workflows,
+  onOpenRuns,
+  onOpenReviews,
+  onOpenWorkflows
+}: Readonly<{
+  runs: readonly MamUiRunSnapshot[]
+  workflows: MamUiSnapshot['workflows']
+  onOpenRuns(): void
+  onOpenReviews(): void
+  onOpenWorkflows(): void
+}>): React.JSX.Element {
+  const empty = mamIntegrationEmptyState(runs, workflows)
+  const action =
+    empty.action === 'workflows'
+      ? onOpenWorkflows
+      : empty.action === 'reviews'
+        ? onOpenReviews
+        : onOpenRuns
+  return (
+    <div className="rounded-xl border border-dashed border-border p-10 text-center">
+      <GitCommit className="mx-auto mb-3 size-7 text-muted-foreground" />
+      <p className="text-sm font-medium">{empty.title}</p>
+      <p className="mx-auto mt-1 max-w-lg text-xs text-muted-foreground">{empty.detail}</p>
+      <Button className="mt-4" variant="outline" size="sm" onClick={action}>
+        {empty.actionLabel}
+      </Button>
+    </div>
   )
 }

@@ -12,6 +12,15 @@ export const ZH_CN_WORKFLOW_MESSAGES: Readonly<Record<string, string>> = {
   'Open editor': '打开编辑器',
   'Start Run': '开始运行',
   'Start Workflow Run': '启动工作流运行',
+  Start: '启动',
+  '. Role versions and required inputs are selected automatically and recorded in Git.':
+    '。角色版本和所需输入将自动选择并记录到 Git。',
+  'Ready to start': '可以开始',
+  'This Workflow does not need external input Artifacts.': '此工作流不需要外部输入产物。',
+  'configured external input versions will be frozen:': '个已配置的外部输入版本将被冻结：',
+  'Why are versions frozen?': '为什么要冻结版本？',
+  'A Run keeps exact Role and Artifact versions so its results can be reproduced and reviewed later. You do not need to enter JSON.':
+    '运行会保留准确的角色和产物版本，以便之后复现和审核结果。你无需填写 JSON。',
   Freeze: '冻结',
   ', active referenced Roles, and input Artifact versions into Git-backed Run state.':
     '、引用的活动角色和输入产物版本，并写入 Git 支撑的运行状态。',
@@ -161,5 +170,22 @@ export const ZH_CN_WORKFLOW_MESSAGES: Readonly<Record<string, string>> = {
   'vector-store': '向量存储',
   'mcp-resource': 'MCP 资源',
   available: '可用',
-  degraded: '已降级'
+  degraded: '已降级',
+  '. MAM will activate its Roles on this machine, complete each Task, and pause only when your decision is required.':
+    '。MAM 会在本机启用所需角色、依次完成任务，并且只在确实需要你决定时暂停。',
+  'Start and complete locally': '在本机启动并完成',
+  'Internal data handoff (advanced)': '角色间数据交接（高级）',
+  'MAM generates these contracts to validate handoffs between Roles. Users normally describe the Task and final result instead of editing this structure.':
+    'MAM 会自动生成这些契约来校验角色间的数据交接。用户通常只需描述任务和最终结果，无需编辑此结构。',
+  'Create Workflow': '创建工作流',
+  'Create delivery Workflow': '创建交付工作流',
+  'Create a delivery Workflow for future Runs. Completed Run history remains unchanged.':
+    '为后续运行创建交付工作流；已完成的运行历史保持不变。',
+  'Start with a complete delivery path, or choose a blank graph for advanced workflows.':
+    '从完整交付路径开始，或为高级工作流选择空白执行图。',
+  Starter: '起始模板',
+  'Reviewed delivery (recommended)': '审核与交付（推荐）',
+  'Blank graph (advanced)': '空白执行图（高级）',
+  'Create Role Profiles before running this Workflow; the graph can still be saved now.':
+    '运行此工作流前请先创建角色配置；当前仍可先保存执行图。'
 }

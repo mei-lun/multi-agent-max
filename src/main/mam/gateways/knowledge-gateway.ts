@@ -11,6 +11,10 @@ import {
   type AttemptGatewayAuthority
 } from './attempt-gateway-authority'
 
+const DEFAULT_SEARCH_RESULTS = 5
+const MAX_SEARCH_RESULTS = 20
+const DEFAULT_CONTEXT_TOKENS = 8_000
+
 const KnowledgeRequestBaseSchema = z.object({
   schemaVersion: MamSchemaVersionSchema,
   context: GatewayRequestContextSchema,
@@ -113,15 +117,16 @@ export class KnowledgeGateway {
       if (this.snapshot.permissions.requireApprovalFor.includes('knowledge')) {
         deny('knowledge_approval_required', 'Knowledge access requires a Scheduler approval grant')
       }
-      authorizeRequest(request, binding, this.snapshot.tools)
       let result: unknown
       if (request.operation === 'search') {
         result = await this.connector.search(resource, {
           query: request.query,
           ...(request.collection ? { collection: request.collection } : {}),
-          topK: request.topK ?? binding.retrievalPolicy.topK,
-          maxContextTokens: request.maxContextTokens ?? binding.retrievalPolicy.maxContextTokens,
-          ...(binding.retrievalPolicy.filters ? { filters: binding.retrievalPolicy.filters } : {})
+          topK: Math.min(request.topK ?? DEFAULT_SEARCH_RESULTS, MAX_SEARCH_RESULTS),
+          maxContextTokens: Math.min(
+            request.maxContextTokens ?? DEFAULT_CONTEXT_TOKENS,
+            this.snapshot.contextPolicy.maxContextTokens
+          )
         })
       } else {
         result = await this.connector.read(resource, {
@@ -161,40 +166,6 @@ export class KnowledgeGateway {
         ...(reason ? { reason } : {})
       }
     })
-  }
-}
-
-function authorizeRequest(
-  request: KnowledgeGatewayRequest,
-  binding: EffectiveRoleConfigSnapshot['knowledgeBaseBindings'][number],
-  roleTools: readonly string[]
-): void {
-  if (!binding.allowedOperations.includes(request.operation)) {
-    deny(
-      'knowledge_operation_denied',
-      `Knowledge operation ${request.operation} is outside the Role allowlist`
-    )
-  }
-  if (!roleTools.includes(`knowledge.${request.operation}`)) {
-    deny(
-      'knowledge_tool_denied',
-      `Tool knowledge.${request.operation} is outside the Role allowlist`
-    )
-  }
-  if (
-    binding.collections &&
-    (!request.collection || !binding.collections.includes(request.collection))
-  ) {
-    deny('knowledge_collection_denied', 'Knowledge collection is outside the Role allowlist')
-  }
-  if (request.operation === 'search') {
-    if (
-      (request.topK ?? binding.retrievalPolicy.topK) > binding.retrievalPolicy.topK ||
-      (request.maxContextTokens ?? binding.retrievalPolicy.maxContextTokens) >
-        binding.retrievalPolicy.maxContextTokens
-    ) {
-      deny('knowledge_budget_exceeded', 'Knowledge retrieval exceeds the Role budget')
-    }
   }
 }
 

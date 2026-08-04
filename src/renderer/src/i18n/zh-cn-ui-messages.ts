@@ -1,3 +1,8 @@
+import { ZH_CN_DESIGN_MESSAGES } from './zh-cn-design-messages'
+import { ZH_CN_PROFILE_MESSAGES } from './zh-cn-profile-messages'
+import { ZH_CN_RECOVERY_MESSAGES } from './zh-cn-recovery-messages'
+import { ZH_CN_REVIEW_MESSAGES } from './zh-cn-review-messages'
+import { ZH_CN_RUN_MESSAGES } from './zh-cn-run-messages'
 import { ZH_CN_WORKFLOW_MESSAGES } from './zh-cn-workflow-messages'
 
 export const ZH_CN_UI_MESSAGES: Readonly<Record<string, string>> = {
@@ -26,6 +31,11 @@ export const ZH_CN_UI_MESSAGES: Readonly<Record<string, string>> = {
   'Choose a Git project to attach its authoritative MAM state.':
     '选择一个 Git 项目以连接其 MAM 权威状态。',
   'Choose project': '选择项目',
+  'Connected project': '已连接项目',
+  'Change project': '切换项目',
+  'No Workflow Runs yet': '尚无工作流运行',
+  'The project is connected. Create a Workflow Definition, then start a Run.':
+    '项目已连接。创建工作流定义后即可启动运行。',
   'Versioned execution, resource, permission, and budget profiles.':
     '管理带版本的执行、资源、权限和预算配置。',
   Executor: '执行器',
@@ -78,6 +88,34 @@ export const ZH_CN_UI_MESSAGES: Readonly<Record<string, string>> = {
   failed: '失败',
   'needs attention': '需要处理',
   'needs reconciliation': '需要核对',
+  'Attempt stopped during result validation': '尝试在结果校验阶段停止',
+  'Attempt stopped during artifact validation': '尝试在产物校验阶段停止',
+  'Attempt stopped during executor execution': '尝试在执行器运行阶段停止',
+  'result validation': '结果校验',
+  'artifact validation': '产物校验',
+  executor: '执行器',
+  'Where:': '位置：',
+  'Error code:': '错误代码：',
+  'What happened': '发生了什么',
+  'Diagnostic detail': '诊断详情',
+  'Next step': '下一步',
+  'Worktree state': '工作树状态',
+  'The executor returned text instead of the required JSON Attempt Result.':
+    '执行器返回了普通文本，而不是所需的 JSON 尝试结果。',
+  'The executor did not return a valid Attempt Result that matches the required schema.':
+    '执行器没有返回符合所需结构的有效尝试结果。',
+  'Review the retained worktree, then reconcile this Attempt and start a replacement after fixing the executor or Role instructions.':
+    '先检查保留的工作树；修正执行器或角色指令后，核对此尝试并开始新的替代尝试。',
+  'The executor returned a result, but its required artifact could not be validated.':
+    '执行器返回了结果，但所需产物未能通过校验。',
+  'Review the retained worktree and the output contract, then reconcile this Attempt before starting a replacement.':
+    '先检查保留的工作树和输出契约；核对此尝试后再开始新的替代尝试。',
+  'The executor stopped before a valid Attempt Result was accepted.':
+    '有效的尝试结果尚未被接受，执行器就已停止。',
+  'Review the retained worktree and local diagnostics, then reconcile this Attempt before starting a replacement.':
+    '先检查保留的工作树和本地诊断信息；核对此尝试后再开始新的替代尝试。',
+  'The isolated worktree was retained for review.': '隔离工作树已保留，供检查使用。',
+  'No isolated worktree was retained.': '没有保留隔离工作树。',
   cancelled: '已取消',
   superseded: '已取代',
   pending: '待处理',
@@ -101,6 +139,8 @@ export const ZH_CN_UI_MESSAGES: Readonly<Record<string, string>> = {
   'Assign to': '分配给',
   'Assigned by': '分配人',
   'Start Attempt': '开始尝试',
+  'Starting Attempt…': '正在开始尝试…',
+  'Preparing the Attempt and worktree…': '正在准备尝试与工作树…',
   'Start local Attempt': '开始本地尝试',
   'Preflight the assigned Role, freeze its Effective Config, and create an isolated task branch and worktree.':
     '预检已分配角色，冻结有效配置，并创建独立任务分支和工作树。',
@@ -125,52 +165,6 @@ export const ZH_CN_UI_MESSAGES: Readonly<Record<string, string>> = {
   'Opened read-only': '已只读打开',
   'Open historical read-only': '只读打开历史记录',
   Continues: '接续',
-  Artifacts: '产物',
-  Risks: '风险',
-  'Follow-ups': '后续事项',
-  None: '无',
-  'Load Git diff': '加载 Git 差异',
-  'Loading diff…': '正在加载差异…',
-  'truncated at 2 MiB': '已在 2 MiB 处截断',
-  'This Attempt commit has no file changes.': '此尝试提交没有文件改动。',
-  'Immutable decisions, findings, and deterministic panel aggregation.':
-    '查看不可变审核结论、发现和确定性聚合结果。',
-  'No Review decisions': '没有审核结论',
-  'Decisions appear after reviewer Attempts submit valid Review Artifacts.':
-    '审核尝试提交有效审核产物后，结论会显示在这里。',
-  'Ready to submit': '待提交',
-  'No findings.': '没有发现。',
-  Approved: '已通过',
-  'Changes requested': '要求修改',
-  Blocked: '已阻塞',
-  'Panel outcomes': '审核组结果',
-  Decisions: '审核结论',
-  'Human decision': '需要人工决定',
-  Approve: '通过',
-  'Request changes': '要求修改',
-  Block: '阻塞',
-  'Resolved as': '已决定为',
-  'Reviewer Attempt': '审核尝试',
-  'Subject Attempt': '被审核尝试',
-  'Unknown file': '未知文件',
-  'Submit decision': '提交结论',
-  'Submit structured Review': '提交结构化审核',
-  Decision: '结论',
-  Summary: '摘要',
-  Findings: '发现',
-  decisions: '条结论',
-  findings: '条发现',
-  by: '由',
-  'Add finding': '添加发现',
-  'Remove finding': '移除发现',
-  Severity: '严重程度',
-  Category: '类别',
-  'Finding summary': '发现摘要',
-  'File path (optional)': '文件路径（可选）',
-  'Line (optional)': '行号（可选）',
-  'Submit Review': '提交审核',
-  'The Main process binds this decision to the immutable subject and active reviewer Attempt. Renderer input cannot replace those authority fields.':
-    '主进程会将此结论绑定到不可变审核对象和活动审核尝试；渲染进程的输入无法替换这些权威字段。',
   'Deterministic integration order and coordinator conflict lineage.':
     '查看确定性集成顺序和协调者冲突处理链路。',
   'Immutable reviewed revisions in Scheduler-controlled integration order.':
@@ -187,6 +181,47 @@ export const ZH_CN_UI_MESSAGES: Readonly<Record<string, string>> = {
   'Coordinator conflict lineage': '协调者冲突处理链路',
   'Resolved by Attempt': '由尝试解决',
   'Execute next merge': '执行下一项合并',
+  'Integration activity': '集成活动',
+  'Monitor Scheduler-controlled delivery and resolve integration exceptions across Runs.':
+    '跨运行监控调度器控制的交付过程，并处理集成异常。',
+  'Show all Runs': '显示全部运行',
+  'Integrating now': '正在集成',
+  'Waiting for integration': '等待集成',
+  'Recent integration history': '最近集成历史',
+  'Conflicts and failed integrations require a decision before the Run can continue.':
+    '冲突和集成失败需要处理后，运行才能继续。',
+  'Scheduler owns the active Git operation and its validation evidence.':
+    '当前 Git 操作及其验证证据由调度器控制。',
+  'Immutable reviewed revisions in deterministic Scheduler order.':
+    '按照调度器确定的顺序查看不可变的已审核版本。',
+  'Completed and superseded entries remain available for audit.':
+    '已完成和已取代的条目会保留供审计。',
+  'No integration activity yet': '尚无集成活动',
+  'Start a Workflow Run with a Git merge stage to track reviewed revisions here.':
+    '启动包含 Git 合并阶段的工作流运行后，可在这里跟踪已审核版本。',
+  'View Workflows': '查看工作流',
+  'These Workflows have no integration stage': '这些工作流没有集成阶段',
+  'Reviewed code stays on its task branch until the Workflow defines a Git merge node.':
+    '在工作流定义 Git 合并节点前，已审核代码会保留在任务分支。',
+  'Open Workflows': '打开工作流',
+  'Reviewed revisions are not ready yet': '已审核版本尚未就绪',
+  'Complete the pending Review. Current validation evidence must also match the revision.':
+    '请先完成待处理审核；当前验证证据也必须与该版本匹配。',
+  'View Reviews': '查看审核',
+  'Approved revisions are waiting on integration prerequisites': '已通过版本正在等待集成前置条件',
+  'Open the Run to inspect downstream dependencies and validation evidence.':
+    '打开运行以检查后续依赖和验证证据。',
+  'View Runs': '查看运行',
+  'No current integration activity': '当前没有集成活动',
+  'Entries appear when a reviewed revision reaches a Git merge stage with current evidence.':
+    '已审核版本携带有效证据到达 Git 合并阶段后，条目会显示在这里。',
+  'Open Run': '打开运行',
+  'Local collaboration will integrate this revision automatically.': '本机协作会自动集成此版本。',
+  'A coordinator must resolve the projected conflict Task.': '需要协调角色处理已生成的冲突任务。',
+  'Inspect the failure before restarting this Run.': '重新启动此运行前，请先检查失败原因。',
+  'Scheduler is integrating and validating this revision.': '调度器正在集成并验证此版本。',
+  'A newer revision replaced this queue entry.': '较新的版本已取代此队列条目。',
+  'Ready for Scheduler-controlled integration.': '已就绪，等待调度器控制的集成。',
   'conflicting path': '冲突路径',
   '· Task': '· 任务',
   Merged: '已合并',
@@ -238,6 +273,9 @@ export const ZH_CN_UI_MESSAGES: Readonly<Record<string, string>> = {
   'Uses the system language on first launch, then keeps this choice on this Mac.':
     '首次启动时跟随系统语言，之后在这台 Mac 上保留你的选择。',
   'State worktree': '状态工作树',
+  Collaboration: '协作模式',
+  Distributed: '分布式协作',
+  'Local roles': '本地多角色',
   Remote: '远端',
   Branch: '分支',
   'New version': '新版本',
@@ -247,5 +285,10 @@ export const ZH_CN_UI_MESSAGES: Readonly<Record<string, string>> = {
     '配置不可变。保存时会验证并在本机启用这个新版本；现有运行和尝试继续使用已冻结的快照。',
   'Secret values are rejected; use secretRef or credentialRef fields.':
     '不允许填写密钥值；请使用 secretRef 或 credentialRef 字段。',
+  ...ZH_CN_DESIGN_MESSAGES,
+  ...ZH_CN_PROFILE_MESSAGES,
+  ...ZH_CN_RECOVERY_MESSAGES,
+  ...ZH_CN_REVIEW_MESSAGES,
+  ...ZH_CN_RUN_MESSAGES,
   ...ZH_CN_WORKFLOW_MESSAGES
 }

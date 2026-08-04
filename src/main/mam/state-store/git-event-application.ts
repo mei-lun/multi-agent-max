@@ -10,6 +10,7 @@ import { applyReviewDisagreementStatus } from './review-disagreement-gate-applic
 import { applyReviewPanelEvent } from './review-panel-event-application'
 import { applyMergeQueueEvent } from './merge-queue-event-application'
 import { applyAttemptResultSubmitted } from './attempt-result-event-application'
+import { applyAttemptRecoveryEvent } from './attempt-recovery-event-application'
 import {
   failGitEventApplication as fail,
   requireProjectedAttempt as requireAttempt,
@@ -17,6 +18,7 @@ import {
   uniqueIds as unique,
   updateProjectedTask as updateTask
 } from './task-attempt-event-state'
+import { applyTaskAssignmentEvent } from './task-assignment-event-application'
 
 export function applyEvent(
   projection: WorkflowRunProjection,
@@ -50,19 +52,20 @@ export function applyEvent(
           roleCatalogHash: event.roleCatalogHash
         }
       }
-    case 'task_assigned':
-      if (tasks[event.taskId]) fail('invalid_transition', 'task already assigned')
-      tasks[event.taskId] = {
-        status: 'ready',
-        roleProfileId: event.roleProfileId,
-        roleProfileVersion: event.roleProfileVersion,
-        assignedByUserId: event.assignedByUserId,
-        activeAttemptIds: [],
-        knownAttemptIds: [],
-        reviewIds: [],
-        executionWarnings: [],
-        lastEventId: event.eventId
+    case 'workflow_run_cancelled':
+      if (projection.cancellation) fail('invalid_transition', 'workflow run is already cancelled')
+      return {
+        ...projection,
+        cancellation: {
+          userId: event.userId,
+          reason: event.reason,
+          cancelledAt: event.createdAt,
+          lastEventId: event.eventId
+        }
       }
+    case 'task_assigned':
+    case 'task_reassigned':
+      applyTaskAssignmentEvent({ event, tasks })
       break
     case 'execution_announced': {
       const task = requireTask(tasks, event.taskId)
@@ -104,42 +107,7 @@ export function applyEvent(
       break
     }
     case 'attempt_recovery_recorded': {
-      const task = requireTask(tasks, event.taskId)
-      const previous = requireAttempt(attempts, event.previousAttemptId, event.taskId)
-      const activeAttemptIds = task.activeAttemptIds.filter(
-        (attemptId) => attemptId !== event.previousAttemptId
-      )
-      if (event.directive.kind === 'needs_reconciliation') {
-        attempts[event.previousAttemptId] = {
-          ...previous,
-          status: 'needs_reconciliation',
-          lastEventId: event.eventId
-        }
-        tasks[event.taskId] = updateTask(task, event, {
-          status: 'needs_attention',
-          activeAttemptIds
-        })
-        break
-      }
-      if (attempts[event.directive.newAttemptId]) {
-        fail('duplicate_attempt', 'recovery Attempt already exists')
-      }
-      attempts[event.previousAttemptId] = {
-        ...previous,
-        status: 'blocked',
-        lastEventId: event.eventId
-      }
-      attempts[event.directive.newAttemptId] = {
-        taskId: event.taskId,
-        previousAttemptId: event.previousAttemptId,
-        status: 'recovery_planned',
-        lastEventId: event.eventId
-      }
-      tasks[event.taskId] = updateTask(task, event, {
-        status: 'ready',
-        activeAttemptIds,
-        knownAttemptIds: unique([...task.knownAttemptIds, event.directive.newAttemptId])
-      })
+      applyAttemptRecoveryEvent({ event, tasks, attempts })
       break
     }
     case 'attempt_started': {
@@ -217,8 +185,13 @@ export function applyEvent(
     }
     case 'progress_reported': {
       const task = requireTask(tasks, event.taskId)
-      requireAttempt(attempts, event.attemptId, event.taskId)
-      tasks[event.taskId] = updateTask(task, event, { status: 'running' })
+      const attempt = requireAttempt(attempts, event.attemptId, event.taskId)
+      if (task.status === 'needs_attention' || attempt.status !== 'running') {
+        fail('stale_attempt', 'Attempt can no longer report progress')
+      }
+      tasks[event.taskId] = updateTask(task, event, {
+        status: task.status === 'running' ? 'running' : task.status
+      })
       break
     }
     case 'approval_gate_resolved':

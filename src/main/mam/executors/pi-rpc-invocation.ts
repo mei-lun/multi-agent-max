@@ -12,6 +12,9 @@ import {
 } from '../../../shared/mam/domain/role'
 import type { MaterializedAttemptResources } from '../profiles/attempt-resource-materializer'
 import { PI_ISOLATED_LAUNCHER_SOURCE } from './pi-isolated-launcher-source'
+import { PI_APPLICATION_API_EXTENSION_SOURCE } from './pi-application-api-extension-source'
+import type { PiApplicationApiBridgeEndpoint } from './pi-application-api-bridge-server'
+import { piArguments, piBridgeTools, piModels } from './pi-rpc-launch-configuration'
 
 export type PiRpcInvocation = Readonly<{
   launchOptions: RpcClientOptions
@@ -41,6 +44,7 @@ export async function preparePiRpcInvocation(input: {
   workspacePath: string
   systemPrompt: string
   credentialValues: Readonly<Record<string, string>>
+  applicationApi?: PiApplicationApiBridgeEndpoint
 }): Promise<PiRpcInvocation> {
   const snapshot = EffectiveRoleConfigSnapshotSchema.parse(input.snapshot)
   const binding = LocalExecutorBindingSchema.parse(input.executorBinding)
@@ -70,14 +74,31 @@ export async function preparePiRpcInvocation(input: {
   const modelsPath = join(agentDirectory, 'models.json')
   const manifestPath = join(agentDirectory, 'mam-invocation-manifest.json')
   const launcherPath = join(agentDirectory, 'mam-pi-launcher.mjs')
+  const applicationApiExtensionPath = join(agentDirectory, 'mam-application-api-extension.mjs')
   const rpcLogPath = join(invocationDirectory, 'rpc.jsonl')
-  const args = piArguments(snapshot, input.systemPrompt, sessionDirectory, skillPaths)
+  const bridgeTools = piBridgeTools(snapshot)
+  const args = piArguments(
+    snapshot,
+    input.systemPrompt,
+    sessionDirectory,
+    skillPaths,
+    input.applicationApi ? applicationApiExtensionPath : undefined,
+    bridgeTools
+  )
   const piEnvironment = minimalEnvironment({
+    ...(process.versions.electron ? { ELECTRON_RUN_AS_NODE: '1' } : {}),
     PI_CODING_AGENT_DIR: agentDirectory,
     PI_CODING_AGENT_SESSION_DIR: sessionDirectory,
     PI_OFFLINE: '1',
     PI_SKIP_VERSION_CHECK: '1',
     PI_TELEMETRY: '0',
+    ...(input.applicationApi
+      ? {
+          MAM_APPLICATION_API_ENDPOINT: input.applicationApi.url,
+          MAM_APPLICATION_API_TOKEN: input.applicationApi.token,
+          MAM_APPLICATION_API_TOOLS: JSON.stringify(bridgeTools)
+        }
+      : {}),
     ...credentialEnvironment
   })
   await Promise.all([
@@ -91,12 +112,22 @@ export async function preparePiRpcInvocation(input: {
       providerProfileId: snapshot.providerProfile.id,
       modelProfileId: snapshot.modelProfile.id,
       skillIds: snapshot.skills.map((skill) => skill.id),
-      mcpServerIds: [],
-      knowledgeBaseIds: [],
-      extensionIds: [],
+      mcpServerIds: snapshot.mcpBindings.map((binding) => binding.serverProfileId),
+      knowledgeBaseIds: snapshot.knowledgeBaseBindings.map(
+        (binding) => binding.knowledgeBaseProfileId
+      ),
+      extensionIds: input.applicationApi ? ['mam.application-api'] : [],
       environmentKeys: Object.keys(piEnvironment).sort()
     }),
-    writeFile(launcherPath, PI_ISOLATED_LAUNCHER_SOURCE, { encoding: 'utf8', mode: 0o700 })
+    writeFile(launcherPath, PI_ISOLATED_LAUNCHER_SOURCE, { encoding: 'utf8', mode: 0o700 }),
+    ...(input.applicationApi
+      ? [
+          writeFile(applicationApiExtensionPath, PI_APPLICATION_API_EXTENSION_SOURCE, {
+            encoding: 'utf8',
+            mode: 0o600
+          })
+        ]
+      : [])
   ])
   return {
     launchOptions: {
@@ -143,12 +174,6 @@ function validateBindings(
   if (snapshot.execution.providerHeaders) {
     fail('provider_headers_unsupported', 'Pi provider headers are not safely materialized')
   }
-  if (snapshot.mcpBindings.length > 0) {
-    fail('mcp_gateway_unavailable', 'Pi MCP bindings require the MAM MCP Gateway')
-  }
-  if (snapshot.knowledgeBaseBindings.length > 0) {
-    fail('knowledge_gateway_unavailable', 'Pi knowledge bindings require the MAM Knowledge Gateway')
-  }
   const adapterOptions = Object.keys(snapshot.execution.adapterOptions).filter(
     (key) => key !== 'mode'
   )
@@ -173,57 +198,6 @@ function validateBindings(
       `Unsupported Pi inference options: ${inferenceOptions.join(', ')}`
     )
   }
-}
-
-function piModels(snapshot: EffectiveRoleConfigSnapshot): Record<string, unknown> {
-  const secretEnvironmentKey = snapshot.execution.providerSecretRef
-    ? 'MAM_PI_PROVIDER_KEY'
-    : undefined
-  return {
-    providers: {
-      [snapshot.providerProfile.id]: {
-        api: snapshot.execution.providerProtocol,
-        ...(snapshot.execution.providerBaseUrl
-          ? { baseUrl: snapshot.execution.providerBaseUrl }
-          : {}),
-        ...(secretEnvironmentKey ? { apiKey: `$${secretEnvironmentKey}` } : {}),
-        models: [
-          {
-            id: snapshot.execution.remoteModelId,
-            name: snapshot.execution.remoteModelId,
-            contextWindow: snapshot.contextPolicy.maxContextTokens,
-            maxTokens: snapshot.budget.maxOutputTokens
-          }
-        ]
-      }
-    }
-  }
-}
-
-function piArguments(
-  snapshot: EffectiveRoleConfigSnapshot,
-  systemPrompt: string,
-  sessionDirectory: string,
-  skillPaths: readonly string[]
-): string[] {
-  const args = [
-    '--no-extensions',
-    '--no-skills',
-    '--no-prompt-templates',
-    '--no-themes',
-    '--no-context-files',
-    '--no-approve',
-    '--session-dir',
-    sessionDirectory,
-    '--system-prompt',
-    systemPrompt
-  ]
-  for (const skillPath of skillPaths) args.push('--skill', skillPath)
-  if (snapshot.tools.length > 0) args.push('--tools', snapshot.tools.join(','))
-  else args.push('--no-tools')
-  const thinkingLevel = snapshot.execution.inference.thinkingLevel
-  if (typeof thinkingLevel === 'string') args.push('--thinking', thinkingLevel)
-  return args
 }
 
 async function materializeSkills(

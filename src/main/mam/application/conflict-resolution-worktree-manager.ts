@@ -36,7 +36,7 @@ export type ConflictResolutionResult =
 type ConflictWorktreeInput = Readonly<{
   repositoryPath: string
   integrationRoot: string
-  remoteName: string
+  remoteName: string | undefined
   task: MergeConflictTaskDefinition
 }>
 
@@ -55,7 +55,7 @@ export class ConflictResolutionWorktreeManager {
     const remoteTarget = revision(
       this.git,
       input.repositoryPath,
-      remoteRef(input.remoteName, input.task.targetBranch)
+      branchRef(input.remoteName, input.task.targetBranch)
     )
     if (remoteTarget !== input.task.targetCommit) {
       throw new Error('Target branch changed after conflict detection')
@@ -112,17 +112,26 @@ export class ConflictResolutionWorktreeManager {
       const currentTarget = revision(
         this.git,
         input.repositoryPath,
-        remoteRef(input.remoteName, input.task.targetBranch)
+        branchRef(input.remoteName, input.task.targetBranch)
       )
       if (currentTarget !== input.task.targetCommit) {
         throw new Error('Target branch changed before conflict resolution push')
       }
       stage = 'push'
-      this.git.run(worktreePath, [
-        'push',
-        input.remoteName,
-        `HEAD:refs/heads/${input.task.targetBranch}`
-      ])
+      if (input.remoteName) {
+        this.git.run(worktreePath, [
+          'push',
+          input.remoteName,
+          `HEAD:refs/heads/${input.task.targetBranch}`
+        ])
+      } else {
+        this.git.run(input.repositoryPath, [
+          'update-ref',
+          `refs/heads/${input.task.targetBranch}`,
+          head,
+          input.task.targetCommit
+        ])
+      }
       const outcome: Extract<ConflictResolutionResult, { status: 'merged' }> = {
         status: 'merged',
         queueEntryId: input.task.queueEntryId,
@@ -167,7 +176,7 @@ function assertInput(input: ConflictWorktreeInput): void {
   if (!isAbsolute(input.repositoryPath) || !isAbsolute(input.integrationRoot)) {
     throw new Error('Repository and integration worktree paths must be absolute')
   }
-  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(input.remoteName)) {
+  if (input.remoteName && !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(input.remoteName)) {
     throw new Error('Git remote name is invalid')
   }
 }
@@ -175,17 +184,19 @@ function assertInput(input: ConflictWorktreeInput): void {
 function fetchPinnedBranches(git: GitCommandClient, input: ConflictWorktreeInput): void {
   git.run(input.repositoryPath, ['check-ref-format', `refs/heads/${input.task.targetBranch}`])
   git.run(input.repositoryPath, ['check-ref-format', `refs/heads/${input.task.sourceBranch}`])
-  git.run(input.repositoryPath, [
-    'fetch',
-    '--no-tags',
-    input.remoteName,
-    `+refs/heads/${input.task.targetBranch}:refs/remotes/${input.remoteName}/${input.task.targetBranch}`,
-    `+refs/heads/${input.task.sourceBranch}:refs/remotes/${input.remoteName}/${input.task.sourceBranch}`
-  ])
+  if (input.remoteName) {
+    git.run(input.repositoryPath, [
+      'fetch',
+      '--no-tags',
+      input.remoteName,
+      `+refs/heads/${input.task.targetBranch}:refs/remotes/${input.remoteName}/${input.task.targetBranch}`,
+      `+refs/heads/${input.task.sourceBranch}:refs/remotes/${input.remoteName}/${input.task.sourceBranch}`
+    ])
+  }
   const source = revision(
     git,
     input.repositoryPath,
-    remoteRef(input.remoteName, input.task.sourceBranch)
+    branchRef(input.remoteName, input.task.sourceBranch)
   )
   git.run(input.repositoryPath, ['merge-base', '--is-ancestor', input.task.submittedCommit, source])
 }
@@ -226,8 +237,8 @@ function revision(git: GitCommandClient, directory: string, ref: string): string
   return git.run(directory, ['rev-parse', '--verify', `${ref}^{commit}`])
 }
 
-function remoteRef(remoteName: string, branch: string): string {
-  return `refs/remotes/${remoteName}/${branch}`
+function branchRef(remoteName: string | undefined, branch: string): string {
+  return remoteName ? `refs/remotes/${remoteName}/${branch}` : `refs/heads/${branch}`
 }
 
 function expectedWorktreePath(root: string, taskId: string): string {

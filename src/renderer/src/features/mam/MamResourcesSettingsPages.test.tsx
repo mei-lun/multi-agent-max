@@ -25,6 +25,12 @@ describe('MAM Resources and Settings pages', () => {
       executableRef: 'codex',
       adapterOptions: {}
     })
+    snapshot.providers.push({
+      id: 'provider.openai',
+      version: 1,
+      protocol: 'openai-responses',
+      secretRef: 'secret.openai'
+    })
     const resources = renderToStaticMarkup(
       <MamResourcesPage
         snapshot={snapshot}
@@ -38,6 +44,8 @@ describe('MAM Resources and Settings pages', () => {
         snapshot={snapshot}
         pending={false}
         onSaveProfile={async () => undefined}
+        onSaveModelConnection={async () => undefined}
+        onFetchModelCatalog={async () => ({ models: [] })}
         onSaveLocalSettings={async () => undefined}
         onExportDiagnostics={async () => undefined}
       />
@@ -46,7 +54,13 @@ describe('MAM Resources and Settings pages', () => {
     expect(resources).toContain('Skill Registry')
     expect(resources).toContain('New version')
     expect(settings).toContain('Git executable')
+    expect(settings).toContain('Add model connection')
+    expect(settings).toContain('Advanced profile setup')
     expect(settings).toContain('Machine-local bindings')
+    expect(settings).toContain('Local executors')
+    expect(settings).toContain('Local secrets')
+    expect(settings).toContain('MAM_SECRET_SECRET_OPENAI')
+    expect(settings).toContain('Advanced local JSON')
     expect(settings).toContain('executor.codex')
     expect(settings).toContain('Export diagnostics')
   })

@@ -44,13 +44,17 @@ export function MamWorkflowEditor({
   roles,
   pending,
   onSave,
-  onClose
+  onClose,
+  saveLabel = 'Save version',
+  versionLabel = `new v${workflow.version}`
 }: Readonly<{
   workflow: WorkflowDefinition
   roles: readonly RoleProfile[]
   pending: boolean
   onSave(input: MamSaveWorkflowInput): Promise<void>
   onClose(): void
+  saveLabel?: string
+  versionLabel?: string
 }>): React.JSX.Element {
   const [definition, setDefinition] = useState(workflow)
   const [nodes, setNodes, onNodesChange] = useNodesState<MamWorkflowCanvasNode>(
@@ -172,15 +176,18 @@ export function MamWorkflowEditor({
   }
 
   return (
-    <section className="flex h-full min-h-[640px] flex-col" aria-label="Workflow editor">
+    <section className="flex h-full min-h-0 flex-col" aria-label="Workflow editor">
       <header className="flex flex-wrap items-center gap-2 border-b border-border bg-card px-4 py-2">
         <Button variant="ghost" size="sm" onClick={onClose}>
           <ArrowLeft /> Back
         </Button>
         <div className="mr-auto min-w-0">
           <h1 className="truncate text-sm font-semibold">Edit {definition.name}</h1>
-          <p className="font-mono text-xs text-muted-foreground">
-            {definition.id} · new v{definition.version}
+          <p className="text-xs text-muted-foreground">
+            <span data-i18n-skip className="font-mono">
+              {definition.id}
+            </span>{' '}
+            · {versionLabel}
           </p>
         </div>
         <Input
@@ -208,7 +215,7 @@ export function MamWorkflowEditor({
           <Plus /> Add node
         </Button>
         <Button size="sm" disabled={pending} onClick={() => void save()}>
-          <Save /> Save version
+          <Save /> {saveLabel}
         </Button>
       </header>
       {editorError && (

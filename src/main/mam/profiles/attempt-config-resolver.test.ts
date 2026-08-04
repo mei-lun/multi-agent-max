@@ -32,8 +32,7 @@ describe('Attempt config resolution and resource materialization', () => {
     expect(roleA.snapshot.modelProfile.id).toBe(roleB.snapshot.modelProfile.id)
     expect(roleA.snapshot.mcpBindings[0]).toMatchObject({
       serverProfileId: 'mcp.git',
-      version: 1,
-      allowedTools: ['git.status']
+      version: 1
     })
     expect(roleB.snapshot.mcpBindings).toEqual([])
     expect(roleA.snapshot.execution.inference).toMatchObject({
@@ -163,7 +162,7 @@ describe('Attempt config resolution and resource materialization', () => {
     ).rejects.toMatchObject({ code: 'ambiguous_secret_binding' })
   })
 
-  it('records optional local Knowledge as degraded and blocks when it is required', async () => {
+  it('blocks a selected local Knowledge Base when it is unavailable', async () => {
     const fixture = await createCatalogFixture()
     fixture.catalog.knowledgeBases.save({
       id: 'knowledge.local',
@@ -172,17 +171,11 @@ describe('Attempt config resolution and resource materialization', () => {
       kind: 'local-directory',
       sourceRef: 'local.notes'
     })
-    fixture.catalog.roles.save(knowledgeRole('role.optional-knowledge', false))
-    fixture.catalog.roles.save(knowledgeRole('role.required-knowledge', true))
+    fixture.catalog.roles.save(knowledgeRole('role.local-knowledge', true))
     const resolver = new AttemptConfigResolver(fixture.catalog)
-    const optional = await resolver.resolve({
-      ...resolutionInput(fixture, 'role.optional-knowledge', 'attempt.optional'),
-      localSkillBindings: []
-    })
-    expect(optional.snapshot.knowledgeBaseBindings[0]?.status).toBe('degraded')
     await expect(
       resolver.resolve({
-        ...resolutionInput(fixture, 'role.required-knowledge', 'attempt.required'),
+        ...resolutionInput(fixture, 'role.local-knowledge', 'attempt.local'),
         localSkillBindings: []
       })
     ).rejects.toMatchObject({ code: 'required_knowledge_unavailable' })
@@ -387,26 +380,9 @@ function roleProfile(
     },
     systemPromptRef: `prompt.${id}`,
     skillBindings: [{ skillId }],
-    mcpBindings: includeResources
-      ? [
-          {
-            serverProfileId: 'mcp.git',
-            allowedTools: ['git.status'],
-            allowedResources: ['repository://current'],
-            allowedPrompts: []
-          }
-        ]
-      : [],
+    mcpBindings: includeResources ? [{ serverProfileId: 'mcp.git' }] : [],
     knowledgeBaseBindings: includeResources
-      ? [
-          {
-            knowledgeBaseProfileId: 'knowledge.project',
-            collections: ['source'],
-            allowedOperations: ['search', 'read'],
-            retrievalPolicy: { topK: 5, maxContextTokens: 8_000 },
-            required: true
-          }
-        ]
+      ? [{ knowledgeBaseProfileId: 'knowledge.project' }]
       : [],
     tools: ['shell'],
     permissions: {
@@ -432,18 +408,11 @@ function roleProfile(
   }
 }
 
-function knowledgeRole(id: string, required: boolean): RoleProfile {
+function knowledgeRole(id: string, _required: boolean): RoleProfile {
   return {
     ...roleProfile(id, 'skill.alpha', false),
     skillBindings: [],
-    knowledgeBaseBindings: [
-      {
-        knowledgeBaseProfileId: 'knowledge.local',
-        allowedOperations: ['search', 'read'],
-        retrievalPolicy: { topK: 3, maxContextTokens: 2_000 },
-        required
-      }
-    ]
+    knowledgeBaseBindings: [{ knowledgeBaseProfileId: 'knowledge.local' }]
   }
 }
 

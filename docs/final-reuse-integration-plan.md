@@ -26,6 +26,7 @@ Multi-Agent Max 是一个本地运行、Git 驱动、按角色参与工作流的
 
 - 自由创建 Role Profile，不受产品预设角色名称限制。
 - 自由创建 Workflow Definition，定义串行、并行、条件、审核、人工审批、返工、动态任务和合并步骤。
+- 在 Design Assistant 中使用已有 Model Profile 通过对话设计全新的 Role Profile 和 Workflow Definition，并在人工确认后创建这些定义。
 - 在工作流运行过程中，把动态产生的任务分配给任意角色。
 - 由用户把 Task 人工分配给 Role；在任意机器克隆项目并选择角色后，程序列出该角色已获分配且可执行的任务。
 - 在同一台机器同时启动多个 Agent 实例，每个实例可以使用不同角色。
@@ -56,7 +57,7 @@ Role Profiles + Workflow Definition + Git Repository
 - 工作流节点可以声明推荐角色或角色约束，运行时由用户对具体 Task 创建正式 Role Assignment，并产生独立 Role Instance 和 Executor Invocation。
 - 人工 Role Assignment 是唯一执行资格来源；Workflow 和 Agent 只能推荐角色，不能自动完成正式派发。
 - 一台机器运行多个不同角色或同角色的多个执行实例。
-- 多台机器通过同一个 Git remote 参与同一个 Workflow Run。
+- 有 Git remote 时，多台机器通过同一个 remote 参与同一个 Workflow Run；没有 remote 时，多个角色可以在同一台机器的本地 Git 上协作。
 - 任务只绑定角色，不绑定机器。
 - 代码任务使用独立 task branch 和 worktree。
 - Artifact、Review、Attempt、人工审批、返工和完整事件追踪。
@@ -64,7 +65,7 @@ Role Profiles + Workflow Definition + Git Repository
 - 调度者角色按工作流策略处理合并顺序和冲突。
 - Scheduler Kernel 独占权威状态写入和受控 Git 操作权限。
 - Codex CLI、Grok CLI、Pi RPC 三种结构化执行适配器，以及统一的标准结果 JSON。
-- 每个 Role Profile 独立配置 Skill、MCP Server/tool/resource/prompt 和 Knowledge Base 白名单。
+- 每个 Role Profile 独立选择可使用的 Skill、MCP Server 和 Knowledge Base。
 - Role Instance 不继承全局 Skills/MCP；知识库通过受控只读 Gateway 检索。
 - 首期在 macOS 原生运行；实现继续保持可移植边界，Linux 和 Windows 的构建、打包和端到端验收后置。
 
@@ -173,14 +174,14 @@ interface RoleExecutionBinding {
 
 同一个 Executor Profile 可以被多个角色复用，同一个 Model Profile 也可以被多个 Executor 使用。例如：
 
-| 角色示例 | Executor | Model Profile |
-| --- | --- | --- |
-| A | Codex CLI | GPT-5.6 SOL |
-| B | Codex CLI | GPT-5.6 Lunna |
-| C | Pi RPC | GPT-5.6 SOL |
-| D | Pi RPC | GLM-5.2 |
-| E | Grok CLI | Grok-4.5 |
-| F | Codex CLI | DeepSeek V4 Pro |
+| 角色示例 | Executor  | Model Profile   |
+| -------- | --------- | --------------- |
+| A        | Codex CLI | GPT-5.6 SOL     |
+| B        | Codex CLI | GPT-5.6 Lunna   |
+| C        | Pi RPC    | GPT-5.6 SOL     |
+| D        | Pi RPC    | GLM-5.2         |
+| E        | Grok CLI  | Grok-4.5        |
+| F        | Codex CLI | DeepSeek V4 Pro |
 
 这些名称只是配置示例，不进入产品枚举或硬编码兼容表。产品按照协议和 capability 判断组合是否可运行，而不是根据模型厂商名称限制组合。
 
@@ -213,30 +214,19 @@ interface RoleSkillBinding {
 
 interface RoleMcpBinding {
   serverProfileId: string
-  allowedTools: string[]
-  allowedResources: string[]
-  allowedPrompts: string[]
 }
 
 interface RoleKnowledgeBaseBinding {
   knowledgeBaseProfileId: string
-  collections?: string[]
-  allowedOperations: Array<'search' | 'read'>
-  retrievalPolicy: {
-    topK: number
-    maxContextTokens: number
-    filters?: Record<string, string | string[]>
-  }
-  required: boolean
 }
 ```
 
 授权粒度：
 
 - Skill：按稳定 Skill ID 和版本授权，运行时锁定内容摘要。
-- MCP：先按 Server Profile 授权，再按 tool、resource 和 prompt 分别设置 allowlist；不能因为允许一个 Server 就自动允许其全部能力。
-- Knowledge Base：按知识库、collection/namespace、操作类型和检索预算授权，第一版只读，不允许 Agent 修改索引或源内容。
-- Tool：Role Profile 的总体工具白名单继续生效；MCP 和知识库工具还必须同时通过各自资源白名单。
+- MCP：按 Server Profile 授权。角色勾选服务器后即可使用该服务器提供的 tool、resource 和 prompt，不再配置第二层允许列表。
+- Knowledge Base：按 Knowledge Base Profile 授权。角色勾选后默认可搜索和读取；第一版保持只读，不允许 Agent 修改索引或源内容。
+- 未选择的 Skill、MCP Server 或 Knowledge Base 不物化、不暴露，Gateway 拒绝并审计越权请求。
 
 Role Instance 启动时必须禁用 Executor 自动发现的全局 Skills 和 MCP 配置，只物化当前角色的绑定。任意全局 `~/.codex`、`~/.grok`、Pi 或通用 Agent 配置都不能被隐式继承。
 
@@ -255,11 +245,11 @@ interface KnowledgeBaseProfile {
 }
 ```
 
-Scheduler 通过统一的只读 Knowledge Gateway 向角色提供 `knowledge.search` 和 `knowledge.read`，而不是把向量数据库凭证或任意文件系统路径直接交给 Agent。Gateway 校验 Role Instance、Knowledge Base binding、collection、操作和预算，并记录查询审计事件。
+Scheduler 通过统一的只读 Knowledge Gateway 向角色提供 `knowledge.search` 和 `knowledge.read`，而不是把向量数据库凭证或任意文件系统路径直接交给 Agent。Gateway 校验 Role Instance 和 Knowledge Base binding，应用系统统一的检索上限，并记录查询审计事件。
 
-项目文件和 Git 仓库型知识库可以随 repository 在多台机器使用；本地目录或需要凭证的知识库由每台机器配置 Local Knowledge Binding。必需知识库在本机不可用时，该角色不能启动 Attempt；可选知识库不可用时必须在 Effective Role Config 中记录 degraded 状态，不能静默假装已加载。
+项目文件和 Git 仓库型知识库可以随 repository 在多台机器使用；本地目录或需要凭证的知识库由每台机器配置 Local Knowledge Binding。角色勾选的知识库在本机不可用时，该角色不能启动 Attempt，不能静默假装已加载。
 
-每个 Attempt 记录实际解析到的 Executor、Provider、Model、Skill digest、MCP Profile version、MCP tool allowlist、Knowledge Base Profile version 和 index revision。资源在运行中更新，只影响新 Attempt；Run 中固定的 Role 白名单不随之扩大。
+每个 Attempt 记录实际解析到的 Executor、Provider、Model、Skill digest、MCP Profile version、Knowledge Base Profile version 和 index revision。资源在运行中更新，只影响新 Attempt；Run 中固定的 Role 资源选择不随之扩大。
 
 ### 4.4 工作流决定何时使用角色
 
@@ -267,19 +257,19 @@ Workflow Definition 是带版本的执行图。节点可以引用一个角色、
 
 第一版正式支持的节点类型：
 
-| 节点类型 | 作用 |
-| --- | --- |
-| `role_task` | 生成需要用户人工派发的普通 Task，并携带角色建议或约束 |
-| `dynamic_tasks` | 根据结构化任务计划创建多个待分配任务 |
-| `review_gate` | 生成需要人工派发的审核 Task，由一个或多个角色提交结构化结论 |
-| `approval_gate` | 等待用户人工决定 |
-| `condition` | 根据结构化输出选择路径 |
-| `parallel` | 启动多个可并行分支 |
-| `join` | 等待指定分支汇合 |
-| `artifact_transform` | 受控地整理或合并 Artifact |
-| `command` | 执行经过策略校验的本地命令 |
-| `git_merge` | 由指定协调角色驱动，内核执行受控合并 |
-| `finish` | 完成 Workflow Run |
+| 节点类型             | 作用                                                        |
+| -------------------- | ----------------------------------------------------------- |
+| `role_task`          | 生成需要用户人工派发的普通 Task，并携带角色建议或约束       |
+| `dynamic_tasks`      | 根据结构化任务计划创建多个待分配任务                        |
+| `review_gate`        | 生成需要人工派发的审核 Task，由一个或多个角色提交结构化结论 |
+| `approval_gate`      | 等待用户人工决定                                            |
+| `condition`          | 根据结构化输出选择路径                                      |
+| `parallel`           | 启动多个可并行分支                                          |
+| `join`               | 等待指定分支汇合                                            |
+| `artifact_transform` | 受控地整理或合并 Artifact                                   |
+| `command`            | 执行经过策略校验的本地命令                                  |
+| `git_merge`          | 由指定协调角色驱动，内核执行受控合并                        |
+| `finish`             | 完成 Workflow Run                                           |
 
 工作流允许显式返工和循环，但每条回退路径必须配置最大次数或总转换次数。无边界循环在保存时被拒绝。
 
@@ -373,6 +363,12 @@ interface TaskAssignment {
 
 Assignment 中不得出现 `deviceId`、`machineId` 或远程连接信息。
 
+当前 Assignment 可以由用户在下一次 Attempt 启动前修正，但必须追加独立的
+`task_reassigned` 事件，不能改写原事件。改派命令携带当前角色 ID 和版本作为
+compare-and-set 条件，目标仍须属于 Task allowlist 和 Run 冻结 Role catalog；存在活动
+Attempt、Task 正在等待副作用核对或已经越过可返工阶段时拒绝改派。历史 Attempt、Role
+Instance 和 Effective Config Snapshot 始终保持不变。
+
 ### 5.4 Execution Claim 是绑定实例的非排他提示
 
 ```ts
@@ -411,8 +407,8 @@ mam join --run run-20260727-001 --role role.merge-coordinator
 
 启动后程序执行：
 
-1. 定位 Git repository 和 remote。
-2. 同步 `mam-state` 权威状态分支。
+1. 定位 Git repository，并检测是否配置 Git remote。
+2. 有 remote 时同步 `mam-state` 权威状态分支；无 remote 时使用本地 `mam-state` 分支。
 3. 验证 Workflow Run 和 Role Profile 是否存在。
 4. 在本机解析该角色的 Executor Profile、CLI、模型和 secret references。
 5. 计算当前分配给该角色且依赖已满足的任务。
@@ -464,6 +460,8 @@ created
 - 新 Attempt 通过 `previousAttemptId` 形成 lineage。
 - 工作流推进只读取当前有效 Attempt；历史 Attempt 永久可查。
 - timeout 或进程退出不等于外部命令未执行。对于无法确认的非幂等副作用，Task 进入 `needs_reconciliation`，等待查询或人工处理，不自动重试。
+- 用户完成人工核对并填写原因后，可以把原 Attempt 标记为 blocked 并创建唯一的 `recovery_planned` Attempt；同一 Task 的新恢复计划会封存旧计划，其他并发 Attempt 成功提交也会封存尚未启动的恢复计划。后续人工启动必须复用唯一计划的 Attempt ID 和 `previousAttemptId`，不能另建一个脱离恢复链路的 Attempt。
+- Attempt 被恢复或进入 `needs_reconciliation` 后，其迟到的 Executor progress/result 必须被拒绝；Task 处于 `needs_attention` 时，其他并发 Executor 也不能用迟到事件覆盖人工核对状态。
 
 ### 7.3 Artifact 契约
 
@@ -545,6 +543,8 @@ mam-state                                # 工作流权威状态分支
 
 任务代码和工作流状态不能写在同一分支。每个本地克隆为 `mam-state` 创建独立隐藏 worktree，例如 `.mam-local/state-worktree`，业务 task worktree 不直接包含权威状态写目录。
 
+项目业务分支尚无首个 commit 时，桌面端必须能够初始化独立 `mam-state`，且不得创建或移动项目业务分支的 `HEAD`，也不得提交用户已暂存文件。有 remote 时，初始化必须验证 remote 并推送状态分支；无 remote 时只创建本地状态分支。用户明确启动首个需要项目 worktree 的 Attempt 时，若项目仍完全为空且工作树干净，程序创建不包含用户文件的首个空 commit；若存在 staged、modified 或 untracked 文件，则返回 `project_initial_commit_required`，由用户决定首个 commit 内容。
+
 ### 8.2 状态目录
 
 为最大化复用当前实现，继续使用 `.workflow/` 目录：
@@ -576,21 +576,21 @@ Snapshot 是可删除并通过 events 重建的缓存。Event 是 append-only �
 
 每个本地 Scheduler 都可以向 `mam-state` 提交合法命令，但只有 Scheduler Kernel 可以生成事件。写入算法：
 
-1. fetch 最新 `mam-state`。
+1. 有 remote 时 fetch 最新 `mam-state`；本地模式直接读取本地状态分支。
 2. 重建 Workflow Run projection。
 3. 根据当前 revision 校验命令。
 4. 生成事件并提交到本地 state worktree。
-5. push `mam-state`。
-6. 如果 non-fast-forward，丢弃本次未发布状态提交，更新远端状态并重新校验同一幂等命令。
+5. 有 remote 时 push `mam-state`；本地模式保留本地提交。
+6. 仅 distributed 模式在 non-fast-forward 时丢弃本次未发布状态提交，更新远端状态并重新校验同一幂等命令。
 7. 同一 Task 的多个 claim notice 都可以提交和 replay；projection 产生 `concurrent_execution_warning`，但不拒绝命令。
 
 状态事件使用稳定 `commandId` 做幂等控制。Git 冲突和业务状态冲突必须分别报告。
 
-Kernel 一次命令产生的 Event Batch 必须作为事务单元暂存、整体校验并在一个 Git commit 中发布。只有已经 push 的 commit 是权威；进程崩溃遗留的未提交文件必须由恢复流程清理，不能被 replay。non-fast-forward 后必须丢弃 stale commit，在最新 projection 上重新执行原命令，不能只 rebase 已生成的旧事件。人工 conflict resolution 必须真实应用、提交并消费 resolution batch。
+Kernel 一次命令产生的 Event Batch 必须作为事务单元暂存、整体校验并在一个 Git commit 中发布。Distributed 模式只有已经 push 的 commit 是共享权威；本地模式的本地状态分支提交即为权威。进程崩溃遗留的未提交文件必须由恢复流程清理，不能被 replay。non-fast-forward 后必须丢弃 stale commit，在最新 projection 上重新执行原命令，不能只 rebase 已生成的旧事件。人工 conflict resolution 必须真实应用、提交并消费 resolution batch。
 
 ### 8.4 不依赖 hosted provider
 
-该协议只依赖标准 Git clone、fetch、branch、worktree、commit 和 push，不调用 GitHub/GitLab API。因此任何可访问的 Git remote 都可以作为共享媒介。
+该协议只依赖标准 Git branch、worktree 和 commit；配置 remote 时额外使用 clone、fetch 和 push 作为共享媒介，不调用 GitHub/GitLab API。没有 remote 的项目保持本地协作模式。
 
 ## 9. 代码任务、审核和合并
 
@@ -617,7 +617,7 @@ task branch 属于 Task/Attempt，不属于 Role。一个角色可以执行多�
 
 1. 执行角色完成代码和测试。
 2. Scheduler 验证 worktree、输出契约和 submitted commit。
-3. task branch 推送到 remote。
+3. 有 remote 时将 task branch 推送到 remote；本地模式保留 task branch 和提交在本地。
 4. Task 进入 `submitted`。
 5. Review 节点审核确定的 commit SHA。
 6. Review 通过后进入工作流定义的后续节点或 merge queue。
@@ -705,7 +705,7 @@ interface ExecutorCapabilities {
 
 1. Definition validation：所有 Profile 引用存在，字段和 Artifact 契约合法。
 2. Capability validation：Executor 支持目标 Provider protocol、custom endpoint、model override、Skill/MCP 物化和 Knowledge Gateway 等角色要求的能力。
-3. Local preflight：本机存在对应 CLI/Runtime、版本满足要求、凭证和必需知识库可解析，并能构造该组合的隔离启动配置。
+3. Local preflight：本机存在对应 CLI/Runtime、版本满足要求、凭证和角色已选择的知识库可解析，并能构造该组合的隔离启动配置。
 
 配置可以作为 draft 保存，但 capability 或 local preflight 不通过时不能启动 Attempt。错误必须指出具体原因，例如 `custom_endpoint_unsupported`、`model_override_unsupported`、`secret_unavailable`，不能笼统报告 Runtime 启动失败。
 
@@ -754,7 +754,7 @@ Local Knowledge Binding
   -> local source path / database endpoint / credentialRef resolution / index availability
 ```
 
-本机缺少对应 CLI、登录、secret 或必需知识库时，preflight 返回 `local_executor_unavailable` 或 `required_knowledge_base_unavailable`；任务保持已分配、待执行状态，不得写成任务失败，也不影响用户在其他机器启动执行。
+本机缺少对应 CLI、登录、secret 或角色已选择的知识库时，preflight 返回 `local_executor_unavailable` 或 `required_knowledge_base_unavailable`；任务保持已分配、待执行状态，不得写成任务失败，也不影响用户在其他机器启动执行。
 
 ## 11. 权限与安全边界
 
@@ -765,7 +765,7 @@ Local Knowledge Binding
 - Worker 通过 Scheduler Bridge 提交请求，不能直接写事件。
 - Executor 使用独立配置目录启动，不继承全局 Skill、MCP 或知识库配置。
 - Role Profile 保留文件、命令、网络、MCP 和知识库的 allow/deny/approval 策略。
-- 未授权 MCP tool/resource/prompt 和 Knowledge Base 查询在 Gateway 层拒绝并记录审计事件。
+- 对未选择 MCP Server 或 Knowledge Base 的请求在 Gateway 层拒绝并记录审计事件。
 - secret 通过本机 secret reference 解析，不写入 Git、Artifact、日志或 prompt dump。
 - 诊断事件在落盘前进行凭证脱敏。
 - 危险 Git 操作、目标分支 push 和人工审批只能由 Scheduler Kernel 的专用端口执行。
@@ -781,21 +781,28 @@ Local Knowledge Binding
 
 主要页面：
 
-| 页面 | 核心能力 |
-| --- | --- |
-| Roles | 创建、复制、版本化 Role Profile；独立组合 Executor、Provider、模型、Skills、MCP、知识库和策略 |
-| Workflows | 编辑节点、边、Artifact、角色绑定、动态任务、循环保护和合并策略 |
-| Runs | 查看图状态、ready tasks、执行提示、attempts、成本和阻塞原因 |
-| My Role | 选择当前角色，查看人工分配给该角色的任务；启动前显示可能的重复执行 warning |
-| Task | 查看输入、结构化执行事件、Artifact、Git diff、提交、Attempt 时间线和返工记录；默认打开最新 Attempt，历史 Attempt 只读 |
-| Reviews | 提交结构化审核结果，处理多 Reviewer 分歧 |
-| Merge Queue | 调度者角色查看顺序、冲突、验证和 merge lineage |
-| Resources | 管理 Skill Registry、MCP Server Profile、Knowledge Base Profile 和角色授权范围 |
-| Settings | 管理 Executor、Provider/Endpoint、Model Profile、本机 secret/local bindings、Git 和默认目录 |
+| 页面             | 核心能力                                                                                                              |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Roles            | 创建、复制、版本化 Role Profile；独立组合 Executor、Provider、模型、Skills、MCP、知识库和策略                         |
+| Design Assistant | 选择已有 Model Profile，通过本地保存的对话草稿生成、检查和人工确认全新的 Role Profile 与 Workflow Definition          |
+| Workflows        | 编辑节点、边、Artifact、角色绑定、动态任务、循环保护和合并策略                                                        |
+| Runs             | 查看图状态、ready tasks、执行提示、attempts、成本和阻塞原因；恢复中断执行并在允许时修正后续 Attempt 的角色             |
+| My Role          | 选择当前角色，查看人工分配给该角色的任务；启动前显示重复执行 warning，并在无活动 Attempt 时修正角色                    |
+| Task             | 查看输入、结构化执行事件、Artifact、Git diff、提交、Attempt 时间线和返工记录；默认打开最新 Attempt，历史 Attempt 只读 |
+| Reviews          | 提交结构化审核结果，处理多 Reviewer 分歧                                                                              |
+| Merge Queue      | 调度者角色查看顺序、冲突、验证和 merge lineage                                                                        |
+| Resources        | 管理 Skill Registry、MCP Server Profile 和 Knowledge Base Profile                                                     |
+| Settings         | 管理 Executor、Provider/Endpoint、Model Profile、本机 secret/local bindings、Git 和默认目录                           |
+
+Design Assistant 是定义设计入口，不是独立 Agent Session，也不是 Workflow 权威状态。对话草稿以未加密 JSON 保存在本机，不写入 Git；模型只能引用当前已注册的 Executor、Model、Skill、MCP Server 和 Knowledge Base。每次模型响应必须生成一份完整替换方案，并以一个可编译的标准 Role/Workflow 模板作为保底；解析、引用和 Workflow 编译错误必须进入有界自动修复，耗尽后持久化错误和草稿，允许用户重试或恢复标准模板。每次方案只创建全新的完整 Role Profile 和一个全新的 Workflow Definition，不更新既有定义。确认操作不得创建 Workflow Run、Role Assignment、Task、Attempt、Review 或 Merge Queue 项；用户仍需在 Workflows 页面人工启动 Run，并在后续页面人工分配和审核。
 
 同一程序窗口可以启动多个 Role Instance；也允许多个本地进程分别选择不同角色。
 
 Workflows 页面本期必须提供可视化图编辑器，包括节点画布、边连接、节点 Inspector、角色/任务/审核配置、显式循环上限和 merge 节点配置，并支持 Definition round-trip。源码 YAML/JSON 编辑可以作为高级入口，但不能替代图编辑器。产品不提供脱离 Workflow Task 的独立 Agent Session 创建入口。
+
+Roles、Resources 和 Settings 页面必须默认提供面向普通用户的字段表单，并使用当前已注册的 Executor、Provider、Model、Skill 和 Knowledge Base 作为可选择项。本机 Executor 和 secret binding 也必须通过字段与选择控件完成。内部 Profile 或本机设置 JSON 只能作为可展开的高级入口，不能成为创建或更新角色、执行器、Provider、Model、MCP、知识库或常用本机绑定的必经路径。简单表单与高级 JSON 必须使用同一套 Schema 校验并保持可逆；界面不得因简化配置而绕过资源白名单、版本快照或 secret reference 边界，secret value 仍不得写入 Profile、Git 或本机设置文件。
+
+首期桌面端必须内置并显示 Pi RPC Executor Profile，并在可发现随应用安装的 Pi CLI 时自动建立绝对路径的本机绑定。普通用户配置模型时，默认入口必须在同一个流程中完成 API protocol、中转站或官方 endpoint、API Key 和 remote model ID；系统据此生成独立 Provider/Model Profile 和 secret reference。填写地址和 API Key 后，界面必须通过对应协议的模型列表接口拉取并选择 remote model ID，不显示手动 ID 入口。API Key 只能进入操作系统加密的本机 secret store，UI projection、Profile、Git 状态和普通本机设置均不得返回或持久化明文。Role 必须以勾选方式显式选择 Skill、MCP Server 和 Knowledge Base；勾选即授权该资源，不显示或要求配置 MCP tool/resource/prompt 允许列表、知识库 collection、search/read、topK、上下文预算或 required 等二级限制。若某个 Executor 的统一资源网关尚不可用，UI 必须明确阻止该组合，不能将仅保存成功表述为可执行。
 
 ## 13. 当前项目代码复用
 
@@ -805,49 +812,49 @@ Workflows 页面本期必须提供可视化图编辑器，包括节点画布、�
 
 ### 13.1 可直接或近乎直接复制
 
-| 当前路径 | 复用内容 | 目标处理 |
-| --- | --- | --- |
-| `src/shared/mam/domain/primitives.ts` | ID、时间、schema version、hash schema | 直接复制 |
-| `src/shared/mam/domain/artifact.ts` | Artifact contract、ref、version | `R1`：补 `taskId`、Attempt result 和 GitChange 后复制 |
-| `src/shared/mam/domain/review.ts` | Review decision、aggregation | `R1/R2`：删除旧 runtime/session assignment，绑定不可变 Attempt/commit |
-| `src/shared/mam/domain/skill-definition.ts` | Skill 定义和锁定信息 | 直接复制 |
-| `src/shared/mam/runtime-events.ts` | 标准执行事件 | 重命名类型后复制 |
-| `src/main/mam/artifacts/` | Artifact 校验、内容寻址和本地存储模式 | `R1/R2`：增加 state branch store，并让本地 ACL 可从权威 projection 重建 |
-| `src/main/mam/review/review-aggregation-policy.ts` | 多 Reviewer 聚合 | 直接复制 |
-| `src/main/mam/review/review-fan-out-coordinator.ts` | Reviewer 并行启动和 fan-in | `R1/R2`：替换 Runtime assignment，并绑定显式 Attempt/commit |
-| `src/main/mam/workflow/human-approval-service.ts` | 人工审批命令入口 | 直接复制 |
-| `src/main/mam/workflow/review-loop-policy.ts` | 审核返工次数保护 | 直接复制并接入通用 loop policy |
-| `src/main/mam/scheduler/scheduler-command-authority.ts` | Kernel-only 权威写入边界 | 直接复制并更新 actor 类型 |
-| `src/main/mam/skills/skill-package-validator.ts` | Skill 包路径、大小和 hash 校验 | 直接复制 |
-| `src/main/mam/skills/mam-skill-registry.ts` | Skill registry 的导入、校验和原子存储模式 | `R2`：重做跨机器稳定 ID、版本和启停写接口 |
-| `src/main/mam/skills/runtime-skill-materializer.ts` | Skill 路径校验和复制模式 | `R2/R3`：改成每 Attempt 的不可变隔离快照 |
-| `src/main/mam/diagnostics/diagnostics-recorder.ts` | 诊断记录和 secret 脱敏 | 直接复制 |
-| `src/renderer/src/components/ui/` | shadcn 基础组件 | 按实际使用组件复制 |
-| `src/renderer/src/assets/main.css` | 设计 token | 复制为新程序 UI 基线 |
+| 当前路径                                                | 复用内容                                  | 目标处理                                                                |
+| ------------------------------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------- |
+| `src/shared/mam/domain/primitives.ts`                   | ID、时间、schema version、hash schema     | 直接复制                                                                |
+| `src/shared/mam/domain/artifact.ts`                     | Artifact contract、ref、version           | `R1`：补 `taskId`、Attempt result 和 GitChange 后复制                   |
+| `src/shared/mam/domain/review.ts`                       | Review decision、aggregation              | `R1/R2`：删除旧 runtime/session assignment，绑定不可变 Attempt/commit   |
+| `src/shared/mam/domain/skill-definition.ts`             | Skill 定义和锁定信息                      | 直接复制                                                                |
+| `src/shared/mam/runtime-events.ts`                      | 标准执行事件                              | 重命名类型后复制                                                        |
+| `src/main/mam/artifacts/`                               | Artifact 校验、内容寻址和本地存储模式     | `R1/R2`：增加 state branch store，并让本地 ACL 可从权威 projection 重建 |
+| `src/main/mam/review/review-aggregation-policy.ts`      | 多 Reviewer 聚合                          | 直接复制                                                                |
+| `src/main/mam/review/review-fan-out-coordinator.ts`     | Reviewer 并行启动和 fan-in                | `R1/R2`：替换 Runtime assignment，并绑定显式 Attempt/commit             |
+| `src/main/mam/workflow/human-approval-service.ts`       | 人工审批命令入口                          | 直接复制                                                                |
+| `src/main/mam/workflow/review-loop-policy.ts`           | 审核返工次数保护                          | 直接复制并接入通用 loop policy                                          |
+| `src/main/mam/scheduler/scheduler-command-authority.ts` | Kernel-only 权威写入边界                  | 直接复制并更新 actor 类型                                               |
+| `src/main/mam/skills/skill-package-validator.ts`        | Skill 包路径、大小和 hash 校验            | 直接复制                                                                |
+| `src/main/mam/skills/mam-skill-registry.ts`             | Skill registry 的导入、校验和原子存储模式 | `R2`：重做跨机器稳定 ID、版本和启停写接口                               |
+| `src/main/mam/skills/runtime-skill-materializer.ts`     | Skill 路径校验和复制模式                  | `R2/R3`：改成每 Attempt 的不可变隔离快照                                |
+| `src/main/mam/diagnostics/diagnostics-recorder.ts`      | 诊断记录和 secret 脱敏                    | 直接复制                                                                |
+| `src/renderer/src/components/ui/`                       | shadcn 基础组件                           | 按实际使用组件复制                                                      |
+| `src/renderer/src/assets/main.css`                      | 设计 token                                | 复制为新程序 UI 基线                                                    |
 
 ### 13.2 复制后重点改造
 
-| 当前路径 | 可复用骨架 | 必须改造 |
-| --- | --- | --- |
-| `src/shared/mam/domain/role.ts` | RoleProfile、Provider/Model 引用、EffectiveRoleConfig、RoleInstance | 保留细粒度组合结构；删除 container policy 和 `deviceId`；增加 Executor Profile、execution notice/invocation 身份和配置快照 |
-| `src/shared/mam/domain/workflow.ts` | Workflow、NodeRun、Run schema | 增加 dynamic tasks、command、artifact transform、git merge 和有界循环 |
-| `src/shared/mam/domain/task.ts` | TaskPackage、Attempt | 删除 `assignedDeviceId`；增加人工 Assignment、ExecutionClaimNotice、Effective Config/Result snapshot 和 GitChange |
-| `src/shared/mam/domain/runtime-kind.ts` | 执行后端枚举位置 | 收敛为 `codex-cli`、`grok-cli`、`pi-rpc` |
-| `src/shared/mam/runtime-capabilities.ts` | capability preflight | 删除 jcode、Claude、container 和设备能力 |
-| `src/shared/mam/scheduler-protocol.ts` | Command/Event envelope、幂等与 actor | 删除 device actor 和 lease rejection；增加 role assignment、execution notice、Attempt result、dynamic task 和 merge events |
-| `src/main/mam/workflow/workflow-compiler.ts` | YAML/JSON 解析、图校验、Artifact 校验、plan hash | 扩展节点类型和有界循环；现实现只接受 DAG |
-| `src/main/mam/scheduler/kernel.ts` | 命令校验、权威事件生成、Artifact hash 检查 | 删除设备派发和设备 lease；增加人工 Assignment、非排他执行提示、Attempt result 和 merge authority |
-| `src/main/mam/state-store/append-only-event-store.ts` | event path 校验、replay 和 snapshot rebuild | `R2`：补真正批次原子性和并发 writer，再挂载到独立 `mam-state` worktree |
-| `src/main/mam/state-store/` 中的 `github-*` 文件 | Git commit、projection、replay、冲突检测 | 重命名为 provider-neutral `git-*`；改为独立状态分支和 CAS retry |
-| `src/main/mam/application/` 中的 `mam-*` 文件 | use-case 边界、projection、Artifact 提交和执行协调 | 按新状态机组装；删除所有 device dispatch/recovery 调用 |
-| `src/main/mam/runtimes/contracts/runtime-adapter.ts` | start/resume/send/steer/abort/usage 接口 | 重命名 Executor；删除 containerId |
-| `src/main/mam/runtimes/orca/orca-hosted-runtime-adapter.ts` | queue、abort 和错误测试资产 | `R3/T`：不得复用 terminal idle/tail 作为 Codex/Grok 完成通道 |
-| `src/main/mam/runtimes/pi/` | Pi RPC、事件、日志和 Role materialization | 保留 host 模式，删除 container、Pi 专属 Extension 和专用完成协议 |
-| `src/main/mam/workspace/orca-workspace-host.ts` | worktree、terminal、ownership 组合 | 重命名并只依赖 local provider |
-| `src/main/mam/workspace/orca-workspace-provider.ts` | Local provider | 只复制 `LocalOrcaWorkspaceProvider`，删除 SSH provider |
-| `src/main/mam/policy/policy-engine.ts` | file/command/network/MCP 策略 | 复制并适配新的 execution policy |
-| `src/renderer/src/features/mam/` | Roles、Workflows、Runs、Review UI | 复制组件，替换 Orca store、worktree selector 和旧 API 接线 |
-| `src/shared/mam/application-api.ts`、`src/shared/mam/ui-projection.ts` | IPC DTO 与 UI projection | 根据新模型更新后复用 |
+| 当前路径                                                               | 可复用骨架                                                          | 必须改造                                                                                                                   |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `src/shared/mam/domain/role.ts`                                        | RoleProfile、Provider/Model 引用、EffectiveRoleConfig、RoleInstance | 保留细粒度组合结构；删除 container policy 和 `deviceId`；增加 Executor Profile、execution notice/invocation 身份和配置快照 |
+| `src/shared/mam/domain/workflow.ts`                                    | Workflow、NodeRun、Run schema                                       | 增加 dynamic tasks、command、artifact transform、git merge 和有界循环                                                      |
+| `src/shared/mam/domain/task.ts`                                        | TaskPackage、Attempt                                                | 删除 `assignedDeviceId`；增加人工 Assignment、ExecutionClaimNotice、Effective Config/Result snapshot 和 GitChange          |
+| `src/shared/mam/domain/runtime-kind.ts`                                | 执行后端枚举位置                                                    | 收敛为 `codex-cli`、`grok-cli`、`pi-rpc`                                                                                   |
+| `src/shared/mam/runtime-capabilities.ts`                               | capability preflight                                                | 删除 jcode、Claude、container 和设备能力                                                                                   |
+| `src/shared/mam/scheduler-protocol.ts`                                 | Command/Event envelope、幂等与 actor                                | 删除 device actor 和 lease rejection；增加 role assignment、execution notice、Attempt result、dynamic task 和 merge events |
+| `src/main/mam/workflow/workflow-compiler.ts`                           | YAML/JSON 解析、图校验、Artifact 校验、plan hash                    | 扩展节点类型和有界循环；现实现只接受 DAG                                                                                   |
+| `src/main/mam/scheduler/kernel.ts`                                     | 命令校验、权威事件生成、Artifact hash 检查                          | 删除设备派发和设备 lease；增加人工 Assignment、非排他执行提示、Attempt result 和 merge authority                           |
+| `src/main/mam/state-store/append-only-event-store.ts`                  | event path 校验、replay 和 snapshot rebuild                         | `R2`：补真正批次原子性和并发 writer，再挂载到独立 `mam-state` worktree                                                     |
+| `src/main/mam/state-store/` 中的 `github-*` 文件                       | Git commit、projection、replay、冲突检测                            | 重命名为 provider-neutral `git-*`；改为独立状态分支和 CAS retry                                                            |
+| `src/main/mam/application/` 中的 `mam-*` 文件                          | use-case 边界、projection、Artifact 提交和执行协调                  | 按新状态机组装；删除所有 device dispatch/recovery 调用                                                                     |
+| `src/main/mam/runtimes/contracts/runtime-adapter.ts`                   | start/resume/send/steer/abort/usage 接口                            | 重命名 Executor；删除 containerId                                                                                          |
+| `src/main/mam/runtimes/orca/orca-hosted-runtime-adapter.ts`            | queue、abort 和错误测试资产                                         | `R3/T`：不得复用 terminal idle/tail 作为 Codex/Grok 完成通道                                                               |
+| `src/main/mam/runtimes/pi/`                                            | Pi RPC、事件、日志和 Role materialization                           | 保留 host 模式，删除 container、Pi 专属 Extension 和专用完成协议                                                           |
+| `src/main/mam/workspace/orca-workspace-host.ts`                        | worktree、terminal、ownership 组合                                  | 重命名并只依赖 local provider                                                                                              |
+| `src/main/mam/workspace/orca-workspace-provider.ts`                    | Local provider                                                      | 只复制 `LocalOrcaWorkspaceProvider`，删除 SSH provider                                                                     |
+| `src/main/mam/policy/policy-engine.ts`                                 | file/command/network/MCP 策略                                       | 复制并适配新的 execution policy                                                                                            |
+| `src/renderer/src/features/mam/`                                       | Roles、Workflows、Runs、Review UI                                   | 复制组件，替换 Orca store、worktree selector 和旧 API 接线                                                                 |
+| `src/shared/mam/application-api.ts`、`src/shared/mam/ui-projection.ts` | IPC DTO 与 UI projection                                            | 根据新模型更新后复用                                                                                                       |
 
 当前项目没有正式 Knowledge Base Registry 或统一检索层，需要新增：
 
@@ -868,19 +875,19 @@ src/main/mam/mcp/mcp-capability-gateway.ts
 
 这些模块不属于 MAM 领域，但可以避免重写底层能力。迁移时按依赖闭包复制，不整体复制 Orca：
 
-| 当前路径 | 复用目的 | 边界 |
-| --- | --- | --- |
-| `src/main/git/runner.ts` | 跨平台 Git 进程执行 | 只保留 native host |
-| `src/main/git/worktree.ts` | worktree 查询和操作 | 保留 Git 2.25 fallback |
-| `src/main/git/git-capability-state.ts` | Git capability cache | 删除 SSH/WSL host key |
-| `src/main/` 中的 `worktree-create-*` 文件 | 安全创建 task worktree | 删除 hosted work-item 和远程环境依赖 |
-| `src/main/` 中的 `worktree-removal-*` 文件 | worktree 删除保护 | 只保留本地安全检查 |
-| `src/shared/git-capability-cache.ts`、`git-worktree-command-capabilities.ts` | Git 版本能力探测 | 直接复用核心逻辑 |
-| `src/shared/worktree-ownership.ts` | worktree 所有权模型 | 改为 task/attempt owner |
-| `src/main/codex/codex-app-server-session.ts` | JSONL framing、request correlation、timeout 和进程清理 | 作为 Codex 结构化 Adapter 的主要源资产，补完整 turn/session 生命周期 |
-| `src/main/codex/codex-app-server-capability-cache.ts` | 机器接口 capability cache | 按 executable、version 和 config home 隔离后复用 |
-| `src/main/daemon/` 中的 `terminal-host*` 文件 | 可选的本地观察和人工接管 | `R3` 条件复制，不进入结构化完成协议 |
-| `src/main/runtime/rpc/methods/terminal.ts` | 可选终端展示 | 仅在首期确认需要人工接管时提取本地 send/read/close；不得解析输出判定完成 |
+| 当前路径                                                                     | 复用目的                                               | 边界                                                                     |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------ |
+| `src/main/git/runner.ts`                                                     | 跨平台 Git 进程执行                                    | 只保留 native host                                                       |
+| `src/main/git/worktree.ts`                                                   | worktree 查询和操作                                    | 保留 Git 2.25 fallback                                                   |
+| `src/main/git/git-capability-state.ts`                                       | Git capability cache                                   | 删除 SSH/WSL host key                                                    |
+| `src/main/` 中的 `worktree-create-*` 文件                                    | 安全创建 task worktree                                 | 删除 hosted work-item 和远程环境依赖                                     |
+| `src/main/` 中的 `worktree-removal-*` 文件                                   | worktree 删除保护                                      | 只保留本地安全检查                                                       |
+| `src/shared/git-capability-cache.ts`、`git-worktree-command-capabilities.ts` | Git 版本能力探测                                       | 直接复用核心逻辑                                                         |
+| `src/shared/worktree-ownership.ts`                                           | worktree 所有权模型                                    | 改为 task/attempt owner                                                  |
+| `src/main/codex/codex-app-server-session.ts`                                 | JSONL framing、request correlation、timeout 和进程清理 | 作为 Codex 结构化 Adapter 的主要源资产，补完整 turn/session 生命周期     |
+| `src/main/codex/codex-app-server-capability-cache.ts`                        | 机器接口 capability cache                              | 按 executable、version 和 config home 隔离后复用                         |
+| `src/main/daemon/` 中的 `terminal-host*` 文件                                | 可选的本地观察和人工接管                               | `R3` 条件复制，不进入结构化完成协议                                      |
+| `src/main/runtime/rpc/methods/terminal.ts`                                   | 可选终端展示                                           | 仅在首期确认需要人工接管时提取本地 send/read/close；不得解析输出判定完成 |
 
 ### 13.4 UI 壳复用
 
@@ -978,6 +985,7 @@ mcpProfiles.list / mcpProfiles.save / mcpProfiles.discoverCapabilities
 knowledgeBases.list / knowledgeBases.save / knowledgeBases.preflight
 knowledge.search / knowledge.read
 workflows.list / workflows.save / workflows.compile
+designDraft.get / designDraft.selectModel / designDraft.send / designDraft.updateProposal / designDraft.apply
 runs.create / runs.list / runs.get / runs.pause / runs.resume / runs.cancel
 tasks.listForRole / tasks.assignRole / tasks.announceExecution / tasks.releaseExecutionNotice
 attempts.start / attempts.abort
@@ -1007,7 +1015,7 @@ Renderer、CLI 和 Executor Bridge 都调用 Application API，不能直接操�
 - 复制 shared MAM schemas、Artifact、Review 和 Kernel authority。
 - 删除设备和容器字段。
 - 将 Executor、Provider、Model 和 Role binding 拆成独立、可复用、带版本的配置对象。
-- 增加 Skill、MCP 和 Knowledge Base Profile 及角色级白名单 schema。
+- 增加 Skill、MCP 和 Knowledge Base Profile 及角色级资源选择 schema。
 - 增加 Assignment、非排他 ExecutionClaimNotice、Attempt result、dynamic tasks 和 merge events。
 - 扩展 Workflow Compiler。
 
@@ -1034,7 +1042,7 @@ Renderer、CLI 和 Executor Bridge 都调用 Application API，不能直接操�
 
 - 迁移 Pi host RPC Adapter。
 - 迁移 Role materialization 和 Skills；所有 Executor 统一通过 Application API 和标准结果契约接入。
-- 实现 MCP Profile Registry、tool/resource/prompt allowlist 和按角色隔离物化。
+- 实现 MCP Profile Registry 和按角色选择、隔离物化。
 - 实现 Knowledge Base Registry、Local Knowledge Binding 和只读 Knowledge Gateway。
 - 移除 container、jcode、Claude capability。
 
@@ -1068,12 +1076,12 @@ Renderer、CLI 和 Executor Bridge 都调用 Application API，不能直接操�
 
 如果使用一个主 Agent 加三个 subagent，建议按稳定边界并行：
 
-| 负责人 | 范围 |
-| --- | --- |
-| 主 Agent | 新仓库基线、shared contracts、Application API、最终集成和验收 |
-| Agent A | Git state branch、events、Assignment/execution notice、projection、并发测试 |
-| Agent B | Codex/Grok/Pi 结构化 Adapters、标准结果、Role materialization |
-| Agent C | Renderer、可视化 Workflow、Attempt timeline、Review/Merge Queue UI |
+| 负责人   | 范围                                                                        |
+| -------- | --------------------------------------------------------------------------- |
+| 主 Agent | 新仓库基线、shared contracts、Application API、最终集成和验收               |
+| Agent A  | Git state branch、events、Assignment/execution notice、projection、并发测试 |
+| Agent B  | Codex/Grok/Pi 结构化 Adapters、标准结果、Role materialization               |
+| Agent C  | Renderer、可视化 Workflow、Attempt timeline、Review/Merge Queue UI          |
 
 Workflow/Kernel schema 由主 Agent 先冻结，其他 Agent 不并行修改 shared contracts、package lock、tsconfig、Electron 启动和 preload 文件。
 
@@ -1097,6 +1105,7 @@ Workflow/Kernel schema 由主 Agent 先冻结，其他 Agent 不并行修改 sha
 - 同一节点使用多个 Reviewer Role Profile。
 - 工作流包含并行、join、condition、review、approval、dynamic tasks、有界返工和 git merge。
 - 可视化编辑器可以创建、连接、检查并 round-trip 上述节点及循环上限；源码编辑只是高级入口。
+- Design Assistant 使用已有 Model Profile 生成全新角色和工作流；本地对话草稿可恢复，确认后只增加定义且不产生 Run、Assignment、Task 或 Attempt。
 - Role 不继承；产品没有 Session override、Executor/Model fallback 或独立 Agent Session 创建入口。
 
 ### 18.2 人工分配、执行提示与多实例
@@ -1104,6 +1113,7 @@ Workflow/Kernel schema 由主 Agent 先冻结，其他 Agent 不并行修改 sha
 - 同一机器同时运行至少 3 个角色实例。
 - 同一机器同一角色可以并行执行不同任务。
 - Task 只有用户人工 Role Assignment 后才能启动；Agent recommendation 和 Workflow role binding 不能自行授予执行资格。
+- 用户可在无活动 Attempt 且 Task 为 ready/changes_requested 时，把 Assignment 修正为同一 Run 冻结目录和 Task allowlist 内的其他角色版本；并发旧值不匹配时明确冲突，历史 Attempt 不变。
 - 两个独立 clone 启动同一 Task 时都可以创建独立 Attempt，但两端都显示并记录 `concurrent_execution_warning`，全部历史不得覆盖。
 - 任意机器只需 clone、同步状态、选择 run 和 role，不需要预先注册设备。
 - 本机缺少 Executor 时任务保持已分配且可重试，不自动 fallback，也不写成任务失败。
@@ -1125,10 +1135,10 @@ Workflow/Kernel schema 由主 Agent 先冻结，其他 Agent 不并行修改 sha
 
 - Executor 全局目录中存在未授权 Skill 时，Role Instance 不加载该 Skill。
 - Role 只加载显式绑定且内容 digest 匹配的 Skill；unexpected Skill 使物化失败。
-- Role 只能调用允许的 MCP Server 及其 `allowedTools`、`allowedResources` 和 `allowedPrompts`。
-- 对未授权 MCP 能力的调用返回明确拒绝并生成审计事件。
-- Role 只能查询绑定的 Knowledge Base 和 collection，并受 `topK`、token 和 filter 策略限制。
-- 必需知识库在本机不可用时不能启动 Attempt；可选知识库缺失时明确显示 degraded。
+- Role 可以使用已选择 MCP Server 提供的 tool、resource 和 prompt，不能调用未选择的 MCP Server。
+- 对未选择 MCP Server 或 Knowledge Base 的调用返回明确拒绝并生成审计事件。
+- Role 只能查询已选择的 Knowledge Base；Gateway 统一限制单次结果数和上下文 Token。
+- 已选择知识库在本机不可用时不能启动 Attempt。
 - Knowledge Base 查询只读，Agent 不能通过 Gateway 修改源内容或索引。
 - Attempt 记录实际 Skill digest、MCP Profile version 和 Knowledge Base index revision。
 - Effective Config Snapshot 不包含 secret value，且旧 Attempt 的资源快照在 Profile 更新后保持不变。
@@ -1153,6 +1163,7 @@ Workflow/Kernel schema 由主 Agent 先冻结，其他 Agent 不并行修改 sha
 - 未授权资源不能通过 MAM Bridge/Gateway 使用；无 OS sandbox 时不宣称阻止 Agent 读取操作系统用户本来可读的任意文件。
 - 删除 snapshot 和本地 UI cache 后可从 events 重建一致状态。
 - 进程崩溃后创建新 Attempt，历史 Attempt 保留；无法判断非幂等副作用是否发生时进入 `needs_reconciliation`，不得自动重试。
+- 人工核对完成后创建的 `recovery_planned` Attempt 必须能被实际启动并保留正确 lineage；Executor 报错不能让权威状态永久停留在 running。
 - 产品构建和测试不依赖 Docker、SSH、jcode、Claude、Linear/Jira 或 hosted provider API。
 - macOS 的安装、构建、启动和核心 E2E 全部通过；Linux/Windows 仅记录后续兼容工作，不属于首期通过条件。
 

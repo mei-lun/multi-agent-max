@@ -19,7 +19,7 @@ import { KnowledgeGateway, type KnowledgeConnector } from './knowledge-gateway'
 import { McpCapabilityGateway, type McpConnector } from './mcp-capability-gateway'
 
 describe('MCP capability gateway', () => {
-  it('routes only the pinned Role tool allowlist and records an allow audit', async () => {
+  it('routes capabilities from a selected MCP server and records an allow audit', async () => {
     const fixture = gatewayFixture()
     const connector: McpConnector = { execute: vi.fn(async () => ({ ok: true })) }
     const diagnostics = new DiagnosticsRecorder()
@@ -49,7 +49,7 @@ describe('MCP capability gateway', () => {
     ])
   })
 
-  it('denies unlisted tools and mismatched Attempt authority before connector access', async () => {
+  it('accepts any capability from a selected server but rejects another Attempt', async () => {
     const fixture = gatewayFixture()
     const connector: McpConnector = { execute: vi.fn() }
     const diagnostics = new DiagnosticsRecorder()
@@ -63,18 +63,18 @@ describe('MCP capability gateway', () => {
 
     await expect(
       gateway.execute({ ...mcpToolRequest(fixture), toolId: 'mcp.admin' })
-    ).rejects.toMatchObject({ code: 'mcp_tool_denied' })
+    ).resolves.toBeUndefined()
     await expect(
       gateway.execute({
         ...mcpToolRequest(fixture),
         context: { ...fixture.context, attemptId: 'attempt.other' }
       })
     ).rejects.toMatchObject({ code: 'gateway_authority_mismatch' })
-    expect(connector.execute).not.toHaveBeenCalled()
-    expect(diagnostics.list().map((event) => event.payload.decision)).toEqual(['deny', 'deny'])
+    expect(connector.execute).toHaveBeenCalledOnce()
+    expect(diagnostics.list().map((event) => event.payload.decision)).toEqual(['allow', 'deny'])
   })
 
-  it('keeps resource and prompt allowlists independent and honors approval policy', async () => {
+  it('routes server resources and prompts and honors approval policy', async () => {
     const fixture = gatewayFixture()
     const connector: McpConnector = { execute: vi.fn(async () => ({ ok: true })) }
     const diagnostics = new DiagnosticsRecorder()
@@ -100,15 +100,13 @@ describe('MCP capability gateway', () => {
       operation: 'get_prompt',
       promptId: 'prompt.explain'
     })
-    await expect(
-      gateway.execute({
-        schemaVersion: '1.0.0',
-        context: fixture.context,
-        serverProfileId: 'mcp.docs',
-        operation: 'read_resource',
-        resourceUri: 'docs://private'
-      })
-    ).rejects.toMatchObject({ code: 'mcp_resource_denied' })
+    await gateway.execute({
+      schemaVersion: '1.0.0',
+      context: fixture.context,
+      serverProfileId: 'mcp.docs',
+      operation: 'read_resource',
+      resourceUri: 'docs://private'
+    })
 
     const approvalSnapshot = withApproval(fixture.snapshot, 'mcp')
     const approvalAuthority = gatewayAuthority(approvalSnapshot)
@@ -125,7 +123,7 @@ describe('MCP capability gateway', () => {
         context: gatewayContext(approvalAuthority)
       })
     ).rejects.toMatchObject({ code: 'mcp_approval_required' })
-    expect(connector.execute).toHaveBeenCalledTimes(2)
+    expect(connector.execute).toHaveBeenCalledTimes(3)
   })
 
   it('rejects a Profile whose versioned hash differs from the Effective Config', () => {
@@ -148,7 +146,7 @@ describe('MCP capability gateway', () => {
 })
 
 describe('Knowledge gateway', () => {
-  it('applies pinned collection, filter and retrieval budgets without exposing local paths', async () => {
+  it('searches a selected knowledge base without exposing local paths', async () => {
     const fixture = gatewayFixture()
     const connector: KnowledgeConnector = {
       search: vi.fn(async () => ({ matches: [] })),
@@ -178,8 +176,7 @@ describe('Knowledge gateway', () => {
       query: request.query,
       collection: 'guides',
       topK: 3,
-      maxContextTokens: 800,
-      filters: { audience: ['developer'] }
+      maxContextTokens: 800
     })
     const audit = diagnostics.list()[0]!
     expect(audit.payload).toMatchObject({
@@ -191,7 +188,7 @@ describe('Knowledge gateway', () => {
     expect(JSON.stringify(audit)).not.toContain('/private/knowledge')
   })
 
-  it('denies collection escapes, budget expansion and degraded resources', async () => {
+  it('allows selected collections, caps global retrieval size, and denies degraded resources', async () => {
     const fixture = gatewayFixture()
     const connector: KnowledgeConnector = { search: vi.fn(), read: vi.fn() }
     const diagnostics = new DiagnosticsRecorder()
@@ -204,12 +201,13 @@ describe('Knowledge gateway', () => {
     )
     const request = knowledgeSearchRequest(fixture)
 
-    await expect(gateway.execute({ ...request, collection: 'private' })).rejects.toMatchObject({
-      code: 'knowledge_collection_denied'
-    })
-    await expect(gateway.execute({ ...request, topK: 6 })).rejects.toMatchObject({
-      code: 'knowledge_budget_exceeded'
-    })
+    await expect(
+      gateway.execute({ ...request, collection: 'private', topK: 100 })
+    ).resolves.toBeUndefined()
+    expect(connector.search).toHaveBeenCalledWith(
+      fixture.knowledgeResource,
+      expect.objectContaining({ collection: 'private', topK: 20 })
+    )
 
     const degraded = degradedKnowledgeFixture()
     const degradedGateway = new KnowledgeGateway(
@@ -222,7 +220,7 @@ describe('Knowledge gateway', () => {
     await expect(degradedGateway.execute(knowledgeSearchRequest(degraded))).rejects.toMatchObject({
       code: 'knowledge_base_degraded'
     })
-    expect(connector.search).not.toHaveBeenCalled()
+    expect(connector.search).toHaveBeenCalledOnce()
   })
 })
 
@@ -252,12 +250,7 @@ function gatewayFixture() {
     mcpProfile,
     knowledgeProfile,
     mcpResource: {
-      binding: {
-        serverProfileId: 'mcp.docs',
-        allowedTools: ['mcp.search'],
-        allowedResources: ['docs://scheduler'],
-        allowedPrompts: ['prompt.explain']
-      },
+      binding: { serverProfileId: 'mcp.docs' },
       profile: mcpProfile
     } satisfies ResolvedMcpResource,
     knowledgeResource: {
@@ -326,9 +319,6 @@ function effectiveSnapshot(
     mcpBindings: [
       {
         serverProfileId: 'mcp.docs',
-        allowedTools: ['mcp.search'],
-        allowedResources: ['docs://scheduler'],
-        allowedPrompts: ['prompt.explain'],
         version: mcpProfile.version,
         contentHash: profileContentHash(mcpProfile)
       }
@@ -373,17 +363,7 @@ function effectiveSnapshot(
 }
 
 function knowledgeRoleBinding(): RoleKnowledgeBaseBinding {
-  return {
-    knowledgeBaseProfileId: 'knowledge.docs',
-    collections: ['guides'],
-    allowedOperations: ['search', 'read'],
-    retrievalPolicy: {
-      topK: 5,
-      maxContextTokens: 1000,
-      filters: { audience: ['developer'] }
-    },
-    required: false
-  }
+  return { knowledgeBaseProfileId: 'knowledge.docs' }
 }
 
 function gatewayAuthority(snapshot: EffectiveRoleConfigSnapshot): AttemptGatewayAuthority {

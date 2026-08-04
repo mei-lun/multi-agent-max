@@ -15,12 +15,24 @@ describe('MamMyRolePage', () => {
       roleProfileVersion: 1,
       contentHash: mamUiFixtureHash
     })
+    const reviewer = {
+      ...mamUiRoleFixture(),
+      id: 'role.reviewer',
+      displayName: 'Reviewer'
+    }
+    run.roleProfiles.push(mamUiRoleFixture(), reviewer)
+    run.run.roleCatalog.push({
+      roleProfileId: reviewer.id,
+      roleProfileVersion: reviewer.version,
+      contentHash: mamUiFixtureHash
+    })
     run.tasks.push({
       id: 'task.assigned',
       title: 'Assigned implementation',
       kind: 'dynamic',
       status: 'running',
       roleProfileId: 'role.builder',
+      roleProfileVersion: 1,
       assignedByUserId: 'user.owner',
       dependencies: [],
       recommendedRoleProfileIds: ['role.builder'],
@@ -28,6 +40,11 @@ describe('MamMyRolePage', () => {
       attemptIds: ['attempt.assigned'],
       reviewIds: [],
       executionWarningCount: 2
+    })
+    run.attempts.push({
+      id: 'attempt.assigned',
+      taskId: 'task.assigned',
+      status: 'running'
     })
     run.tasks.push({
       id: 'task.other',
@@ -38,6 +55,20 @@ describe('MamMyRolePage', () => {
       dependencies: [],
       recommendedRoleProfileIds: ['role.other'],
       allowedRoleProfileIds: ['role.other'],
+      attemptIds: [],
+      reviewIds: [],
+      executionWarningCount: 0
+    })
+    run.tasks.push({
+      id: 'task.correctable',
+      title: 'Correctable assignment',
+      kind: 'static',
+      status: 'ready',
+      roleProfileId: 'role.builder',
+      roleProfileVersion: 1,
+      dependencies: [],
+      recommendedRoleProfileIds: ['role.reviewer'],
+      allowedRoleProfileIds: ['role.builder', 'role.reviewer'],
       attemptIds: [],
       reviewIds: [],
       executionWarningCount: 0
@@ -58,7 +89,9 @@ describe('MamMyRolePage', () => {
       <MamMyRolePage
         pending={false}
         onAssignTask={() => undefined}
+        onReassignTask={async () => undefined}
         onStartAttempt={async () => undefined}
+        onSaveLocalSettings={async () => undefined}
         snapshot={{
           schemaVersion: '1.0.0',
           generatedAt: '2026-07-28T18:00:00Z',
@@ -76,6 +109,7 @@ describe('MamMyRolePage', () => {
             gitExecutable: 'git',
             executorBindings: [],
             secretBindings: [],
+            mcpConnections: [],
             skillBindings: [],
             knowledgeBindings: []
           },
@@ -90,6 +124,9 @@ describe('MamMyRolePage', () => {
     expect(markup).toContain('Start Attempt')
     expect(markup).toContain('Available implementation')
     expect(markup).toContain('Assign to Builder')
+    expect(markup).toContain('Recover every active Attempt before changing this Role.')
+    expect(markup).toContain('Correctable assignment')
+    expect(markup).toContain('Change Role')
     expect(markup).not.toContain('Other role task')
   })
 })

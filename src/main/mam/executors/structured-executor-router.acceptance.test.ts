@@ -35,12 +35,12 @@ describe('mixed Executor Workflow acceptance', () => {
 
     expect([...calls.keys()].sort()).toEqual([...kinds].sort())
     expect(new Set([...calls.values()].map((input) => input.snapshot.contentHash)).size).toBe(3)
-    expect(results.map((result) => result.result.system.workflowRunId)).toEqual([
+    expect(results.map((result) => result.result!.system.workflowRunId)).toEqual([
       'run.mixed',
       'run.mixed',
       'run.mixed'
     ])
-    expect(results.map((result) => result.result.system.taskId)).toEqual([
+    expect(results.map((result) => result.result!.system.taskId)).toEqual([
       'task.codex-cli',
       'task.grok-cli',
       'task.pi-rpc'

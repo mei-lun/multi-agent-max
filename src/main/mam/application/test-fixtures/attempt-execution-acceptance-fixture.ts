@@ -187,7 +187,7 @@ function workflow(): WorkflowDefinition {
         id: 'build',
         type: 'role_task',
         recommendedRoleProfileIds: ['role.builder'],
-        allowedRoleProfileIds: ['role.builder'],
+        allowedRoleProfileIds: ['role.builder', 'role.reviewer'],
         instruction: 'Update README and produce a diff Artifact.',
         workspaceMode: 'write',
         inputs: [],

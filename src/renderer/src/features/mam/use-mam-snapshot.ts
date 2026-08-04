@@ -2,11 +2,16 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { MamUiSnapshotSchema, type MamUiSnapshot } from '../../../../shared/mam/ui-projection'
 import type {
   MamAssignTaskInput,
+  MamCancelWorkflowRunInput,
+  MamReassignTaskInput,
+  MamDeleteRoleProfileInput,
   MamCreateWorkflowRunInput,
   MamRecoverAttemptInput,
+  MamRestartWorkflowRunInput,
   MamResolveReviewDisagreementInput,
   MamResolveApprovalGateInput,
   MamSaveLocalSettingsInput,
+  MamSaveModelConnectionInput,
   MamSaveProfileInput,
   MamSelectAttemptInput,
   MamSubmitReviewInput,
@@ -17,33 +22,13 @@ import type {
 import { getMamRendererApi } from '../../renderer-api'
 import {
   MamAttemptDiffSchema,
-  type MamAttemptDiff,
   type MamGetAttemptDiffInput
 } from '../../../../shared/mam/attempt-inspection'
+import type { MamFetchModelCatalogInput } from '../../../../shared/mam/model-catalog'
+import { mamApplicationErrorMessage } from './mam-application-error-message'
+import type { MamSnapshotState } from './mam-snapshot-state'
 
-export type MamSnapshotState = Readonly<{
-  snapshot?: MamUiSnapshot
-  error?: string
-  pending: boolean
-  showPending: boolean
-  refresh(): Promise<void>
-  selectProject(): Promise<void>
-  assignTask(input: MamAssignTaskInput): Promise<void>
-  recoverAttempt(input: MamRecoverAttemptInput): Promise<void>
-  startAttempt(input: MamStartAttemptInput): Promise<void>
-  executeNextMerge(input: MamExecuteNextMergeInput): Promise<void>
-  saveWorkflow(input: MamSaveWorkflowInput): Promise<void>
-  createWorkflowRun(input: MamCreateWorkflowRunInput): Promise<void>
-  submitReview(input: MamSubmitReviewInput): Promise<void>
-  resolveReviewDisagreement(input: MamResolveReviewDisagreementInput): Promise<void>
-  resolveApprovalGate(input: MamResolveApprovalGateInput): Promise<void>
-  selectAttempt(input: MamSelectAttemptInput): Promise<void>
-  saveProfile(input: MamSaveProfileInput): Promise<void>
-  saveLocalSettings(input: MamSaveLocalSettingsInput): Promise<void>
-  importSkill(): Promise<void>
-  exportDiagnostics(): Promise<string | undefined>
-  getAttemptDiff(input: MamGetAttemptDiffInput): Promise<MamAttemptDiff>
-}>
+export type { MamSnapshotState } from './mam-snapshot-state'
 
 export function useMamSnapshot(): MamSnapshotState {
   const [snapshot, setSnapshot] = useState<MamUiSnapshot>()
@@ -59,7 +44,7 @@ export function useMamSnapshot(): MamSnapshotState {
       const next = MamUiSnapshotSchema.parse(await getMamRendererApi().getUiSnapshot())
       if (mounted.current) setSnapshot(next)
     } catch (cause) {
-      if (mounted.current) setError(cause instanceof Error ? cause.message : String(cause))
+      if (mounted.current) setError(mamApplicationErrorMessage(cause))
     } finally {
       window.clearTimeout(timer)
       if (mounted.current) {
@@ -76,7 +61,7 @@ export function useMamSnapshot(): MamSnapshotState {
       const result = await getMamRendererApi().selectProject()
       if (result && mounted.current) setSnapshot(MamUiSnapshotSchema.parse(result))
     } catch (cause) {
-      if (mounted.current) setError(cause instanceof Error ? cause.message : String(cause))
+      if (mounted.current) setError(mamApplicationErrorMessage(cause))
     } finally {
       window.clearTimeout(timer)
       if (mounted.current) {
@@ -85,41 +70,69 @@ export function useMamSnapshot(): MamSnapshotState {
       }
     }
   }, [])
-  const applyAuthoritativeChange = useCallback(async (operation: () => Promise<unknown>) => {
-    setPending(true)
-    setError(undefined)
-    const timer = window.setTimeout(() => setShowPending(true), 200)
-    try {
-      const next = MamUiSnapshotSchema.parse(await operation())
-      if (mounted.current) setSnapshot(next)
-    } catch (cause) {
-      if (mounted.current) setError(cause instanceof Error ? cause.message : String(cause))
-    } finally {
-      window.clearTimeout(timer)
-      if (mounted.current) {
-        setPending(false)
-        setShowPending(false)
+  const applyAuthoritativeChange = useCallback(
+    async (
+      operation: () => Promise<unknown>,
+      options: Readonly<{ rethrow?: boolean; surface?: boolean }> = {}
+    ) => {
+      setPending(true)
+      setError(undefined)
+      const timer = window.setTimeout(() => setShowPending(true), 200)
+      try {
+        const next = MamUiSnapshotSchema.parse(await operation())
+        if (mounted.current) setSnapshot(next)
+      } catch (cause) {
+        const normalized = new Error(mamApplicationErrorMessage(cause))
+        if (mounted.current && options.surface !== false) setError(normalized.message)
+        if (options.rethrow) throw normalized
+      } finally {
+        window.clearTimeout(timer)
+        if (mounted.current) {
+          setPending(false)
+          setShowPending(false)
+        }
       }
-    }
-  }, [])
+    },
+    []
+  )
   const assignTask = useCallback(
     (input: MamAssignTaskInput) =>
-      applyAuthoritativeChange(() => getMamRendererApi().assignTask(input)),
+      applyAuthoritativeChange(() => getMamRendererApi().assignTask(input), {
+        rethrow: true,
+        surface: false
+      }),
+    [applyAuthoritativeChange]
+  )
+  const reassignTask = useCallback(
+    (input: MamReassignTaskInput) =>
+      applyAuthoritativeChange(() => getMamRendererApi().reassignTask(input), {
+        rethrow: true,
+        surface: false
+      }),
     [applyAuthoritativeChange]
   )
   const recoverAttempt = useCallback(
     (input: MamRecoverAttemptInput) =>
-      applyAuthoritativeChange(() => getMamRendererApi().recoverAttempt(input)),
+      applyAuthoritativeChange(() => getMamRendererApi().recoverAttempt(input), {
+        rethrow: true,
+        surface: false
+      }),
     [applyAuthoritativeChange]
   )
   const startAttempt = useCallback(
     (input: MamStartAttemptInput) =>
-      applyAuthoritativeChange(() => getMamRendererApi().startAttempt(input)),
+      applyAuthoritativeChange(() => getMamRendererApi().startAttempt(input), {
+        rethrow: true,
+        surface: false
+      }),
     [applyAuthoritativeChange]
   )
   const executeNextMerge = useCallback(
     (input: MamExecuteNextMergeInput) =>
-      applyAuthoritativeChange(() => getMamRendererApi().executeNextMerge(input)),
+      applyAuthoritativeChange(() => getMamRendererApi().executeNextMerge(input), {
+        rethrow: true,
+        surface: false
+      }),
     [applyAuthoritativeChange]
   )
   const saveWorkflow = useCallback(async (input: MamSaveWorkflowInput) => {
@@ -130,8 +143,9 @@ export function useMamSnapshot(): MamSnapshotState {
       const next = MamUiSnapshotSchema.parse(await getMamRendererApi().saveWorkflow(input))
       if (mounted.current) setSnapshot(next)
     } catch (cause) {
-      if (mounted.current) setError(cause instanceof Error ? cause.message : String(cause))
-      throw cause
+      const normalized = new Error(mamApplicationErrorMessage(cause))
+      if (mounted.current) setError(normalized.message)
+      throw normalized
     } finally {
       window.clearTimeout(timer)
       if (mounted.current) {
@@ -145,10 +159,41 @@ export function useMamSnapshot(): MamSnapshotState {
       applyAuthoritativeChange(() => getMamRendererApi().submitReview(input)),
     [applyAuthoritativeChange]
   )
+  const applyAndReturnAuthoritativeChange = useCallback(
+    async (operation: () => Promise<unknown>) => {
+      setPending(true)
+      setError(undefined)
+      try {
+        const next = MamUiSnapshotSchema.parse(await operation())
+        if (mounted.current) setSnapshot(next)
+        return next
+      } catch (cause) {
+        const normalized = new Error(mamApplicationErrorMessage(cause))
+        if (mounted.current) setError(normalized.message)
+        throw normalized
+      } finally {
+        if (mounted.current) setPending(false)
+      }
+    },
+    []
+  )
   const createWorkflowRun = useCallback(
     (input: MamCreateWorkflowRunInput) =>
-      applyAuthoritativeChange(() => getMamRendererApi().createWorkflowRun(input)),
+      applyAndReturnAuthoritativeChange(() => getMamRendererApi().createWorkflowRun(input)),
+    [applyAndReturnAuthoritativeChange]
+  )
+  const cancelWorkflowRun = useCallback(
+    (input: MamCancelWorkflowRunInput) =>
+      applyAuthoritativeChange(() => getMamRendererApi().cancelWorkflowRun(input), {
+        rethrow: true,
+        surface: false
+      }),
     [applyAuthoritativeChange]
+  )
+  const restartWorkflowRun = useCallback(
+    (input: MamRestartWorkflowRunInput) =>
+      applyAndReturnAuthoritativeChange(() => getMamRendererApi().restartWorkflowRun(input)),
+    [applyAndReturnAuthoritativeChange]
   )
   const resolveReviewDisagreement = useCallback(
     (input: MamResolveReviewDisagreementInput) =>
@@ -172,7 +217,36 @@ export function useMamSnapshot(): MamSnapshotState {
   )
   const saveLocalSettings = useCallback(
     (input: MamSaveLocalSettingsInput) =>
-      applyAuthoritativeChange(() => getMamRendererApi().saveLocalSettings(input)),
+      applyAuthoritativeChange(() => getMamRendererApi().saveLocalSettings(input), {
+        rethrow: true,
+        surface: false
+      }),
+    [applyAuthoritativeChange]
+  )
+  const saveModelConnection = useCallback(async (input: MamSaveModelConnectionInput) => {
+    setPending(true)
+    setError(undefined)
+    try {
+      const next = MamUiSnapshotSchema.parse(await getMamRendererApi().saveModelConnection(input))
+      if (mounted.current) setSnapshot(next)
+    } catch (cause) {
+      const normalized = new Error(mamApplicationErrorMessage(cause))
+      if (mounted.current) setError(normalized.message)
+      throw normalized
+    } finally {
+      if (mounted.current) setPending(false)
+    }
+  }, [])
+  const fetchModelCatalog = useCallback(
+    (input: MamFetchModelCatalogInput) => getMamRendererApi().fetchModelCatalog(input),
+    []
+  )
+  const deleteRoleProfile = useCallback(
+    (input: MamDeleteRoleProfileInput) =>
+      applyAuthoritativeChange(() => getMamRendererApi().deleteRoleProfile(input), {
+        rethrow: true,
+        surface: false
+      }),
     [applyAuthoritativeChange]
   )
   const importSkill = useCallback(async () => {
@@ -202,17 +276,23 @@ export function useMamSnapshot(): MamSnapshotState {
     refresh,
     selectProject,
     assignTask,
+    reassignTask,
     recoverAttempt,
     startAttempt,
     executeNextMerge,
     saveWorkflow,
     createWorkflowRun,
+    cancelWorkflowRun,
+    restartWorkflowRun,
     submitReview,
     resolveReviewDisagreement,
     resolveApprovalGate,
     selectAttempt,
     saveProfile,
     saveLocalSettings,
+    saveModelConnection,
+    fetchModelCatalog,
+    deleteRoleProfile,
     importSkill,
     exportDiagnostics,
     getAttemptDiff

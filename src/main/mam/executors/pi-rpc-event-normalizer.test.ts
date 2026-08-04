@@ -63,6 +63,30 @@ describe('Pi RPC event normalization', () => {
       costUsd: 0.25
     })
   })
+
+  it('keeps only streaming deltas instead of repeated full assistant messages', () => {
+    const event = normalizePiRpcEvent({
+      event: {
+        type: 'message_update',
+        assistantMessageEvent: {
+          type: 'text_delta',
+          contentIndex: 1,
+          delta: '完',
+          partial: {
+            role: 'assistant',
+            content: [{ type: 'thinking', thinkingSignature: 'x'.repeat(100_000) }]
+          }
+        }
+      },
+      executorInvocationId: 'executor-invocation.1',
+      timestamp: '2026-07-28T08:00:00Z'
+    })
+
+    expect(event.payload).toEqual({
+      assistantMessageEvent: { type: 'text_delta', contentIndex: 1, delta: '完' }
+    })
+    expect(JSON.stringify(event)).not.toContain('thinkingSignature')
+  })
 })
 
 function stats(cost: number) {

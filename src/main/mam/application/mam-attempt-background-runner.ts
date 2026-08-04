@@ -1,7 +1,5 @@
 import { AttemptResultSchema, type AttemptResult } from '../../../shared/mam/domain/attempt-result'
 import { existsSync } from 'node:fs'
-import type { SchedulerCommand } from '../../../shared/mam/scheduler-protocol'
-import type { ExecutorUsage } from '../../../shared/mam/executor-events'
 import type { DiagnosticsRecorder } from '../diagnostics/diagnostics-recorder'
 import { GitCommandRetryCoordinator } from '../state-store/git-command-retry-coordinator'
 import type { GitStateRepository } from '../state-store/git-state-repository'
@@ -14,8 +12,27 @@ import { advanceReadyReviewPanel } from './review-panel-advancement'
 import { finalizeMergeConflictAttempt } from './merge-conflict-attempt-finalizer'
 import { advanceDynamicTaskPlan } from './dynamic-task-advancement'
 import { advanceDeterministicNodes } from './deterministic-node-advancement'
+import { AttemptResourceApplicationService } from './attempt-resource-application-service'
+import { ExecutorCapabilityBridge } from './executor-capability-bridge'
+import { McpSdkConnector } from '../gateways/mcp-sdk-connector'
+import { FileKnowledgeConnector } from '../gateways/file-knowledge-connector'
+import { recordAttemptInterruption } from './attempt-interruption-recovery'
+import { materializeDirectAttemptResult } from './direct-attempt-result'
+import { collectPreparedAttemptResult } from './prepared-attempt-result-collector'
+import {
+  automaticReviewSubmission,
+  publishAutomaticReviewSubmission
+} from './automatic-review-submission'
+import { shouldAutomaticallyRetryAttempt } from './attempt-automatic-retry'
+import { buildAttemptResultCommand } from './attempt-result-command'
+import { normalizePreparedReviewContracts } from './automatic-review-contract'
+import {
+  attemptRunnerErrorCode as errorCode,
+  recordAttemptRunnerCost as recordCost,
+  recordAttemptRunnerEvent as record
+} from './attempt-runner-diagnostics'
 
-export async function runPreparedAttempt(input: {
+export type PreparedAttemptRunnerInput = Readonly<{
   prepared: PreparedAttempt
   executor: ExecutorRouter
   artifacts: AttemptArtifactValidator
@@ -27,24 +44,54 @@ export async function runPreparedAttempt(input: {
   schedulerId: string
   now(): string
   createId(kind: string): string
-}): Promise<void> {
-  const { prepared } = input
+}>
+
+export async function runPreparedAttempt(input: PreparedAttemptRunnerInput): Promise<void> {
+  const prepared = normalizePreparedReviewContracts(input.prepared)
+  let executorCompleted = false
   try {
-    const execution = await input.executor.execute({
-      profile: prepared.profile,
-      binding: prepared.binding,
-      snapshot: prepared.snapshot,
-      resources: prepared.resources,
-      executorInvocationId: prepared.executorInvocationId,
-      workspacePath: prepared.worktree.path,
-      systemPrompt: prepared.systemPrompt,
-      prompt: prepared.prompt,
-      credentialValues: prepared.credentialValues,
-      authority: attemptAuthority(prepared, input.now())
-    })
+    const authority = attemptGatewayAuthority(prepared)
+    const resourceApplication = new AttemptResourceApplicationService(
+      prepared.resolvedConfig,
+      authority,
+      new McpSdkConnector((connectionRef) =>
+        prepared.mcpConnections.find((connection) => connection.connectionRef === connectionRef)
+      ),
+      new FileKnowledgeConnector(input.repository.projectDirectory),
+      input.diagnostics
+    )
+    const capabilityBridge = new ExecutorCapabilityBridge(
+      resourceApplication,
+      gatewayRequestContext(authority)
+    )
+    const execution = await input.executor
+      .execute({
+        profile: prepared.profile,
+        binding: prepared.binding,
+        snapshot: prepared.snapshot,
+        resources: prepared.resources,
+        executorInvocationId: prepared.executorInvocationId,
+        workspacePath: prepared.worktree.path,
+        systemPrompt: prepared.systemPrompt,
+        prompt: prepared.prompt,
+        credentialValues: prepared.credentialValues,
+        authority: attemptAuthority(prepared, input.now()),
+        capabilityBridge
+      })
+      .finally(() => resourceApplication.dispose())
+    executorCompleted = true
     for (const event of execution.events) record(input, 'executor', { event })
+    const collected = execution.result
+      ? undefined
+      : await collectPreparedAttemptResult({
+          prepared,
+          assistantText: execution.assistantText,
+          usage: execution.usage,
+          git: input.git,
+          authority: attemptAuthority(prepared, input.now())
+        })
     const validated = await input.artifacts.validate({
-      result: execution.result,
+      result: execution.result ?? collected!.result,
       outputContracts: prepared.task.outputContracts,
       workspacePath: prepared.worktree.path,
       workflowRunId: prepared.workflowRunId,
@@ -52,8 +99,20 @@ export async function runPreparedAttempt(input: {
       taskId: prepared.taskId,
       attemptId: prepared.attemptId,
       roleInstanceId: prepared.roleInstanceId,
-      inputArtifacts: prepared.task.inputArtifacts
+      inputArtifacts: prepared.task.inputArtifacts,
+      ...(collected ? { contentOverrides: collected.contents } : {})
     })
+    if (collected && prepared.snapshot.permissions.writePaths.length === 0) {
+      await materializeDirectAttemptResult(
+        prepared.worktree.path,
+        prepared.task.outputContracts,
+        collected.contents
+      )
+    }
+    const automaticReview = automaticReviewSubmission(prepared, validated)
+    if (prepared.task.reviewTask && !automaticReview) {
+      throw new Error('automatic_review_output_invalid')
+    }
     const authoritative = prepared.task.mergeConflictTask
       ? finalizeMergeConflictAttempt({
           prepared,
@@ -71,6 +130,17 @@ export async function runPreparedAttempt(input: {
       status: 'result_submitted',
       submittedCommit: authoritative.system.submittedCommit
     })
+    if (
+      publishAutomaticReviewSubmission({
+        request: automaticReview,
+        repository: input.repository,
+        schedulerId: input.schedulerId,
+        nextCommandId: () => input.createId('command'),
+        now: input.now
+      })
+    ) {
+      record(input, 'scheduler', { status: 'automatic_review_submitted' })
+    }
     if (prepared.task.mergeConflictTask) {
       recordCost(input, execution.usage)
       return
@@ -131,10 +201,33 @@ export async function runPreparedAttempt(input: {
     }
     recordCost(input, execution.usage)
   } catch (error) {
+    let recoveryStatus: string
+    try {
+      recoveryStatus = recordAttemptInterruption({
+        repository: input.repository,
+        workflowRunId: prepared.workflowRunId,
+        taskId: prepared.taskId,
+        attemptId: prepared.attemptId,
+        schedulerId: input.schedulerId,
+        commandId: input.createId('command'),
+        issuedAt: input.now(),
+        ...(shouldAutomaticallyRetryAttempt({
+          prepared,
+          repository: input.repository,
+          error,
+          executorCompleted
+        })
+          ? { replacementAttemptId: input.createId('attempt') }
+          : {})
+      })
+    } catch (recoveryError) {
+      recoveryStatus = `recovery_record_failed:${errorCode(recoveryError)}`
+    }
     record(input, 'executor', {
       status: 'execution_interrupted',
       errorCode: errorCode(error),
       message: error instanceof Error ? error.message : String(error),
+      recoveryStatus,
       worktreeRetained: existsSync(prepared.worktree.path)
     })
   }
@@ -156,24 +249,16 @@ function finalizeRegularAttempt(
     system: { ...result.system, submittedCommit: finalized.submittedCommit }
   })
   new GitCommandRetryCoordinator(input.repository).executeAndPush({
-    command: resultCommand(input.prepared, authoritative, input.createId('command'), input.now()),
+    command: buildAttemptResultCommand(
+      input.prepared,
+      authoritative,
+      input.createId('command'),
+      input.now()
+    ),
     schedulerId: input.schedulerId,
     validArtifactHashes
   })
   return authoritative
-}
-
-function recordCost(input: Parameters<typeof runPreparedAttempt>[0], usage: ExecutorUsage): void {
-  input.diagnostics.recordCost({
-    ...diagnosticIdentity(input.prepared, input.now()),
-    usage: {
-      inputTokens: usage.inputTokens ?? null,
-      outputTokens: usage.outputTokens ?? null,
-      costUsd: usage.costUsd ?? null,
-      status:
-        usage.status === 'known' ? 'reported' : usage.status === 'partial' ? 'partial' : 'unknown'
-    }
-  })
 }
 
 function attemptAuthority(prepared: PreparedAttempt, createdAt: string) {
@@ -189,54 +274,19 @@ function attemptAuthority(prepared: PreparedAttempt, createdAt: string) {
   }
 }
 
-function resultCommand(
-  prepared: PreparedAttempt,
-  result: AttemptResult,
-  commandId: string,
-  issuedAt: string
-): Extract<SchedulerCommand, { type: 'submit_attempt_result' }> {
+function attemptGatewayAuthority(prepared: PreparedAttempt) {
   return {
-    schemaVersion: '1.0.0',
-    commandId,
-    issuedAt,
     workflowRunId: prepared.workflowRunId,
+    nodeRunId: prepared.task.nodeRunId,
     taskId: prepared.taskId,
-    actor: {
-      kind: 'executor',
-      roleInstanceId: prepared.roleInstanceId,
-      attemptId: prepared.attemptId,
-      executorInvocationId: prepared.executorInvocationId
-    },
-    type: 'submit_attempt_result',
     attemptId: prepared.attemptId,
-    result
-  }
-}
-
-function record(
-  input: Parameters<typeof runPreparedAttempt>[0],
-  kind: 'scheduler' | 'executor',
-  payload: Readonly<Record<string, unknown>>
-): void {
-  input.diagnostics.record({
-    ...diagnosticIdentity(input.prepared, input.now()),
-    kind,
-    payload
-  })
-}
-
-function diagnosticIdentity(prepared: PreparedAttempt, at: string) {
-  return {
-    at,
-    workflowRunId: prepared.workflowRunId,
-    nodeId: prepared.nodeId,
     roleInstanceId: prepared.roleInstanceId,
-    executorInvocationId: prepared.executorInvocationId
+    executorInvocationId: prepared.executorInvocationId,
+    effectiveConfigHash: prepared.snapshot.contentHash
   }
 }
 
-function errorCode(error: unknown): string {
-  return typeof error === 'object' && error !== null && 'code' in error
-    ? String(error.code)
-    : 'execution_error'
+function gatewayRequestContext(authority: ReturnType<typeof attemptGatewayAuthority>) {
+  const { nodeRunId: _, ...context } = authority
+  return context
 }

@@ -69,8 +69,8 @@ describe('MCP SDK connector', () => {
 
       await expect(
         gateway.execute({ ...toolRequest(fixture), toolId: 'mcp.admin' })
-      ).rejects.toMatchObject({ code: 'mcp_tool_denied' })
-      expect(execute).toHaveBeenCalledTimes(4)
+      ).resolves.toMatchObject({ isError: true })
+      expect(execute).toHaveBeenCalledTimes(5)
     } finally {
       await connector.dispose()
     }
@@ -139,9 +139,6 @@ function gatewayFixture() {
     mcpBindings: [
       {
         serverProfileId: profile.id,
-        allowedTools: ['mcp.search'],
-        allowedResources: ['docs://scheduler'],
-        allowedPrompts: ['prompt.explain'],
         version: profile.version,
         contentHash: profileContentHash(profile)
       }
@@ -191,12 +188,7 @@ function gatewayFixture() {
     authority,
     context,
     resource: {
-      binding: {
-        serverProfileId: profile.id,
-        allowedTools: ['mcp.search'],
-        allowedResources: ['docs://scheduler'],
-        allowedPrompts: ['prompt.explain']
-      },
+      binding: { serverProfileId: profile.id },
       profile
     }
   }

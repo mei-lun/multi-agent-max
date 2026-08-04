@@ -1,7 +1,11 @@
 import { AlertTriangle, UserRoundCheck } from 'lucide-react'
 import { useState } from 'react'
 import type { MamAssignTaskInput } from '../../../../shared/mam/application-command'
-import type { MamStartAttemptInput } from '../../../../shared/mam/application-command'
+import type { MamReassignTaskInput } from '../../../../shared/mam/application-command'
+import type {
+  MamSaveLocalSettingsInput,
+  MamStartAttemptInput
+} from '../../../../shared/mam/application-command'
 import type { MamUiRunSnapshot, MamUiSnapshot } from '../../../../shared/mam/ui-projection'
 import {
   Select,
@@ -13,28 +17,44 @@ import {
 import { Button } from '../../components/ui/button'
 import { MamStateBadge } from './MamStateBadge'
 import { MamStartAttemptDialog } from './MamStartAttemptDialog'
+import { MamTaskRoleDialog } from './MamTaskRoleDialog'
+import { MamLocalRoleParticipation } from './MamLocalRoleParticipation'
 
 type AssignedTask = Readonly<{
   run: MamUiRunSnapshot
   task: MamUiRunSnapshot['tasks'][number]
 }>
 
+type AvailableTask = AssignedTask & Readonly<{ roleProfileVersion: number }>
+
 export function MamMyRolePage({
   snapshot,
   pending,
   onAssignTask,
-  onStartAttempt
+  onReassignTask,
+  onStartAttempt,
+  onSaveLocalSettings
 }: Readonly<{
   snapshot: MamUiSnapshot
   pending: boolean
   onAssignTask(input: MamAssignTaskInput): void
+  onReassignTask(input: MamReassignTaskInput): Promise<void>
   onStartAttempt(input: MamStartAttemptInput): Promise<void>
+  onSaveLocalSettings(input: MamSaveLocalSettingsInput): Promise<void>
 }>): React.JSX.Element {
+  const selectableRoles = [
+    ...new Map(
+      [...snapshot.runs.flatMap((run) => run.roleProfiles), ...snapshot.roles].map((role) => [
+        role.id,
+        role
+      ])
+    ).values()
+  ].sort((left, right) => left.displayName.localeCompare(right.displayName))
   const [selectedRoleId, setSelectedRoleId] = useState<string>()
-  const activeRoleId = snapshot.roles.some((role) => role.id === selectedRoleId)
+  const activeRoleId = selectableRoles.some((role) => role.id === selectedRoleId)
     ? selectedRoleId
-    : snapshot.roles[0]?.id
-  const activeRole = snapshot.roles.find((role) => role.id === activeRoleId)
+    : selectableRoles[0]?.id
+  const activeRole = selectableRoles.find((role) => role.id === activeRoleId)
   const tasks: AssignedTask[] = activeRoleId
     ? snapshot.runs.flatMap((run) =>
         run.tasks
@@ -42,20 +62,18 @@ export function MamMyRolePage({
           .map((task) => ({ run, task }))
       )
     : []
-  const availableTasks: AssignedTask[] = activeRole
+  const availableTasks: AvailableTask[] = activeRole
     ? snapshot.runs.flatMap((run) => {
-        const roleAvailable = run.run.roleCatalog.some(
-          (entry) =>
-            entry.roleProfileId === activeRole.id && entry.roleProfileVersion === activeRole.version
-        )
-        if (!roleAvailable) return []
+        const roleEntry = run.run.roleCatalog.find((entry) => entry.roleProfileId === activeRole.id)
+        if (!roleEntry) return []
         return run.tasks
           .filter(
             (task) =>
               task.status === 'waiting_role_assignment' &&
-              task.allowedRoleProfileIds.includes(activeRole.id)
+              (task.allowedRoleProfileIds.length === 0 ||
+                task.allowedRoleProfileIds.includes(activeRole.id))
           )
-          .map((task) => ({ run, task }))
+          .map((task) => ({ run, task, roleProfileVersion: roleEntry.roleProfileVersion }))
       })
     : []
   return (
@@ -75,7 +93,7 @@ export function MamMyRolePage({
               <SelectValue placeholder="Select a Role" />
             </SelectTrigger>
             <SelectContent>
-              {snapshot.roles.map((role) => (
+              {selectableRoles.map((role) => (
                 <SelectItem key={role.id} value={role.id}>
                   {role.displayName}
                 </SelectItem>
@@ -85,12 +103,18 @@ export function MamMyRolePage({
         )}
       </div>
 
+      <MamLocalRoleParticipation
+        snapshot={snapshot}
+        pending={pending}
+        onSave={onSaveLocalSettings}
+      />
+
       {!activeRole ? (
         <div className="rounded-xl border border-dashed border-border p-10 text-center">
           <UserRoundCheck className="mx-auto mb-3 size-7 text-muted-foreground" />
           <p className="text-sm font-medium">No Role is available</p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Register an active Role Profile before selecting a local working role.
+            Create a Role Profile or start a Run with a frozen Role catalog.
           </p>
         </div>
       ) : (
@@ -140,10 +164,16 @@ export function MamMyRolePage({
                         </span>
                       )}
                     </div>
-                    {(task.status === 'ready' ||
-                      task.status === 'changes_requested' ||
-                      task.status === 'running') && (
-                      <div className="mt-3 flex justify-end">
+                    <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+                      <MamTaskRoleDialog
+                        run={run}
+                        task={task}
+                        pending={pending}
+                        onReassignTask={onReassignTask}
+                      />
+                      {(task.status === 'ready' ||
+                        task.status === 'changes_requested' ||
+                        task.status === 'running') && (
                         <MamStartAttemptDialog
                           input={{ workflowRunId: run.run.id, taskId: task.id }}
                           activeAttemptIds={run.attempts
@@ -156,8 +186,8 @@ export function MamMyRolePage({
                           pending={pending}
                           onStart={onStartAttempt}
                         />
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </article>
                 ))}
               </div>
@@ -175,7 +205,7 @@ export function MamMyRolePage({
               </p>
             ) : (
               <div className="overflow-hidden rounded-xl border border-border bg-card">
-                {availableTasks.map(({ run, task }) => (
+                {availableTasks.map(({ run, task, roleProfileVersion }) => (
                   <article
                     key={`${run.run.id}:${task.id}`}
                     className="flex items-center justify-between gap-4 border-b border-border px-4 py-3 last:border-b-0"
@@ -194,7 +224,7 @@ export function MamMyRolePage({
                           workflowRunId: run.run.id,
                           taskId: task.id,
                           roleProfileId: activeRole.id,
-                          roleProfileVersion: activeRole.version
+                          roleProfileVersion
                         })
                       }
                     >

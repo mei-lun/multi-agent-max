@@ -5,6 +5,7 @@ import type { AttemptSecretValueProvider } from './local-attempt-secrets'
 import type { ExecutableAttemptTask } from './mam-attempt-execution-types'
 import type { ConflictResolutionWorktreeManager } from './conflict-resolution-worktree-manager'
 import type { AttemptWorktree } from './attempt-worktree-manager'
+import { automaticReviewArtifactContract } from './automatic-review-contract'
 
 export function resolveExecutableTask(
   bundle: WorkflowRunBundle,
@@ -29,11 +30,16 @@ export function resolveExecutableTask(
   if (dynamicTask) return { ...dynamicTask, workspaceMode: 'write', baseRef: 'HEAD' }
   const reviewTask = projection.reviewTasks[taskId]
   if (reviewTask) {
+    // Review result shape is an internal MAM contract, including for Runs frozen
+    // before the current automatic Review schema was introduced.
+    const outputContracts = reviewTask.outputContracts.map(automaticReviewArtifactContract)
     return {
       ...reviewTask,
+      outputContracts,
       nodeId: reviewTask.reviewNodeId,
       workspaceMode: 'read',
-      baseRef: reviewTask.subject.submittedCommit ?? 'HEAD'
+      baseRef: reviewTask.subject.submittedCommit ?? 'HEAD',
+      reviewTask
     }
   }
   const conflictTask = projection.mergeConflictTasks[taskId]
@@ -86,10 +92,26 @@ export function attemptExecutionPrompt(task: ExecutableAttemptTask, branch: stri
     task.specification,
     '',
     `Workspace branch: ${branch}`,
-    'Leave intended file changes in the workspace; MAM creates and pushes the Attempt commit.',
-    'For every required output contract, write one payload file inside the workspace and declare it in artifacts.',
+    'Leave intended file changes in the workspace; MAM creates the Attempt commit and publishes it to a configured remote when distributed mode is enabled.',
+    'Complete each output contract in the workspace. For code changes, MAM captures the Git diff. For file outputs, create a relative file whose name includes the artifact type.',
+    'For Markdown outputs, each required section heading must include its configured section identifier.',
+    ...(task.reviewTask ? reviewOutputInstructions(task) : []),
     `Output contracts: ${JSON.stringify(task.outputContracts)}`
   ].join('\n')
+}
+
+function reviewOutputInstructions(task: ExecutableAttemptTask): readonly string[] {
+  const structured = task.outputContracts.some((contract) => contract.format === 'json-schema')
+  if (structured) {
+    return [
+      'This is a Review Task. Return exactly one JSON object with status (approved, changes_requested, or blocked), summary, and findings; do not wrap it in Markdown.',
+      'Use an empty findings array when approved. For changes_requested, include at least one actionable finding with severity, category, and summary; filePath and line are optional.'
+    ]
+  }
+  return [
+    'This is a Review Task. Follow the configured report contract and state exactly one explicit verdict: approved, changes_requested, or blocked.',
+    'For changes_requested, list every actionable problem as a bullet. MAM converts the report into its internal Review decision.'
+  ]
 }
 
 export function conflictAttemptWorktree(

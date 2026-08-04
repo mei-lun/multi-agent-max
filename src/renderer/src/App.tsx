@@ -10,11 +10,13 @@ import {
   PackageOpen,
   RefreshCw,
   Settings,
+  Sparkles,
   UserRoundCheck,
   Users
 } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from './components/ui/button'
+import { Badge } from './components/ui/badge'
 import {
   Select,
   SelectContent,
@@ -24,6 +26,7 @@ import {
 } from './components/ui/select'
 import { Tooltip, TooltipContent, TooltipTrigger } from './components/ui/tooltip'
 import { MamMergeQueuePage } from './features/mam/MamMergeQueuePage'
+import { MamDesignPage } from './features/mam/MamDesignPage'
 import { MamMyRolePage } from './features/mam/MamMyRolePage'
 import { MamOverviewPage } from './features/mam/MamOverviewPage'
 import { MamReviewsPage } from './features/mam/MamReviewsPage'
@@ -33,11 +36,13 @@ import { MamRunsPage } from './features/mam/MamRunsPage'
 import { MamSettingsPage } from './features/mam/MamSettingsPage'
 import { MamWorkflowsPage } from './features/mam/MamWorkflowsPage'
 import { useMamSnapshot } from './features/mam/use-mam-snapshot'
+import { useMamLocalCollaboration } from './features/mam/use-mam-local-collaboration'
 import { cn } from './lib/class-name'
 import { LocalizedUiText, useUiLocale, type UiLocale } from './i18n/ui-locale'
 
 type Page =
   | 'overview'
+  | 'design'
   | 'roles'
   | 'workflows'
   | 'runs'
@@ -49,9 +54,17 @@ type Page =
 
 export function App(): React.JSX.Element {
   const [page, setPage] = useState<Page>('overview')
+  const [focusedRunId, setFocusedRunId] = useState<string>()
+  const [integrationRunId, setIntegrationRunId] = useState<string>()
+  const [createWorkflowRequested, setCreateWorkflowRequested] = useState(false)
   const state = useMamSnapshot()
+  const collaborationErrors = useMamLocalCollaboration(state)
   const { locale, setLocale } = useUiLocale()
   const isMac = navigator.userAgent.includes('Mac')
+  const integrationAttentionCount =
+    state.snapshot?.runs
+      .flatMap((run) => run.mergeQueueEntries)
+      .filter((entry) => entry.status === 'conflict' || entry.status === 'failed').length ?? 0
   return (
     <div className="flex h-dvh flex-col bg-background text-foreground">
       <LocalizedUiText />
@@ -105,6 +118,12 @@ export function App(): React.JSX.Element {
             onClick={() => setPage('overview')}
           />
           <NavigationButton
+            current={page === 'design'}
+            icon={Sparkles}
+            label="Design Assistant"
+            onClick={() => setPage('design')}
+          />
+          <NavigationButton
             current={page === 'roles'}
             icon={Users}
             label="Roles"
@@ -114,13 +133,19 @@ export function App(): React.JSX.Element {
             current={page === 'workflows'}
             icon={Network}
             label="Workflows"
-            onClick={() => setPage('workflows')}
+            onClick={() => {
+              setCreateWorkflowRequested(false)
+              setPage('workflows')
+            }}
           />
           <NavigationButton
             current={page === 'runs'}
             icon={History}
             label="Runs"
-            onClick={() => setPage('runs')}
+            onClick={() => {
+              setFocusedRunId(undefined)
+              setPage('runs')
+            }}
           />
           <NavigationButton
             current={page === 'my-role'}
@@ -138,7 +163,11 @@ export function App(): React.JSX.Element {
             current={page === 'merge-queue'}
             icon={GitMerge}
             label="Merge Queue"
-            onClick={() => setPage('merge-queue')}
+            count={integrationAttentionCount}
+            onClick={() => {
+              setIntegrationRunId(undefined)
+              setPage('merge-queue')
+            }}
           />
           <NavigationButton
             current={page === 'resources'}
@@ -183,20 +212,54 @@ export function App(): React.JSX.Element {
                 pending={state.pending}
                 onChooseProject={() => void state.selectProject()}
                 onAssignTask={state.assignTask}
+                onReassignTask={state.reassignTask}
                 onRecoverAttempt={state.recoverAttempt}
                 onStartAttempt={state.startAttempt}
                 onExecuteNextMerge={state.executeNextMerge}
                 onSaveWorkflow={state.saveWorkflow}
                 onCreateWorkflowRun={state.createWorkflowRun}
+                onCancelWorkflowRun={state.cancelWorkflowRun}
+                onRestartWorkflowRun={state.restartWorkflowRun}
+                collaborationErrors={collaborationErrors}
                 onSubmitReview={state.submitReview}
                 onResolveReviewDisagreement={state.resolveReviewDisagreement}
                 onResolveApprovalGate={state.resolveApprovalGate}
                 onSelectAttempt={state.selectAttempt}
                 onGetAttemptDiff={state.getAttemptDiff}
                 onSaveProfile={state.saveProfile}
+                onDeleteRoleProfile={state.deleteRoleProfile}
                 onSaveLocalSettings={state.saveLocalSettings}
+                onSaveModelConnection={state.saveModelConnection}
+                onFetchModelCatalog={state.fetchModelCatalog}
                 onImportSkill={state.importSkill}
                 onExportDiagnostics={state.exportDiagnostics}
+                onOpenSettings={() => setPage('settings')}
+                onDesignApplied={() => {
+                  void state.refresh()
+                  setCreateWorkflowRequested(false)
+                  setPage('workflows')
+                }}
+                {...(focusedRunId ? { focusedRunId } : {})}
+                {...(integrationRunId ? { integrationRunId } : {})}
+                openNewWorkflow={createWorkflowRequested}
+                onOpenRun={(workflowRunId) => {
+                  setFocusedRunId(workflowRunId)
+                  setPage('runs')
+                }}
+                onOpenRuns={() => {
+                  setFocusedRunId(undefined)
+                  setPage('runs')
+                }}
+                onOpenIntegration={(workflowRunId) => {
+                  setIntegrationRunId(workflowRunId)
+                  setPage('merge-queue')
+                }}
+                onShowAllIntegration={() => setIntegrationRunId(undefined)}
+                onOpenWorkflows={() => {
+                  setCreateWorkflowRequested(true)
+                  setPage('workflows')
+                }}
+                onOpenReviews={() => setPage('reviews')}
               />
             </>
           ) : (
@@ -220,51 +283,105 @@ function ActivePage({
   pending,
   onChooseProject,
   onAssignTask,
+  onReassignTask,
   onRecoverAttempt,
   onStartAttempt,
   onExecuteNextMerge,
   onSaveWorkflow,
   onCreateWorkflowRun,
+  onCancelWorkflowRun,
+  onRestartWorkflowRun,
+  collaborationErrors,
   onSubmitReview,
   onResolveReviewDisagreement,
   onResolveApprovalGate,
   onSelectAttempt,
   onGetAttemptDiff,
   onSaveProfile,
+  onDeleteRoleProfile,
   onSaveLocalSettings,
+  onSaveModelConnection,
+  onFetchModelCatalog,
   onImportSkill,
-  onExportDiagnostics
+  onExportDiagnostics,
+  onOpenSettings,
+  onDesignApplied,
+  focusedRunId,
+  integrationRunId,
+  openNewWorkflow,
+  onOpenRun,
+  onOpenRuns,
+  onOpenIntegration,
+  onShowAllIntegration,
+  onOpenWorkflows,
+  onOpenReviews
 }: Readonly<{
   page: Page
   snapshot: NonNullable<ReturnType<typeof useMamSnapshot>['snapshot']>
   pending: boolean
   onChooseProject(): void
   onAssignTask: ReturnType<typeof useMamSnapshot>['assignTask']
+  onReassignTask: ReturnType<typeof useMamSnapshot>['reassignTask']
   onRecoverAttempt: ReturnType<typeof useMamSnapshot>['recoverAttempt']
   onStartAttempt: ReturnType<typeof useMamSnapshot>['startAttempt']
   onExecuteNextMerge: ReturnType<typeof useMamSnapshot>['executeNextMerge']
   onSaveWorkflow: ReturnType<typeof useMamSnapshot>['saveWorkflow']
   onCreateWorkflowRun: ReturnType<typeof useMamSnapshot>['createWorkflowRun']
+  onCancelWorkflowRun: ReturnType<typeof useMamSnapshot>['cancelWorkflowRun']
+  onRestartWorkflowRun: ReturnType<typeof useMamSnapshot>['restartWorkflowRun']
+  collaborationErrors: ReadonlyMap<string, string>
   onSubmitReview: ReturnType<typeof useMamSnapshot>['submitReview']
   onResolveReviewDisagreement: ReturnType<typeof useMamSnapshot>['resolveReviewDisagreement']
   onResolveApprovalGate: ReturnType<typeof useMamSnapshot>['resolveApprovalGate']
   onSelectAttempt: ReturnType<typeof useMamSnapshot>['selectAttempt']
   onGetAttemptDiff: ReturnType<typeof useMamSnapshot>['getAttemptDiff']
   onSaveProfile: ReturnType<typeof useMamSnapshot>['saveProfile']
+  onDeleteRoleProfile: ReturnType<typeof useMamSnapshot>['deleteRoleProfile']
   onSaveLocalSettings: ReturnType<typeof useMamSnapshot>['saveLocalSettings']
+  onSaveModelConnection: ReturnType<typeof useMamSnapshot>['saveModelConnection']
+  onFetchModelCatalog: ReturnType<typeof useMamSnapshot>['fetchModelCatalog']
   onImportSkill: ReturnType<typeof useMamSnapshot>['importSkill']
   onExportDiagnostics: ReturnType<typeof useMamSnapshot>['exportDiagnostics']
+  onOpenSettings(): void
+  onDesignApplied(): void
+  focusedRunId?: string
+  integrationRunId?: string
+  openNewWorkflow: boolean
+  onOpenRun(workflowRunId: string): void
+  onOpenRuns(): void
+  onOpenIntegration(workflowRunId: string): void
+  onShowAllIntegration(): void
+  onOpenWorkflows(): void
+  onOpenReviews(): void
 }>): React.JSX.Element {
+  if (page === 'design') {
+    return (
+      <MamDesignPage
+        snapshot={snapshot}
+        onApplied={onDesignApplied}
+        onOpenSettings={onOpenSettings}
+      />
+    )
+  }
   if (page === 'roles') {
-    return <MamRolesPage snapshot={snapshot} pending={pending} onSaveProfile={onSaveProfile} />
+    return (
+      <MamRolesPage
+        snapshot={snapshot}
+        pending={pending}
+        onSaveProfile={onSaveProfile}
+        onDeleteRoleProfile={onDeleteRoleProfile}
+      />
+    )
   }
   if (page === 'workflows') {
     return (
       <MamWorkflowsPage
         snapshot={snapshot}
+        openNewWorkflow={openNewWorkflow}
         pending={pending}
         onSaveWorkflow={onSaveWorkflow}
         onCreateWorkflowRun={onCreateWorkflowRun}
+        onSaveLocalSettings={onSaveLocalSettings}
       />
     )
   }
@@ -273,11 +390,22 @@ function ActivePage({
       <MamRunsPage
         runs={snapshot.runs}
         roles={snapshot.roles}
+        workflows={snapshot.workflows}
+        {...(focusedRunId ? { focusedRunId } : {})}
+        localSettings={snapshot.localSettings}
         pending={pending}
+        onAssignTask={onAssignTask}
+        onStartAttempt={onStartAttempt}
+        onCancelWorkflowRun={onCancelWorkflowRun}
+        onRestartWorkflowRun={onRestartWorkflowRun}
+        collaborationErrors={collaborationErrors}
+        onSaveLocalSettings={onSaveLocalSettings}
         onRecoverAttempt={onRecoverAttempt}
+        onReassignTask={onReassignTask}
         onSelectAttempt={onSelectAttempt}
         onGetAttemptDiff={onGetAttemptDiff}
         onResolveApprovalGate={onResolveApprovalGate}
+        onOpenIntegration={onOpenIntegration}
       />
     )
   }
@@ -287,7 +415,9 @@ function ActivePage({
         snapshot={snapshot}
         pending={pending}
         onAssignTask={onAssignTask}
+        onReassignTask={onReassignTask}
         onStartAttempt={onStartAttempt}
+        onSaveLocalSettings={onSaveLocalSettings}
       />
     )
   }
@@ -298,6 +428,8 @@ function ActivePage({
         pending={pending}
         onSubmitReview={onSubmitReview}
         onResolveDisagreement={onResolveReviewDisagreement}
+        onGetAttemptDiff={onGetAttemptDiff}
+        onOpenIntegration={onOpenIntegration}
       />
     )
   }
@@ -305,8 +437,16 @@ function ActivePage({
     return (
       <MamMergeQueuePage
         runs={snapshot.runs}
+        workflows={snapshot.workflows}
+        localSettings={snapshot.localSettings}
+        {...(integrationRunId ? { focusedRunId: integrationRunId } : {})}
         pending={pending}
         onExecuteNextMerge={onExecuteNextMerge}
+        onOpenRun={onOpenRun}
+        onOpenRuns={onOpenRuns}
+        onOpenWorkflows={onOpenWorkflows}
+        onOpenReviews={onOpenReviews}
+        onShowAllRuns={onShowAllIntegration}
       />
     )
   }
@@ -327,6 +467,8 @@ function ActivePage({
         pending={pending}
         onSaveProfile={onSaveProfile}
         onSaveLocalSettings={onSaveLocalSettings}
+        onSaveModelConnection={onSaveModelConnection}
+        onFetchModelCatalog={onFetchModelCatalog}
         onExportDiagnostics={onExportDiagnostics}
       />
     )
@@ -338,11 +480,13 @@ function NavigationButton({
   current,
   icon: Icon,
   label,
+  count,
   onClick
 }: Readonly<{
   current: boolean
   icon: typeof LayoutDashboard
   label: string
+  count?: number
   onClick(): void
 }>): React.JSX.Element {
   return (
@@ -350,6 +494,7 @@ function NavigationButton({
       variant="ghost"
       size="sm"
       data-current={current ? 'true' : 'false'}
+      aria-current={current ? 'page' : undefined}
       className={cn(
         'mb-1 w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
         current && 'bg-sidebar-accent text-sidebar-accent-foreground'
@@ -357,6 +502,11 @@ function NavigationButton({
       onClick={onClick}
     >
       <Icon /> {label}
+      {Boolean(count) && (
+        <Badge className="ml-auto" variant="destructive">
+          {count}
+        </Badge>
+      )}
     </Button>
   )
 }

@@ -18,6 +18,46 @@ describe('MamMergeQueuePage', () => {
     expect(markup).toContain('merge-conflict-task.a')
     expect(markup).toContain('Resolved by Attempt attempt.resolution.a')
     expect(markup).toContain('Merged')
+    expect(markup).toContain('Recent integration history')
+    expect(markup).toContain('Open Run')
+  })
+
+  it('explains automatic integration without competing with it using a manual action', () => {
+    const run = runSnapshot()
+    run.mergeQueueEntries[0]!.status = 'queued'
+    delete run.mergeQueueEntries[0]!.completedAt
+    delete run.mergeQueueEntries[0]!.mergeCommit
+    const markup = renderToStaticMarkup(
+      <MamMergeQueuePage
+        runs={[run]}
+        localSettings={{
+          schemaVersion: '1.0.0',
+          bindingIdentity: 'machine.test',
+          gitExecutable: 'git',
+          automaticWorkflowRunIds: [run.run.id],
+          executorBindings: [],
+          secretBindings: [],
+          mcpConnections: [],
+          skillBindings: [],
+          knowledgeBindings: []
+        }}
+        pending={false}
+        onExecuteNextMerge={async () => {}}
+      />
+    )
+
+    expect(markup).toContain('Waiting for integration')
+    expect(markup).toContain('Local collaboration will integrate this revision automatically.')
+    expect(markup).not.toContain('Execute next merge')
+  })
+
+  it('provides a Workflow action when there is no integration activity', () => {
+    const markup = renderToStaticMarkup(
+      <MamMergeQueuePage runs={[]} pending={false} onExecuteNextMerge={async () => {}} />
+    )
+
+    expect(markup).toContain('No integration activity yet')
+    expect(markup).toContain('Create Workflow')
   })
 })
 
@@ -37,6 +77,7 @@ function runSnapshot(): MamUiRunSnapshot {
       updatedAt: '2026-07-28T18:10:00Z'
     },
     definitionName: 'UI workflow',
+    roleProfiles: [],
     revision: hash,
     stateHash: hash,
     nodeRuns: [],

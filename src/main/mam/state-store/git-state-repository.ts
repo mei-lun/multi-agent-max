@@ -1,5 +1,4 @@
-import { mkdirSync, writeFileSync } from 'node:fs'
-import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import { isKernelEventBatch, type KernelEventBatch } from '../scheduler/kernel'
 import type { EffectiveRoleConfigSnapshot } from '../../../shared/mam/domain/role'
 import type { WorkflowRunBundle } from '../../../shared/mam/domain/run-bundle'
@@ -8,11 +7,15 @@ import {
   AppendOnlyEventStoreError,
   type AppendOnlyResult
 } from './append-only-event-store'
+import { createGitCommandClient, type GitCommandClient } from './git-command-client'
+import { GitStateRepositoryError, isGitNonFastForward } from './git-state-repository-error'
 import {
-  createGitCommandClient,
-  GitCommandError,
-  type GitCommandClient
-} from './git-command-client'
+  assertGitStateRemoteConfigured,
+  assertIndependentGitStateDirectory,
+  attachGitStateWorktree,
+  detectGitRemote
+} from './git-state-worktree-bootstrap'
+import { publishDetachedLocalStateCommit } from './git-state-local-commit'
 import { replayWorkflowRun, type WorkflowRunProjection } from './git-event-projection'
 import { GitEffectiveConfigStore, GitEffectiveConfigStoreError } from './git-effective-config-store'
 import { GitRunBundleStore, GitRunBundleStoreError } from './git-run-bundle-store'
@@ -44,22 +47,15 @@ export type { GitSystemArtifactWrite } from './git-system-artifact-writer'
 
 export type GitStateAppendResult = AppendOnlyResult & Readonly<{ commit: string }>
 
-export class GitStateRepositoryError extends Error {
-  constructor(
-    readonly code: string,
-    message: string
-  ) {
-    super(message)
-    this.name = 'GitStateRepositoryError'
-  }
-}
+export { GitStateRepositoryError } from './git-state-repository-error'
 
 export class GitStateRepository {
   readonly events: AppendOnlyEventStore
   readonly effectiveConfigs: GitEffectiveConfigStore
   readonly runBundles: GitRunBundleStore
   readonly stateDirectory: string
-  readonly remote: string
+  readonly remote: string | undefined
+  readonly collaborationMode: 'distributed' | 'local'
   readonly branch: string
   readonly projectDirectory: string
   private readonly gitClient: GitCommandClient
@@ -67,13 +63,14 @@ export class GitStateRepository {
   private constructor(
     projectDirectory: string,
     stateDirectory: string,
-    remote: string,
+    remote: string | undefined,
     branch: string,
     gitClient: GitCommandClient
   ) {
     this.projectDirectory = resolve(projectDirectory)
     this.stateDirectory = resolve(stateDirectory)
     this.remote = remote
+    this.collaborationMode = remote ? 'distributed' : 'local'
     this.branch = branch
     this.gitClient = gitClient
     this.events = new AppendOnlyEventStore(join(this.stateDirectory, '.workflow'))
@@ -90,15 +87,19 @@ export class GitStateRepository {
     const state = resolve(
       stateDirectory ?? join(dirname(project), `.${basename(project)}-mam-state`)
     )
-    assertIndependentDirectory(project, state)
+    assertIndependentGitStateDirectory(project, state)
     const git = options.gitClient ?? createGitCommandClient()
-    const remote = options.remote ?? 'origin'
     const branch = options.branch ?? 'mam-state'
     if (!git.succeeds(project, ['rev-parse', '--is-inside-work-tree'])) {
       throw new GitStateRepositoryError('not_git_repository', 'project is not a Git worktree')
     }
+    const remote =
+      options.remote === undefined
+        ? detectGitRemote(project, git)
+        : options.remote.trim() || undefined
+    if (remote) assertGitStateRemoteConfigured(project, remote, git)
     if (!git.succeeds(state, ['rev-parse', '--is-inside-work-tree'])) {
-      attachWorktree(project, state, remote, branch, git)
+      attachGitStateWorktree({ project, state, ...(remote ? { remote } : {}), branch, git })
     }
     const repository = new GitStateRepository(project, state, remote, branch, git)
     // Reattaching after a crash must not treat a committed-but-unpushed event as authoritative.
@@ -222,16 +223,25 @@ export class GitStateRepository {
       '--',
       runPath
     ])
-    return { ...appended, commit: this.currentCommit() }
+    const commit = this.currentCommit()
+    if (!this.remote)
+      publishDetachedLocalStateCommit({
+        stateDirectory: this.stateDirectory,
+        branch: this.branch,
+        commit,
+        expectedParentCommit: input.expectedParentCommit,
+        git: this.gitClient
+      })
+    return { ...appended, commit }
   }
 
   appendCommitAndPush(input: GitStateAppendInput): GitStateAppendResult {
     const result = this.appendAndCommit(input)
-    if (result.appendedEventIds.length === 0) return result
+    if (result.appendedEventIds.length === 0 || !this.remote) return result
     try {
       this.git(['push', this.remote, `HEAD:refs/heads/${this.branch}`])
     } catch (error) {
-      if (isNonFastForward(error)) {
+      if (isGitNonFastForward(error)) {
         throw new GitStateRepositoryError('remote_non_fast_forward', String(error))
       }
       throw new GitStateRepositoryError('remote_push_failed', String(error))
@@ -240,9 +250,21 @@ export class GitStateRepository {
   }
 
   alignToRemote(): void {
+    if (!this.remote) {
+      try {
+        if (this.gitClient.succeeds(this.stateDirectory, ['symbolic-ref', '--quiet', 'HEAD'])) {
+          this.git(['reset', '--hard', this.branch])
+        } else {
+          this.git(['checkout', '--detach', this.branch])
+        }
+      } catch (error) {
+        throw new GitStateRepositoryError('local_alignment_failed', String(error))
+      }
+      return
+    }
     this.fetchStateBranch()
     try {
-      this.git(['checkout', '-B', this.branch, this.remoteRef()])
+      this.git(['checkout', '-B', this.branch, `refs/remotes/${this.remote}/${this.branch}`])
     } catch (error) {
       throw new GitStateRepositoryError('remote_alignment_failed', String(error))
     }
@@ -255,15 +277,12 @@ export class GitStateRepository {
   }
 
   private fetchStateBranch(): void {
+    if (!this.remote) return
     this.git([
       'fetch',
       this.remote,
       `refs/heads/${this.branch}:refs/remotes/${this.remote}/${this.branch}`
     ])
-  }
-
-  private remoteRef(): string {
-    return `refs/remotes/${this.remote}/${this.branch}`
   }
 
   private git(args: readonly string[]): string {
@@ -274,48 +293,4 @@ export class GitStateRepository {
       throw new GitStateRepositoryError('git_command_failed', String(error))
     }
   }
-}
-
-function attachWorktree(
-  project: string,
-  state: string,
-  remote: string,
-  branch: string,
-  git: GitCommandClient
-): void {
-  mkdirSync(dirname(state), { recursive: true })
-  const fetchArgs = [
-    'fetch',
-    remote,
-    `refs/heads/${branch}:refs/remotes/${remote}/${branch}`
-  ] as const
-  const hasRemoteBranch = git.succeeds(project, fetchArgs)
-  if (hasRemoteBranch) {
-    git.run(project, ['worktree', 'add', '-B', branch, state, `refs/remotes/${remote}/${branch}`])
-    return
-  }
-  git.run(project, ['worktree', 'add', '--detach', state, 'HEAD'])
-  git.run(state, ['checkout', '--orphan', branch])
-  git.run(state, ['rm', '-r', '-f', '--ignore-unmatch', '.'])
-  mkdirSync(join(state, '.workflow'), { recursive: true })
-  writeFileSync(join(state, '.workflow', '.gitkeep'), '')
-  git.run(state, ['add', '.workflow/.gitkeep'])
-  git.run(state, ['commit', '--no-verify', '-m', 'mam: initialize state branch'])
-  git.run(state, ['push', '-u', remote, `HEAD:refs/heads/${branch}`])
-}
-
-function assertIndependentDirectory(project: string, state: string): void {
-  const relation = relative(project, state)
-  if (state === project || (!relation.startsWith('..') && !isAbsolute(relation))) {
-    throw new GitStateRepositoryError(
-      'state_worktree_not_independent',
-      'state worktree must be outside the project worktree'
-    )
-  }
-}
-
-function isNonFastForward(error: unknown): boolean {
-  const detail =
-    error instanceof GitCommandError ? `${error.stderr}\n${error.message}` : String(error)
-  return /non-fast-forward|fetch first|\[rejected\]/i.test(detail)
 }

@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { isAbsolute } from 'node:path'
+import { extname, isAbsolute } from 'node:path'
 import {
   ExecutorProfileSchema,
   LocalExecutorBindingSchema,
@@ -175,8 +175,8 @@ function probePi(binding: LocalExecutorBinding, probe: ExecutorProbe) {
     supportsPerInstanceConfig: true,
     supportsPerInstanceCredentials: true,
     supportsSkills: true,
-    supportedMcpTransports: ['stdio'],
-    supportsKnowledgeGateway: true,
+    supportedMcpTransports: [],
+    supportsKnowledgeGateway: false,
     supportsStructuredOutput: true,
     supportsInvocationReconnect: false
   })
@@ -222,10 +222,18 @@ function codexCapabilities(mode: 'headless' | 'app-server'): ExecutorCapabilitie
 }
 
 function systemProbe(executablePath: string, args: readonly string[]): ExecutorProbeResult {
-  const result = spawnSync(executablePath, [...args], {
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe']
-  })
+  const javaScriptEntry = ['.js', '.mjs', '.cjs'].includes(extname(executablePath))
+  const result = spawnSync(
+    javaScriptEntry ? process.execPath : executablePath,
+    [...(javaScriptEntry ? [executablePath] : []), ...args],
+    {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      ...(javaScriptEntry && process.versions.electron
+        ? { env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } }
+        : {})
+    }
+  )
   return {
     exitCode: result.status,
     stdout: result.stdout ?? '',

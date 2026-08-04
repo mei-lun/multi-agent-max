@@ -1,48 +1,49 @@
-import { AlertTriangle, MessagesSquare, ShieldCheck } from 'lucide-react'
+import { MessagesSquare, ShieldCheck } from 'lucide-react'
 import type {
   MamResolveReviewDisagreementInput,
   MamSubmitReviewInput
 } from '../../../../shared/mam/application-command'
+import type {
+  MamAttemptDiff,
+  MamGetAttemptDiffInput
+} from '../../../../shared/mam/attempt-inspection'
 import type { MamUiRunSnapshot } from '../../../../shared/mam/ui-projection'
 import { Badge } from '../../components/ui/badge'
 import { Button } from '../../components/ui/button'
 import { useUiLocale, type UiLocale } from '../../i18n/ui-locale'
 import { MamStateBadge } from './MamStateBadge'
-import { MamReviewSubmissionDialog } from './MamReviewSubmissionDialog'
+import { MamOpenReviewsSection, type MamOpenReviewItem } from './MamOpenReviewsSection'
+import {
+  MamReviewAggregationSection,
+  type MamReviewAggregationItem
+} from './MamReviewAggregationSection'
 
 type ReviewItem = Readonly<{
   run: MamUiRunSnapshot
   decision: MamUiRunSnapshot['reviews'][number]
 }>
 
-type AggregationItem = Readonly<{
-  run: MamUiRunSnapshot
-  aggregation: MamUiRunSnapshot['reviewAggregations'][number]
-}>
-
-type OpenReviewItem = Readonly<{
-  run: MamUiRunSnapshot
-  task: MamUiRunSnapshot['tasks'][number]
-  attempt: MamUiRunSnapshot['attempts'][number]
-}>
-
 export function MamReviewsPage({
   runs,
   pending,
   onSubmitReview,
-  onResolveDisagreement
+  onResolveDisagreement,
+  onGetAttemptDiff,
+  onOpenIntegration
 }: Readonly<{
   runs: readonly MamUiRunSnapshot[]
   pending: boolean
   onSubmitReview(input: MamSubmitReviewInput): Promise<void>
   onResolveDisagreement(input: MamResolveReviewDisagreementInput): Promise<void>
+  onGetAttemptDiff(input: MamGetAttemptDiffInput): Promise<MamAttemptDiff>
+  onOpenIntegration?(workflowRunId: string): void
 }>): React.JSX.Element {
   const { locale } = useUiLocale()
   const openReviews = collectOpenReviews(runs)
   const decisions: ReviewItem[] = runs
     .flatMap((run) => run.reviews.map((decision) => ({ run, decision })))
     .sort((left, right) => right.decision.createdAt.localeCompare(left.decision.createdAt))
-  const aggregations: AggregationItem[] = runs
+  const aggregations: MamReviewAggregationItem[] = runs
     .flatMap((run) => run.reviewAggregations.map((aggregation) => ({ run, aggregation })))
     .sort((left, right) => right.aggregation.createdAt.localeCompare(left.aggregation.createdAt))
   return (
@@ -67,166 +68,35 @@ export function MamReviewsPage({
       ) : (
         <div className="space-y-6">
           {openReviews.length > 0 && (
-            <OpenReviewSection items={openReviews} pending={pending} onSubmit={onSubmitReview} />
+            <MamOpenReviewsSection
+              items={openReviews}
+              pending={pending}
+              onSubmit={onSubmitReview}
+              onGetAttemptDiff={onGetAttemptDiff}
+            />
           )}
           {aggregations.length > 0 && (
-            <AggregationSection
+            <MamReviewAggregationSection
               items={aggregations}
               pending={pending}
               onResolve={onResolveDisagreement}
+              onGetAttemptDiff={onGetAttemptDiff}
             />
           )}
-          {decisions.length > 0 && <DecisionSection items={decisions} locale={locale} />}
+          {decisions.length > 0 && (
+            <DecisionSection
+              items={decisions}
+              locale={locale}
+              {...(onOpenIntegration ? { onOpenIntegration } : {})}
+            />
+          )}
         </div>
       )}
     </section>
   )
 }
 
-function OpenReviewSection({
-  items,
-  pending,
-  onSubmit
-}: Readonly<{
-  items: readonly OpenReviewItem[]
-  pending: boolean
-  onSubmit(input: MamSubmitReviewInput): Promise<void>
-}>): React.JSX.Element {
-  return (
-    <div className="space-y-3">
-      <h2 className="text-sm font-semibold">Ready to submit</h2>
-      <div className="overflow-hidden rounded-xl border border-border bg-card">
-        {items.map(({ run, task, attempt }) => (
-          <div
-            key={attempt.id}
-            className="flex items-center justify-between gap-4 border-b border-border p-4 last:border-b-0"
-          >
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium">{task.title}</p>
-              <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
-                {run.definitionName} · {attempt.id}
-              </p>
-            </div>
-            <MamReviewSubmissionDialog
-              workflowRunId={run.run.id}
-              task={task}
-              attempt={attempt}
-              pending={pending}
-              onSubmit={onSubmit}
-            />
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function AggregationSection({
-  items,
-  pending,
-  onResolve
-}: Readonly<{
-  items: readonly AggregationItem[]
-  pending: boolean
-  onResolve(input: MamResolveReviewDisagreementInput): Promise<void>
-}>): React.JSX.Element {
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold">Panel outcomes</h2>
-        <span className="text-xs text-muted-foreground">{items.length} total</span>
-      </div>
-      <div className="overflow-hidden rounded-xl border border-border bg-card">
-        {items.map(({ run, aggregation }) => {
-          const resolution = run.reviewDisagreementResolutions.find(
-            (candidate) => candidate.aggregationId === aggregation.id
-          )
-          return (
-            <div key={aggregation.id} className="border-b border-border p-4 last:border-b-0">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium">{run.definitionName}</p>
-                  <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
-                    {aggregation.id}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  {aggregation.requiresHumanDecision && !resolution && (
-                    <Badge variant="destructive">
-                      <AlertTriangle className="size-3" /> Human decision
-                    </Badge>
-                  )}
-                  <MamStateBadge status={aggregation.proposedStatus} />
-                </div>
-              </div>
-              <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                <span>{aggregation.classification.replaceAll('_', ' ')}</span>
-                <span>{aggregation.sourceDecisionIds.length} decisions</span>
-                <span>{aggregation.findings.length} findings</span>
-                <span className="font-mono">Attempt {aggregation.attemptId}</span>
-              </div>
-              {resolution ? (
-                <p className="mt-3 text-xs text-muted-foreground">
-                  Resolved as{' '}
-                  <span className="font-medium text-foreground">
-                    {resolution.selectedOption.replaceAll('_', ' ')}
-                  </span>{' '}
-                  by {resolution.userId}.
-                </p>
-              ) : aggregation.requiresHumanDecision ? (
-                <div className="mt-3 flex flex-wrap gap-2 border-t border-border pt-3">
-                  <Button
-                    size="xs"
-                    disabled={pending}
-                    onClick={() =>
-                      void onResolve({
-                        workflowRunId: run.run.id,
-                        aggregationId: aggregation.id,
-                        selectedStatus: 'approved'
-                      })
-                    }
-                  >
-                    Approve
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="xs"
-                    disabled={pending}
-                    onClick={() =>
-                      void onResolve({
-                        workflowRunId: run.run.id,
-                        aggregationId: aggregation.id,
-                        selectedStatus: 'changes_requested'
-                      })
-                    }
-                  >
-                    Request changes
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    size="xs"
-                    disabled={pending}
-                    onClick={() =>
-                      void onResolve({
-                        workflowRunId: run.run.id,
-                        aggregationId: aggregation.id,
-                        selectedStatus: 'blocked'
-                      })
-                    }
-                  >
-                    Block
-                  </Button>
-                </div>
-              ) : null}
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
-function collectOpenReviews(runs: readonly MamUiRunSnapshot[]): OpenReviewItem[] {
+function collectOpenReviews(runs: readonly MamUiRunSnapshot[]): MamOpenReviewItem[] {
   return runs.flatMap((run) =>
     run.tasks.flatMap((task) => {
       if (task.kind !== 'review') return []
@@ -240,8 +110,13 @@ function collectOpenReviews(runs: readonly MamUiRunSnapshot[]): OpenReviewItem[]
 
 function DecisionSection({
   items,
-  locale
-}: Readonly<{ items: readonly ReviewItem[]; locale: UiLocale }>) {
+  locale,
+  onOpenIntegration
+}: Readonly<{
+  items: readonly ReviewItem[]
+  locale: UiLocale
+  onOpenIntegration?(workflowRunId: string): void
+}>) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
@@ -268,6 +143,11 @@ function DecisionSection({
               <span>Subject Attempt {decision.attemptId}</span>
               <span>{formatTimestamp(decision.createdAt, locale)}</span>
             </div>
+            <ReviewIntegrationStatus
+              run={run}
+              decision={decision}
+              {...(onOpenIntegration ? { onOpenIntegration } : {})}
+            />
             {decision.findings.length > 0 && (
               <div className="mt-4 space-y-2 border-t border-border pt-3">
                 {decision.findings.map((finding) => (
@@ -289,6 +169,35 @@ function DecisionSection({
           </article>
         ))}
       </div>
+    </div>
+  )
+}
+
+function ReviewIntegrationStatus({
+  run,
+  decision,
+  onOpenIntegration
+}: Readonly<{
+  run: MamUiRunSnapshot
+  decision: MamUiRunSnapshot['reviews'][number]
+  onOpenIntegration?(workflowRunId: string): void
+}>): React.JSX.Element | null {
+  if (decision.status !== 'approved') return null
+  const entry = run.mergeQueueEntries.find((candidate) =>
+    candidate.reviewDecisionIds.includes(decision.id)
+  )
+  return (
+    <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
+      <p className="text-xs text-muted-foreground">
+        {entry
+          ? `This decision released commit ${entry.submittedCommit} to the ${entry.targetBranch} integration stage.`
+          : 'Approved. The Run advances when its remaining Workflow prerequisites are satisfied.'}
+      </p>
+      {entry && onOpenIntegration && (
+        <Button variant="outline" size="xs" onClick={() => onOpenIntegration(run.run.id)}>
+          View integration activity
+        </Button>
+      )}
     </div>
   )
 }

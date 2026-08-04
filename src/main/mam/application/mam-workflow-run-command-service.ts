@@ -1,5 +1,9 @@
 import { randomUUID } from 'node:crypto'
-import { MamCreateWorkflowRunInputSchema } from '../../../shared/mam/application-command'
+import {
+  MamCancelWorkflowRunInputSchema,
+  MamCreateWorkflowRunInputSchema,
+  MamRestartWorkflowRunInputSchema
+} from '../../../shared/mam/application-command'
 import type { RoleProfile } from '../../../shared/mam/domain/role'
 import type { WorkflowDefinition } from '../../../shared/mam/domain/workflow'
 import type { MamUiSnapshot } from '../../../shared/mam/ui-projection'
@@ -40,7 +44,8 @@ export class MamWorkflowRunCommandService {
     repository?: GitStateRepository,
     private readonly now: () => string = () => new Date().toISOString(),
     private readonly createId: (kind: 'run' | 'command') => string = (kind) =>
-      `${kind}.${randomUUID().replaceAll('-', '')}`
+      `${kind}.${randomUUID().replaceAll('-', '')}`,
+    private readonly userId = 'user.local'
   ) {
     this.repository = repository
   }
@@ -50,6 +55,43 @@ export class MamWorkflowRunCommandService {
   }
 
   create(input: unknown): MamUiSnapshot {
+    const parsed = MamCreateWorkflowRunInputSchema.parse(input)
+    const bundle = this.prepareBundle(parsed)
+    this.publishBundle(bundle)
+    return this.query.getSnapshot()
+  }
+
+  cancel(input: unknown): MamUiSnapshot {
+    const parsed = MamCancelWorkflowRunInputSchema.parse(input)
+    this.publishCancellation(parsed.workflowRunId)
+    return this.query.getSnapshot()
+  }
+
+  restart(input: unknown): MamUiSnapshot {
+    const parsed = MamRestartWorkflowRunInputSchema.parse(input)
+    const repository = this.requireRepository()
+    const previous = repository.loadRunBundle(parsed.workflowRunId)
+    if (!previous) {
+      throw new MamWorkflowRunCommandServiceError(
+        'workflow_run_not_found',
+        `Workflow Run ${parsed.workflowRunId} was not found`
+      )
+    }
+    const replacement = this.prepareBundle({
+      definitionId: previous.definition.id,
+      definitionVersion: previous.definition.version,
+      inputArtifacts: previous.plan.inputArtifacts
+    })
+    this.publishCancellation(parsed.workflowRunId)
+    this.publishBundle(replacement)
+    return this.query.getSnapshot()
+  }
+
+  private prepareBundle(input: {
+    definitionId: string
+    definitionVersion: number
+    inputArtifacts: readonly { artifactId: string; version: number; contentHash: string }[]
+  }) {
     const parsed = MamCreateWorkflowRunInputSchema.parse(input)
     const definition = this.catalog.workflows.get(parsed.definitionId, parsed.definitionVersion)
     if (!definition) {
@@ -68,7 +110,7 @@ export class MamWorkflowRunCommandService {
       )
     }
     const createdAt = this.now()
-    const bundle = createWorkflowRunBundle({
+    return createWorkflowRunBundle({
       runId: this.createId('run'),
       definition,
       roleCatalog: roles.map((role) => ({
@@ -80,13 +122,16 @@ export class MamWorkflowRunCommandService {
       inputArtifacts: parsed.inputArtifacts,
       createdAt
     })
+  }
+
+  private publishBundle(bundle: ReturnType<typeof createWorkflowRunBundle>): void {
     const repository = this.requireRepository()
     new GitCommandRetryCoordinator(repository).executeAndPush({
       command: createWorkflowRunCommand({
         bundle,
         commandId: this.createId('command'),
         schedulerId: this.schedulerId,
-        issuedAt: createdAt
+        issuedAt: bundle.createdAt
       }),
       schedulerId: this.schedulerId,
       runBundle: bundle
@@ -98,7 +143,29 @@ export class MamWorkflowRunCommandService {
       nextCommandId: () => this.createId('command'),
       now: this.now
     })
-    return this.query.getSnapshot()
+  }
+
+  private publishCancellation(workflowRunId: string): void {
+    const repository = this.requireRepository()
+    if (!repository.loadRunBundle(workflowRunId)) {
+      throw new MamWorkflowRunCommandServiceError(
+        'workflow_run_not_found',
+        `Workflow Run ${workflowRunId} was not found`
+      )
+    }
+    const issuedAt = this.now()
+    new GitCommandRetryCoordinator(repository).executeAndPush({
+      command: {
+        schemaVersion: '1.0.0',
+        commandId: this.createId('command'),
+        issuedAt,
+        workflowRunId,
+        actor: { kind: 'user', userId: this.userId },
+        type: 'cancel_workflow_run',
+        reason: 'Ended by the user from Run history.'
+      },
+      schedulerId: this.schedulerId
+    })
   }
 
   private requireRepository(): GitStateRepository {

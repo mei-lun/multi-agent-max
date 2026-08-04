@@ -100,7 +100,6 @@ export class McpCapabilityGateway {
       if (this.snapshot.permissions.requireApprovalFor.includes('mcp')) {
         deny('mcp_approval_required', 'MCP access requires a Scheduler approval grant')
       }
-      authorizeOperation(request, binding, this.snapshot.tools)
       const result = await this.connector.execute(profile, request)
       this.audit('allow', request)
       return result
@@ -127,28 +126,6 @@ export class McpCapabilityGateway {
         ...(reason ? { reason } : {})
       }
     })
-  }
-}
-
-function authorizeOperation(
-  request: McpCapabilityRequest,
-  binding: EffectiveRoleConfigSnapshot['mcpBindings'][number],
-  roleTools: readonly string[]
-): void {
-  if (request.operation === 'call_tool') {
-    if (!binding.allowedTools.includes(request.toolId) || !roleTools.includes(request.toolId)) {
-      deny('mcp_tool_denied', `MCP tool ${request.toolId} is outside the Role allowlist`)
-    }
-    return
-  }
-  if (request.operation === 'read_resource') {
-    if (!binding.allowedResources.includes(request.resourceUri)) {
-      deny('mcp_resource_denied', 'MCP resource is outside the Role allowlist')
-    }
-    return
-  }
-  if (!binding.allowedPrompts.includes(request.promptId)) {
-    deny('mcp_prompt_denied', `MCP prompt ${request.promptId} is outside the Role allowlist`)
   }
 }
 

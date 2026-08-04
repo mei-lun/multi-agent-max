@@ -1,4 +1,4 @@
-import { AlertTriangle, GitMerge, Network, Users } from 'lucide-react'
+import { AlertTriangle, FolderGit2, GitMerge, Network, Users } from 'lucide-react'
 import type { MamUiSnapshot } from '../../../../shared/mam/ui-projection'
 import { Badge } from '../../components/ui/badge'
 import { Button } from '../../components/ui/button'
@@ -24,6 +24,14 @@ export function MamOverviewPage({
           Git-authoritative roles, runs, reviews, and integration state.
         </p>
       </div>
+
+      {snapshot.projectBinding && (
+        <ProjectBinding
+          binding={snapshot.projectBinding}
+          pending={pending}
+          onChooseProject={onChooseProject}
+        />
+      )}
 
       {snapshot.issues.length > 0 && (
         <div className="space-y-2 rounded-xl border border-destructive bg-card p-4 text-card-foreground">
@@ -53,7 +61,11 @@ export function MamOverviewPage({
           <span className="text-xs text-muted-foreground">{snapshot.runs.length} total</span>
         </div>
         {snapshot.runs.length === 0 ? (
-          <EmptyPanel pending={pending} onChooseProject={onChooseProject} />
+          <EmptyPanel
+            connected={Boolean(snapshot.projectBinding)}
+            pending={pending}
+            onChooseProject={onChooseProject}
+          />
         ) : (
           <div className="overflow-hidden rounded-xl border border-border bg-card">
             {snapshot.runs.map((run) => (
@@ -82,6 +94,47 @@ export function MamOverviewPage({
   )
 }
 
+function ProjectBinding({
+  binding,
+  pending,
+  onChooseProject
+}: Readonly<{
+  binding: NonNullable<MamUiSnapshot['projectBinding']>
+  pending: boolean
+  onChooseProject(): void
+}>): React.JSX.Element {
+  return (
+    <section
+      aria-label="Connected project"
+      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-4"
+    >
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+          <FolderGit2 className="size-4" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-xs font-medium">Connected project</p>
+          <p
+            data-i18n-skip
+            title={binding.projectDirectory}
+            className="truncate font-mono text-xs text-muted-foreground"
+          >
+            {binding.projectDirectory}
+          </p>
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <Badge data-i18n-skip variant="outline">
+          {binding.remote ? `${binding.remote}/${binding.branch}` : `Local/${binding.branch}`}
+        </Badge>
+        <Button variant="outline" size="xs" disabled={pending} onClick={onChooseProject}>
+          Change project
+        </Button>
+      </div>
+    </section>
+  )
+}
+
 function SummaryCard({
   icon: Icon,
   label,
@@ -103,18 +156,29 @@ function SummaryCard({
 }
 
 function EmptyPanel({
+  connected,
   pending,
   onChooseProject
-}: Readonly<{ pending: boolean; onChooseProject(): void }>): React.JSX.Element {
+}: Readonly<{
+  connected: boolean
+  pending: boolean
+  onChooseProject(): void
+}>): React.JSX.Element {
   return (
     <div className="rounded-xl border border-dashed border-border p-8 text-center">
-      <p className="text-sm font-medium">No Workflow Runs are loaded</p>
-      <p className="mt-1 text-xs text-muted-foreground">
-        Choose a Git project to attach its authoritative MAM state.
+      <p className="text-sm font-medium">
+        {connected ? 'No Workflow Runs yet' : 'No Workflow Runs are loaded'}
       </p>
-      <Button className="mt-4" size="sm" disabled={pending} onClick={onChooseProject}>
-        Choose project
-      </Button>
+      <p className="mt-1 text-xs text-muted-foreground">
+        {connected
+          ? 'The project is connected. Create a Workflow Definition, then start a Run.'
+          : 'Choose a Git project to attach its authoritative MAM state.'}
+      </p>
+      {!connected && (
+        <Button className="mt-4" size="sm" disabled={pending} onClick={onChooseProject}>
+          Choose project
+        </Button>
+      )}
     </div>
   )
 }

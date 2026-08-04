@@ -153,7 +153,7 @@ function validateBindings(
     const resolved = input.resources.knowledgeBases.find(
       (entry) => entry.profile.id === binding.knowledgeBaseProfileId
     )
-    if (binding.required && resolved?.status !== 'available') {
+    if (resolved?.status !== 'available') {
       issue(
         issues,
         'required_knowledge_unavailable',

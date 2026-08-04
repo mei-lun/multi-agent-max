@@ -2,14 +2,20 @@ import { Bot, BrainCircuit, Cloud, Download, Languages, Settings } from 'lucide-
 import { useState } from 'react'
 import type {
   MamSaveLocalSettingsInput,
+  MamSaveModelConnectionInput,
   MamSaveProfileInput
 } from '../../../../shared/mam/application-command'
+import type {
+  MamFetchModelCatalogInput,
+  MamModelCatalogResult
+} from '../../../../shared/mam/model-catalog'
 import type { MamUiSnapshot } from '../../../../shared/mam/ui-projection'
 import { Badge } from '../../components/ui/badge'
 import { Button } from '../../components/ui/button'
 import { MamLocalSettingsEditor } from './MamLocalSettingsEditor'
 import { MamProfileEditorDialog } from './MamProfileEditorDialog'
-import { mamProfileTemplate } from './mam-profile-templates'
+import { MamModelConnectionDialog } from './MamModelConnectionDialog'
+import { MamAdvancedExecutionProfiles } from './MamAdvancedExecutionProfiles'
 import {
   Select,
   SelectContent,
@@ -24,12 +30,16 @@ export function MamSettingsPage({
   pending,
   onSaveProfile,
   onSaveLocalSettings,
+  onSaveModelConnection,
+  onFetchModelCatalog,
   onExportDiagnostics
 }: Readonly<{
   snapshot: MamUiSnapshot
   pending: boolean
   onSaveProfile(input: MamSaveProfileInput): Promise<void>
   onSaveLocalSettings(input: MamSaveLocalSettingsInput): Promise<void>
+  onSaveModelConnection(input: MamSaveModelConnectionInput): Promise<void>
+  onFetchModelCatalog(input: MamFetchModelCatalogInput): Promise<MamModelCatalogResult>
   onExportDiagnostics(): Promise<string | undefined>
 }>): React.JSX.Element {
   const [exportPath, setExportPath] = useState<string>()
@@ -45,27 +55,13 @@ export function MamSettingsPage({
             Executor, Provider, Model, Git, directories, and machine-local bindings.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <MamProfileEditorDialog
-            kind="executor"
-            template={mamProfileTemplate('executor', snapshot)}
-            pending={pending}
-            onSave={onSaveProfile}
-          />
-          <MamProfileEditorDialog
-            kind="provider"
-            template={mamProfileTemplate('provider', snapshot)}
-            pending={pending}
-            onSave={onSaveProfile}
-          />
-          <MamProfileEditorDialog
-            kind="model"
-            template={mamProfileTemplate('model', snapshot)}
-            pending={pending}
-            onSave={onSaveProfile}
-          />
-        </div>
+        <MamModelConnectionDialog
+          pending={pending}
+          onSave={onSaveModelConnection}
+          onFetchModels={onFetchModelCatalog}
+        />
       </div>
+      <MamAdvancedExecutionProfiles snapshot={snapshot} pending={pending} onSave={onSaveProfile} />
       <div className="grid gap-5 lg:grid-cols-3">
         <ProfileColumn title="Executors" icon={Bot} empty="No Executor Profiles">
           {snapshot.executors.map((profile) => (
@@ -79,6 +75,7 @@ export function MamSettingsPage({
                   kind="executor"
                   profile={profile}
                   template={profile}
+                  snapshot={snapshot}
                   pending={pending}
                   onSave={onSaveProfile}
                 />
@@ -98,6 +95,7 @@ export function MamSettingsPage({
                   kind="provider"
                   profile={profile}
                   template={profile}
+                  snapshot={snapshot}
                   pending={pending}
                   onSave={onSaveProfile}
                 />
@@ -117,6 +115,7 @@ export function MamSettingsPage({
                   kind="model"
                   profile={profile}
                   template={profile}
+                  snapshot={snapshot}
                   pending={pending}
                   onSave={onSaveProfile}
                 />
@@ -127,6 +126,7 @@ export function MamSettingsPage({
       </div>
       <MamLocalSettingsEditor
         settings={snapshot.localSettings}
+        catalog={snapshot}
         {...(snapshot.projectBinding
           ? { projectDirectory: snapshot.projectBinding.projectDirectory }
           : {})}
@@ -188,8 +188,18 @@ export function MamSettingsPage({
           <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-xs">
             <dt className="text-muted-foreground">State worktree</dt>
             <dd className="truncate font-mono">{snapshot.projectBinding.stateDirectory}</dd>
-            <dt className="text-muted-foreground">Remote</dt>
-            <dd className="font-mono">{snapshot.projectBinding.remote}</dd>
+            <dt className="text-muted-foreground">Collaboration</dt>
+            <dd className="font-mono">
+              {snapshot.projectBinding.collaborationMode === 'distributed'
+                ? 'Distributed'
+                : 'Local roles'}
+            </dd>
+            {snapshot.projectBinding.remote && (
+              <>
+                <dt className="text-muted-foreground">Remote</dt>
+                <dd className="font-mono">{snapshot.projectBinding.remote}</dd>
+              </>
+            )}
             <dt className="text-muted-foreground">Branch</dt>
             <dd className="font-mono">{snapshot.projectBinding.branch}</dd>
           </dl>

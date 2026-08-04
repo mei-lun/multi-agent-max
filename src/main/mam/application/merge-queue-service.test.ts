@@ -86,6 +86,36 @@ describe('Merge Queue service', () => {
       })
     ).toThrow(expect.objectContaining({ code: 'merge_revision_mismatch' }))
   })
+
+  it('promotes the merged develop revision into main', () => {
+    const bundle = mergeBundle()
+    const projection = mergeProjection(['task.a'])
+    const develop = readyEntry(bundle, projection, 'task.a', '2026-07-28T18:01:00Z')
+    const mergedDevelop = {
+      ...develop,
+      status: 'merged' as const,
+      mergeCommit: 'abcdef1',
+      completedAt: '2026-07-28T18:02:00Z'
+    }
+    const promoted = createMergeQueueEntry({
+      bundle,
+      projection: {
+        ...projection,
+        mergeQueueEntries: { [mergedDevelop.id]: mergedDevelop }
+      },
+      mergeNodeId: 'promote',
+      taskId: 'task.a',
+      sourceBranch: 'ignored-task-branch',
+      mergeReadyAt: '2026-07-28T18:03:00Z',
+      validationEvidence: {}
+    })
+
+    expect(promoted).toMatchObject({
+      targetBranch: 'main',
+      sourceBranch: 'develop',
+      submittedCommit: 'abcdef1'
+    })
+  })
 })
 
 function readyEntry(
@@ -232,9 +262,25 @@ function mergeWorkflow(): WorkflowDefinition {
         conflictPolicy: 'coordinator_attempt',
         validations: ['pnpm test']
       },
+      { id: 'approve', type: 'approval_gate', prompt: 'Promote?', options: ['promote'] },
+      {
+        id: 'promote',
+        type: 'git_merge',
+        recommendedRoleProfileIds: ['role.coordinator'],
+        allowedRoleProfileIds: ['role.coordinator'],
+        targetBranch: 'main',
+        orderBy: 'merge_ready_at',
+        strategy: 'no_ff',
+        conflictPolicy: 'coordinator_attempt',
+        validations: []
+      },
       { id: 'finish', type: 'finish', inputs: [] }
     ],
-    edges: [{ from: 'merge', to: 'finish' }],
+    edges: [
+      { from: 'merge', to: 'approve' },
+      { from: 'approve', to: 'promote' },
+      { from: 'promote', to: 'finish' }
+    ],
     maxTransitions: 20,
     maxRunCostUsd: 20,
     maxRunDurationSeconds: 3600

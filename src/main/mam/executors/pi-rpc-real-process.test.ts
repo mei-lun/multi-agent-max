@@ -2,7 +2,7 @@ import { createServer, type Server } from 'node:http'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type {
   ExecutorProfile,
   LocalExecutorBinding
@@ -11,6 +11,7 @@ import type { EffectiveRoleConfigSnapshot } from '../../../shared/mam/domain/rol
 import type { MaterializedAttemptResources } from '../profiles/attempt-resource-materializer'
 import { profileContentHash } from '../profiles/profile-content-hash'
 import { PiRpcAdapter } from './pi-rpc-adapter'
+import type { ExecutorCapabilityBridge } from '../application/executor-capability-bridge'
 
 describe('Pi RPC real process', () => {
   it('runs the installed Pi CLI against a local provider through the standard Result API', async () => {
@@ -19,6 +20,7 @@ describe('Pi RPC real process', () => {
     try {
       const snapshot = effectiveSnapshot(provider.baseUrl)
       const adapter = new PiRpcAdapter()
+      const execute = vi.fn(async () => ({ matches: [] }))
       const execution = await adapter.execute({
         profile: executorProfile(),
         binding: executorBinding(root),
@@ -29,6 +31,7 @@ describe('Pi RPC real process', () => {
         systemPrompt: 'Return the exact structured JSON requested by the caller.',
         prompt: 'Complete the local integration task.',
         credentialValues: { 'secret.provider': 'mam-canary-secret-real-process' },
+        capabilityBridge: { execute } as unknown as ExecutorCapabilityBridge,
         authority: {
           workflowRunId: snapshot.workflowRunId,
           nodeRunId: 'node-run.real-pi',
@@ -47,8 +50,17 @@ describe('Pi RPC real process', () => {
         system: { executorInvocationId: 'executor-invocation.real-pi' }
       })
       expect(execution.events.some((event) => event.sourceEventType === 'agent_settled')).toBe(true)
-      expect(provider.requestCount()).toBeGreaterThanOrEqual(1)
+      expect(provider.requestCount()).toBeGreaterThanOrEqual(2)
+      expect(execute).toHaveBeenCalledWith({
+        method: 'knowledge.search',
+        request: {
+          knowledgeBaseProfileId: 'knowledge.real-pi',
+          query: 'requirements'
+        }
+      })
       expect(execution.stderr).not.toContain('mam-canary-secret')
+      expect(execution.invocation.launchOptions.args).toContain('--extension')
+      expect(execution.stderr).not.toContain('Failed to load extension')
     } finally {
       await provider.stop()
       await rm(root, { recursive: true, force: true })
@@ -120,8 +132,15 @@ function effectiveSnapshot(baseUrl: string): EffectiveRoleConfigSnapshot {
     },
     skills: [],
     mcpBindings: [],
-    knowledgeBaseBindings: [],
-    tools: [],
+    knowledgeBaseBindings: [
+      {
+        knowledgeBaseProfileId: 'knowledge.real-pi',
+        version: 1,
+        contentHash: hash,
+        status: 'available' as const
+      }
+    ],
+    tools: ['knowledge.search', 'knowledge.read'],
     permissions: {
       readPaths: ['.'],
       writePaths: ['.'],
@@ -161,6 +180,14 @@ async function startProvider(): Promise<{
       return
     }
     requests += 1
+    if (requests === 1) {
+      response.writeHead(200, { 'content-type': 'text/event-stream' })
+      response.write(`data: ${JSON.stringify(chunk({ role: 'assistant' }, null))}\n\n`)
+      response.write(`data: ${JSON.stringify(chunk(toolCallDelta(), null))}\n\n`)
+      response.write(`data: ${JSON.stringify(chunk({}, 'tool_calls'))}\n\n`)
+      response.end('data: [DONE]\n\n')
+      return
+    }
     const content = JSON.stringify({
       schemaVersion: '1.0.0',
       status: 'submitted',
@@ -184,6 +211,25 @@ async function startProvider(): Promise<{
     baseUrl: `http://127.0.0.1:${address.port}/v1`,
     requestCount: () => requests,
     stop: () => closeServer(server)
+  }
+}
+
+function toolCallDelta() {
+  return {
+    tool_calls: [
+      {
+        index: 0,
+        id: 'call.mam.knowledge',
+        type: 'function',
+        function: {
+          name: 'mam_knowledge_search',
+          arguments: JSON.stringify({
+            knowledgeBaseProfileId: 'knowledge.real-pi',
+            query: 'requirements'
+          })
+        }
+      }
+    ]
   }
 }
 

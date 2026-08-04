@@ -40,12 +40,14 @@ export function MamResourcesPage({
           <MamProfileEditorDialog
             kind="mcp"
             template={mamProfileTemplate('mcp', snapshot)}
+            snapshot={snapshot}
             pending={pending}
             onSave={onSaveProfile}
           />
           <MamProfileEditorDialog
             kind="knowledge"
             template={mamProfileTemplate('knowledge', snapshot)}
+            snapshot={snapshot}
             pending={pending}
             onSave={onSaveProfile}
           />
@@ -69,6 +71,7 @@ export function MamResourcesPage({
                 kind="skill"
                 profile={skill}
                 template={skill}
+                snapshot={snapshot}
                 pending={pending}
                 onSave={onSaveProfile}
               />
@@ -94,6 +97,7 @@ export function MamResourcesPage({
                 kind="mcp"
                 profile={server}
                 template={server}
+                snapshot={snapshot}
                 pending={pending}
                 onSave={onSaveProfile}
               />
@@ -125,6 +129,7 @@ export function MamResourcesPage({
                 kind="knowledge"
                 profile={knowledge}
                 template={knowledge}
+                snapshot={snapshot}
                 pending={pending}
                 onSave={onSaveProfile}
               />

@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { LocalExecutorBindingSchema, LocalSecretBindingSchema } from './domain/execution-profile'
-import { LocalKnowledgeBindingSchema } from './domain/resource-profile'
+import { LocalKnowledgeBindingSchema, McpLocalConnectionSchema } from './domain/resource-profile'
 import { MamLocalSkillBindingSchema } from './domain/skill-definition'
 import { MamEntityIdSchema, MamSchemaVersionSchema } from './domain/primitives'
 
@@ -10,8 +10,11 @@ export const MamLocalSettingsSchema = z
     bindingIdentity: MamEntityIdSchema,
     gitExecutable: z.string().min(1),
     defaultProjectDirectory: z.string().min(1).optional(),
+    participatingRoleProfileIds: z.array(MamEntityIdSchema).optional(),
+    automaticWorkflowRunIds: z.array(MamEntityIdSchema).optional(),
     executorBindings: z.array(LocalExecutorBindingSchema),
     secretBindings: z.array(LocalSecretBindingSchema),
+    mcpConnections: z.array(McpLocalConnectionSchema).default([]),
     skillBindings: z.array(MamLocalSkillBindingSchema),
     knowledgeBindings: z.array(LocalKnowledgeBindingSchema)
   })
@@ -26,6 +29,7 @@ export function defaultMamLocalSettings(bindingIdentity = 'machine.local'): MamL
     gitExecutable: 'git',
     executorBindings: [],
     secretBindings: [],
+    mcpConnections: [],
     skillBindings: [],
     knowledgeBindings: []
   }
