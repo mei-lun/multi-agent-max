@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import {
   MamAssignTaskInputSchema,
-  MamDeleteRoleProfileInputSchema,
   MamRecoverAttemptInputSchema,
   MamReassignTaskInputSchema,
   MamSaveLocalSettingsInputSchema,
@@ -28,12 +27,21 @@ import {
   resolveApprovalGateAndPublishDelivery,
   type CommandPublisher
 } from './approval-gate-delivery-command'
+import {
+  exportWorkflowPackage as writeWorkflowPackage,
+  importWorkflowPackage as readWorkflowPackage
+} from './workflow-package-command'
+import {
+  deactivateRoleProfile,
+  deactivateWorkflow as deactivateWorkflowProfile
+} from './profile-deactivation-command'
 
 export type MamUiCommandServiceOptions = Readonly<{
   userId: string
   schedulerId: string
   now?: () => string
   createId?: (kind: 'command' | 'attempt') => string
+  onStateChanged?: () => void
 }>
 
 export class MamUiCommandServiceError extends Error {
@@ -51,6 +59,7 @@ export class MamUiCommandService {
   private readonly schedulerId: string
   private readonly now: () => string
   private readonly createId: (kind: 'command' | 'attempt') => string
+  private onStateChanged: () => void
   private commands: CommandPublisher | undefined
   private repository: GitStateRepository | undefined
 
@@ -67,12 +76,17 @@ export class MamUiCommandService {
     this.schedulerId = MamEntityIdSchema.parse(options.schedulerId)
     this.now = options.now ?? (() => new Date().toISOString())
     this.createId = options.createId ?? ((kind) => `${kind}.${randomUUID().replaceAll('-', '')}`)
+    this.onStateChanged = options.onStateChanged ?? (() => undefined)
     if (repository) this.setRepository(repository)
   }
 
   setRepository(repository: GitStateRepository): void {
     this.repository = repository
     this.commands = new GitCommandRetryCoordinator(repository)
+  }
+
+  setOnStateChanged(onStateChanged: () => void): void {
+    this.onStateChanged = onStateChanged
   }
 
   assignTask(input: unknown): MamUiSnapshot {
@@ -148,6 +162,7 @@ export class MamUiCommandService {
       nextCommandId: () => this.nextId('command'),
       now: this.now
     })
+    this.onStateChanged()
     return this.query.getSnapshot()
   }
 
@@ -160,6 +175,7 @@ export class MamUiCommandService {
       nextCommandId: () => this.nextId('command'),
       now: this.now
     })
+    this.onStateChanged()
     return this.query.getSnapshot()
   }
 
@@ -173,6 +189,7 @@ export class MamUiCommandService {
       nextCommandId: () => this.nextId('command'),
       now: this.now
     })
+    this.onStateChanged()
     return this.query.getSnapshot()
   }
 
@@ -237,15 +254,21 @@ export class MamUiCommandService {
   }
 
   deleteRoleProfile(input: unknown): MamUiSnapshot {
-    const parsed = MamDeleteRoleProfileInputSchema.parse(input)
-    const profiles = this.requireProfiles()
-    if (!profiles.roles.deactivate) {
-      throw new MamUiCommandServiceError(
-        'profile_catalog_unavailable',
-        'The Role Profile catalog cannot delete profiles'
-      )
-    }
-    profiles.roles.deactivate(parsed.roleProfileId)
+    deactivateRoleProfile(input, this.requireProfiles(), makeCommandError)
+    return this.query.getSnapshot()
+  }
+
+  deleteWorkflow(input: unknown): MamUiSnapshot {
+    deactivateWorkflowProfile(input, this.requireProfiles(), makeCommandError)
+    return this.query.getSnapshot()
+  }
+
+  exportWorkflowPackage(input: unknown, destinationPath: string): string {
+    return writeWorkflowPackage(input, destinationPath, this.requireProfiles(), makeCommandError)
+  }
+
+  importWorkflowPackage(sourcePath: string): MamUiSnapshot {
+    readWorkflowPackage(sourcePath, this.requireProfiles(), makeCommandError)
     return this.query.getSnapshot()
   }
 
@@ -296,4 +319,8 @@ export class MamUiCommandService {
   private nextId(kind: 'command' | 'attempt'): string {
     return MamEntityIdSchema.parse(this.createId(kind))
   }
+}
+
+function makeCommandError(code: string, message: string): MamUiCommandServiceError {
+  return new MamUiCommandServiceError(code, message)
 }

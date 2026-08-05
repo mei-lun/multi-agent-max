@@ -91,6 +91,7 @@ describe('MAM Design Assistant service', () => {
       }
     }
     const { service } = createServiceFixture([provisional, ready])
+    const { service: directService } = createServiceFixture([provisional])
 
     const first = await service.sendMessage({
       requestId: 'design-request.clarify',
@@ -104,9 +105,14 @@ describe('MAM Design Assistant service', () => {
       questions: []
     })
     expect(first.brainstorm?.phase).toBe('clarifying')
-    expect(() => service.applyProposal({ proposalHash: first.proposal!.hash })).toThrow(
-      'Continue the Design conversation'
-    )
+    const directFirst = await directService.sendMessage({
+      requestId: 'design-request.direct-confirm',
+      modelProfileId: 'model.designer',
+      message: 'Create this workflow now.'
+    })
+    expect(
+      directService.applyProposal({ proposalHash: directFirst.proposal!.hash }).workflows
+    ).toHaveLength(1)
 
     const second = await service.sendMessage({
       requestId: 'design-request.answer',
@@ -121,12 +127,10 @@ describe('MAM Design Assistant service', () => {
       findings: [{ status: 'addressed' }]
     })
     expect(second.brainstorm?.phase).toBe('comparing_approaches')
-    expect(() => service.applyProposal({ proposalHash: second.proposal!.hash })).toThrow(
-      'Complete the approach selection'
-    )
+    expect(service.applyProposal({ proposalHash: second.proposal!.hash }).workflows).toHaveLength(1)
   })
 
-  it('requires approach selection and unchanged section approvals before confirmation', async () => {
+  it('keeps brainstorming suggestions optional before confirmation', async () => {
     const approaches = [
       {
         id: 'balanced',
@@ -161,6 +165,7 @@ describe('MAM Design Assistant service', () => {
     const comparison = { ...modelResponse(), brainstorm: { approaches, sections: [] } }
     const design = { ...modelResponse(), brainstorm: { approaches, sections } }
     const { service } = createServiceFixture([comparison, design, design, design, design])
+    const { service: directService } = createServiceFixture([comparison])
 
     const compared = await service.sendMessage({
       requestId: 'design-request.compare',
@@ -169,9 +174,14 @@ describe('MAM Design Assistant service', () => {
     })
 
     expect(compared.brainstorm?.phase).toBe('comparing_approaches')
-    expect(() => service.applyProposal({ proposalHash: compared.proposal!.hash })).toThrow(
-      'Complete the approach selection'
-    )
+    const directCompared = await directService.sendMessage({
+      requestId: 'design-request.direct-confirm',
+      modelProfileId: 'model.designer',
+      message: 'Create this workflow now.'
+    })
+    expect(
+      directService.applyProposal({ proposalHash: directCompared.proposal!.hash }).workflows
+    ).toHaveLength(1)
 
     const selected = await service.sendMessage({
       requestId: 'design-request.select',
@@ -180,7 +190,7 @@ describe('MAM Design Assistant service', () => {
       decision: { type: 'select_approach', approachId: 'balanced' }
     })
     expect(selected.brainstorm).toMatchObject({
-      phase: 'reviewing_design',
+      phase: 'ready',
       selectedApproachId: 'balanced'
     })
 
@@ -191,7 +201,7 @@ describe('MAM Design Assistant service', () => {
       decision: { type: 'approve_section', sectionId: 'ownership' }
     })
     expect(firstApproval.brainstorm).toMatchObject({
-      phase: 'reviewing_design',
+      phase: 'ready',
       approvedSectionIds: ['ownership']
     })
 
@@ -202,7 +212,7 @@ describe('MAM Design Assistant service', () => {
       decision: { type: 'approve_section', sectionId: 'flow' }
     })
     expect(secondApproval.brainstorm).toMatchObject({
-      phase: 'reviewing_design',
+      phase: 'ready',
       approvedSectionIds: ['ownership', 'flow']
     })
 

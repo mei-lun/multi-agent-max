@@ -30,6 +30,9 @@ import {
   MAM_SAVE_MODEL_CONNECTION_CHANNEL,
   MAM_FETCH_MODEL_CATALOG_CHANNEL,
   MAM_DELETE_ROLE_PROFILE_CHANNEL,
+  MAM_DELETE_WORKFLOW_CHANNEL,
+  MAM_IMPORT_WORKFLOW_PACKAGE_CHANNEL,
+  MAM_EXPORT_WORKFLOW_PACKAGE_CHANNEL,
   MAM_SAVE_PROFILE_CHANNEL,
   MAM_SELECT_ATTEMPT_CHANNEL,
   MAM_SELECT_PROJECT_CHANNEL,
@@ -100,6 +103,15 @@ const api: MamRendererApi = Object.freeze({
   },
   async deleteRoleProfile(input) {
     return ipcRenderer.invoke(MAM_DELETE_ROLE_PROFILE_CHANNEL, input)
+  },
+  async deleteWorkflow(input) {
+    return ipcRenderer.invoke(MAM_DELETE_WORKFLOW_CHANNEL, input)
+  },
+  async importWorkflowPackage() {
+    return ipcRenderer.invoke(MAM_IMPORT_WORKFLOW_PACKAGE_CHANNEL)
+  },
+  async exportWorkflowPackage(input) {
+    return ipcRenderer.invoke(MAM_EXPORT_WORKFLOW_PACKAGE_CHANNEL, input)
   },
   async importSkill() {
     return ipcRenderer.invoke(MAM_IMPORT_SKILL_CHANNEL)

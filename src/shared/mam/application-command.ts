@@ -12,6 +12,7 @@ import { MamSkillDefinitionSchema } from './domain/skill-definition'
 import { MamLocalSettingsSchema } from './local-settings'
 import { ArtifactRefSchema } from './domain/artifact'
 import { MamModelConnectionProtocolSchema } from './model-catalog'
+import { MamExportWorkflowPackageInputSchema } from './workflow-package'
 
 export const MamSaveModelConnectionInputSchema = z
   .object({
@@ -26,6 +27,10 @@ export const MamSaveModelConnectionInputSchema = z
 export const MamDeleteRoleProfileInputSchema = z
   .object({ roleProfileId: MamEntityIdSchema })
   .strict()
+
+export const MamDeleteWorkflowInputSchema = z.object({ definitionId: MamEntityIdSchema }).strict()
+
+export { MamExportWorkflowPackageInputSchema }
 
 export const MamCancelWorkflowRunInputSchema = z
   .object({ workflowRunId: MamEntityIdSchema })
@@ -169,5 +174,7 @@ export type MamSaveProfileInput = z.infer<typeof MamSaveProfileInputSchema>
 export type MamSaveLocalSettingsInput = z.infer<typeof MamSaveLocalSettingsInputSchema>
 export type MamSaveModelConnectionInput = z.infer<typeof MamSaveModelConnectionInputSchema>
 export type MamDeleteRoleProfileInput = z.infer<typeof MamDeleteRoleProfileInputSchema>
+export type MamDeleteWorkflowInput = z.infer<typeof MamDeleteWorkflowInputSchema>
+export type MamExportWorkflowPackageInput = z.infer<typeof MamExportWorkflowPackageInputSchema>
 export type MamCancelWorkflowRunInput = z.infer<typeof MamCancelWorkflowRunInputSchema>
 export type MamRestartWorkflowRunInput = z.infer<typeof MamRestartWorkflowRunInputSchema>

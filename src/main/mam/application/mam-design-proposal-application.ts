@@ -5,7 +5,6 @@ import { failMamDesignAssistant } from './mam-design-assistant-error'
 import type { MamDesignDraftStore } from './mam-design-draft-store'
 import { createMamDesignRecovery, hasBlockingDesignIssues } from './mam-design-generation-recovery'
 import type { MamUiQueryService } from './mam-ui-query-service'
-import { isMamDesignBrainstormReady, isMamDesignReviewReady } from './mam-design-conversation-state'
 import { writeMamDesignProposal } from './mam-design-proposal-writer'
 
 export function applyMamDesignProposal(input: {
@@ -24,18 +23,6 @@ export function applyMamDesignProposal(input: {
     failMamDesignAssistant(
       'design_proposal_invalid',
       'Resolve proposal errors before creating definitions'
-    )
-  }
-  if (!isMamDesignReviewReady(input.draft.review)) {
-    failMamDesignAssistant(
-      'design_review_not_ready',
-      'Continue the Design conversation until its questions and Workflow findings are resolved'
-    )
-  }
-  if (!isMamDesignBrainstormReady(input.draft.brainstorm)) {
-    failMamDesignAssistant(
-      'design_brainstorm_not_ready',
-      'Complete the approach selection and approve every Design section before confirming'
     )
   }
   try {

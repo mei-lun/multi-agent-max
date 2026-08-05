@@ -46,7 +46,8 @@ export class MamWorkflowRunCommandService {
     private readonly now: () => string = () => new Date().toISOString(),
     private readonly createId: (kind: 'run' | 'command') => string = (kind) =>
       `${kind}.${randomUUID().replaceAll('-', '')}`,
-    private readonly userId = 'user.local'
+    private readonly userId = 'user.local',
+    private onStateChanged: () => void = () => undefined
   ) {
     this.repository = repository
   }
@@ -55,11 +56,16 @@ export class MamWorkflowRunCommandService {
     this.repository = repository
   }
 
+  setOnStateChanged(onStateChanged: () => void): void {
+    this.onStateChanged = onStateChanged
+  }
+
   create(input: unknown): MamUiSnapshot {
     const parsed = MamCreateWorkflowRunInputSchema.parse(input)
     const bundle = this.prepareBundle(parsed)
     this.publishBundle(bundle)
     this.reusePreviousProgress(bundle)
+    this.onStateChanged()
     return this.query.getSnapshot()
   }
 
@@ -87,6 +93,7 @@ export class MamWorkflowRunCommandService {
     this.publishCancellation(parsed.workflowRunId)
     this.publishBundle(replacement)
     this.reusePreviousProgress(replacement)
+    this.onStateChanged()
     return this.query.getSnapshot()
   }
 

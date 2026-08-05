@@ -4,6 +4,8 @@ import type { WorkflowDefinition } from '../../../shared/mam/domain/workflow'
 type WritableRegistry<T = unknown> = Readonly<{
   save(input: unknown): T
   listVersions(id: string): readonly T[]
+  get?(id: string, version: number): T | undefined
+  activate?(id: string, version: number): T
   deactivate?(id: string): void
 }>
 

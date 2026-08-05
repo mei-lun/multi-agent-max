@@ -236,6 +236,9 @@ export function App(): React.JSX.Element {
                 onGetAttemptDiff={state.getAttemptDiff}
                 onSaveProfile={state.saveProfile}
                 onDeleteRoleProfile={state.deleteRoleProfile}
+                onImportWorkflowPackage={state.importWorkflowPackage}
+                onExportWorkflowPackage={state.exportWorkflowPackage}
+                onDeleteWorkflow={state.deleteWorkflow}
                 onSaveLocalSettings={state.saveLocalSettings}
                 onSaveModelConnection={state.saveModelConnection}
                 onFetchModelCatalog={state.fetchModelCatalog}
@@ -307,6 +310,9 @@ function ActivePage({
   onGetAttemptDiff,
   onSaveProfile,
   onDeleteRoleProfile,
+  onImportWorkflowPackage,
+  onExportWorkflowPackage,
+  onDeleteWorkflow,
   onSaveLocalSettings,
   onSaveModelConnection,
   onFetchModelCatalog,
@@ -345,6 +351,9 @@ function ActivePage({
   onGetAttemptDiff: ReturnType<typeof useMamSnapshot>['getAttemptDiff']
   onSaveProfile: ReturnType<typeof useMamSnapshot>['saveProfile']
   onDeleteRoleProfile: ReturnType<typeof useMamSnapshot>['deleteRoleProfile']
+  onImportWorkflowPackage: ReturnType<typeof useMamSnapshot>['importWorkflowPackage']
+  onExportWorkflowPackage: ReturnType<typeof useMamSnapshot>['exportWorkflowPackage']
+  onDeleteWorkflow: ReturnType<typeof useMamSnapshot>['deleteWorkflow']
   onSaveLocalSettings: ReturnType<typeof useMamSnapshot>['saveLocalSettings']
   onSaveModelConnection: ReturnType<typeof useMamSnapshot>['saveModelConnection']
   onFetchModelCatalog: ReturnType<typeof useMamSnapshot>['fetchModelCatalog']
@@ -379,6 +388,8 @@ function ActivePage({
         pending={pending}
         onSaveProfile={onSaveProfile}
         onDeleteRoleProfile={onDeleteRoleProfile}
+        onImportWorkflowPackage={onImportWorkflowPackage}
+        onExportWorkflowPackage={onExportWorkflowPackage}
       />
     )
   }
@@ -391,6 +402,9 @@ function ActivePage({
         onSaveWorkflow={onSaveWorkflow}
         onCreateWorkflowRun={onCreateWorkflowRun}
         onSaveLocalSettings={onSaveLocalSettings}
+        onImportWorkflowPackage={onImportWorkflowPackage}
+        onExportWorkflowPackage={onExportWorkflowPackage}
+        onDeleteWorkflow={onDeleteWorkflow}
       />
     )
   }

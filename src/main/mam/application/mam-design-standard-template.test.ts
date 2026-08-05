@@ -69,7 +69,7 @@ describe('MAM Design standard template', () => {
     expect(prompt).toContain('Every response must include a complete replacement proposal.')
     expect(prompt).toContain('clarify one business decision at a time')
     expect(prompt).toContain('return 2-3 meaningfully different brainstorm.approaches')
-    expect(prompt).toContain('application, not the model, owns approach selection')
+    expect(prompt).toContain('A user may optionally choose an approach or request changes')
     expect(prompt).toContain('Never use maxTraversals on a normal forward or conditional branch.')
     expect(prompt).toContain('git_merge to develop')
     expect(prompt).toContain('git_merge from the integrated revision to main')

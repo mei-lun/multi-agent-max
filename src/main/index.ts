@@ -12,10 +12,10 @@ import { createGitCommandClient } from './mam/state-store/git-command-client'
 import { DiagnosticsRecorder } from './mam/diagnostics/diagnostics-recorder'
 import { MamWorkflowRunCommandService } from './mam/application/mam-workflow-run-command-service'
 import { MamAttemptExecutionService } from './mam/application/mam-attempt-execution-service'
+import { attachAutomaticWorkflow } from './mam/application/mam-automatic-workflow-runtime'
 import { AttemptResourceMaterializer } from './mam/profiles/attempt-resource-materializer'
 import { LocalArtifactStore } from './mam/artifacts/local-artifact-store'
 import { AttemptArtifactValidator } from './mam/application/attempt-artifact-validator'
-// CodexHeadlessAdapter and GrokCliAdapter remain available for later structured-CLI activation.
 import { PiRpcAdapter } from './mam/executors/pi-rpc-adapter'
 import { MAM_UI_SNAPSHOT_CHANGED_CHANNEL } from '../shared/mam/application-api'
 import { MamAttemptInspectionService } from './mam/application/mam-attempt-inspection-service'
@@ -23,20 +23,22 @@ import { MamMergeQueueExecutionService } from './mam/application/mam-merge-queue
 import { EncryptedLocalSecretStore } from './mam/application/encrypted-local-secret-store'
 import {
   ChainedAttemptSecretValueProvider,
-  EnvironmentAttemptSecretValueProvider,
-  type AttemptSecretValueProvider
+  EnvironmentAttemptSecretValueProvider
 } from './mam/application/local-attempt-secrets'
 import { ensureBuiltinPiProfile } from './mam/profiles/builtin-pi-profile'
 import { MamDesignDraftStore } from './mam/application/mam-design-draft-store'
 import { MamDesignAssistantService } from './mam/application/mam-design-assistant-service'
+import { resolveDesignSecret } from './mam/application/design-secret-resolver'
 import { DesktopRuntimeLogger } from './mam/diagnostics/desktop-runtime-logger'
+import { safeFileName } from './mam/diagnostics/safe-file-name'
 import { MamExportExecutionActivityInputSchema } from '../shared/mam/execution-activity-export'
 import { selectExecutionActivityEvents } from './mam/diagnostics/execution-activity-export-selection'
-
+import {
+  exportWorkflowPackageDialog,
+  importWorkflowPackageDialog
+} from './mam/application/workflow-package-dialogs'
 let unregisterMamIpc: (() => void) | undefined
-
 configureSmokeUserData()
-
 function createMainWindow(): void {
   const isMac = process.platform === 'darwin'
   const window = new BrowserWindow({
@@ -137,8 +139,14 @@ function createMainWindow(): void {
     diagnostics,
     workspaceRoot: join(app.getPath('userData'), 'mam', 'attempt-worktrees'),
     secretValues,
+    ...(initialRepository ? { repository: initialRepository } : {})
+  })
+  const automaticRunner = attachAutomaticWorkflow({
+    attempts,
+    commands,
+    workflowRuns,
     ...(initialRepository ? { repository: initialRepository } : {}),
-    onStateChanged: notifySnapshotChanged
+    notifySnapshotChanged
   })
   const attemptInspection = new MamAttemptInspectionService(initialRepository, () =>
     createGitCommandClient(localSettings.get().gitExecutable)
@@ -175,6 +183,8 @@ function createMainWindow(): void {
       commands.setRepository(repository)
       workflowRuns.setRepository(repository)
       attempts.setRepository(repository)
+      automaticRunner.setRepository(repository)
+      automaticRunner.notify()
       attemptInspection.setRepository(repository)
       mergeQueue.setRepository(repository)
       return service.getSnapshot()
@@ -188,6 +198,8 @@ function createMainWindow(): void {
       if (result.canceled || !directory) return undefined
       return commands.importSkill(directory)
     },
+    importWorkflowPackageDialog(window, commands),
+    exportWorkflowPackageDialog(window, commands),
     async () => {
       const result = await dialog.showSaveDialog(window, {
         title: 'Export MAM diagnostics',
@@ -211,7 +223,6 @@ function createMainWindow(): void {
     },
     runtimeLogger
   )
-
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('https://')) void shell.openExternal(url)
     return { action: 'deny' }
@@ -245,10 +256,6 @@ function createMainWindow(): void {
   else void window.loadFile(join(__dirname, '../renderer/index.html'))
 }
 
-function safeFileName(value: string): string {
-  return value.replace(/[^A-Za-z0-9._-]+/g, '-').slice(0, 96)
-}
-
 function createSnapshotChangeNotifier(window: BrowserWindow): () => void {
   let timer: ReturnType<typeof setTimeout> | undefined
   return () => {
@@ -271,20 +278,6 @@ function configuredStateRepository(
   return GitStateRepository.attach(projectDirectory, undefined, {
     gitClient: createGitCommandClient(settings.get().gitExecutable)
   })
-}
-
-function resolveDesignSecret(
-  secretRef: string,
-  settings: MamLocalSettingsStore,
-  secretValues: AttemptSecretValueProvider
-): string | undefined {
-  const local = settings.get()
-  const binding = local.secretBindings.find((candidate) => candidate.secretRef === secretRef) ?? {
-    id: secretRef,
-    secretRef,
-    bindingIdentity: local.bindingIdentity
-  }
-  return secretValues.resolve(binding)
 }
 
 function configureSmokeUserData(): void {

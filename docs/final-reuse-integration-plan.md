@@ -257,19 +257,19 @@ Workflow Definition 是带版本的执行图。每个可执行角色节点引用
 
 第一版正式支持的节点类型：
 
-| 节点类型             | 作用                                                        |
-| -------------------- | ----------------------------------------------------------- |
-| `role_task`          | 生成绑定节点固定角色的普通 Task                             |
-| `dynamic_tasks`      | 根据结构化任务计划创建多个固定角色 Task                     |
-| `review_gate`        | 生成绑定节点固定审核角色的一个或多个 Review Task            |
-| `approval_gate`      | 等待用户人工决定                                            |
-| `condition`          | 根据结构化输出选择路径                                      |
-| `parallel`           | 启动多个可并行分支                                          |
-| `join`               | 等待指定分支汇合                                            |
-| `artifact_transform` | 受控地整理或合并 Artifact                                   |
-| `command`            | 执行经过策略校验的本地命令                                  |
-| `git_merge`          | 由指定协调角色驱动，内核执行受控合并                        |
-| `finish`             | 完成 Workflow Run                                           |
+| 节点类型             | 作用                                             |
+| -------------------- | ------------------------------------------------ |
+| `role_task`          | 生成绑定节点固定角色的普通 Task                  |
+| `dynamic_tasks`      | 根据结构化任务计划创建多个固定角色 Task          |
+| `review_gate`        | 生成绑定节点固定审核角色的一个或多个 Review Task |
+| `approval_gate`      | 等待用户人工决定                                 |
+| `condition`          | 根据结构化输出选择路径                           |
+| `parallel`           | 启动多个可并行分支                               |
+| `join`               | 等待指定分支汇合                                 |
+| `artifact_transform` | 受控地整理或合并 Artifact                        |
+| `command`            | 执行经过策略校验的本地命令                       |
+| `git_merge`          | 由指定协调角色驱动，内核执行受控合并             |
+| `finish`             | 完成 Workflow Run                                |
 
 工作流允许显式返工和循环，但每条回退路径必须配置最大次数或总转换次数。无边界循环在保存时被拒绝。
 
@@ -409,7 +409,7 @@ mam join --run run-20260727-001 --role role.merge-coordinator
 3. 验证 Workflow Run 和 Role Profile 是否存在。
 4. 在本机解析该角色的 Executor Profile、CLI、模型和 secret references。
 5. 计算节点固定为该角色且依赖已满足的任务。
-6. 用户选择 Task 并点击运行；系统直接使用节点固定角色创建 Attempt，并写入非排他的 claim notice。如果已有活跃提示，必须先展示 warning，但用户仍可继续。
+6. Scheduler 默认选择依赖已满足且固定角色的 Task，直接使用节点绑定角色创建 Attempt，并写入非排他的 claim notice。如果已有活跃提示，记录 warning；用户可以在 UI 中人工重试或接管。
 7. 创建 Attempt、Role Instance、worktree 或只读工作区。
 8. 启动对应 Adapter。
 
@@ -422,7 +422,7 @@ mam join --run run-20260727-001 --role role.merge-coordinator
 1. `role_task`、`review_gate` 和 `git_merge`：Workflow Definition 在设计时固定角色，节点 ready 后生成绑定该角色的 Task。
 2. `dynamic_tasks`：规划节点固定一个角色；其结构化 Task Plan 中的每个 Task 也必须固定一个角色，Scheduler 校验后生成 Task。
 
-兼容字段 `recommendedRoleProfileIds` 和 `allowedRoleProfileIds` 必须是包含同一个 Role ID 的单元素数组。Scheduler 可在用户点击运行时记录内部 `task_assigned` 激活事件以保持事件兼容，但角色值只能从节点绑定派生，不能接受用户选择或 Agent 推荐，也不得生成 `task_reassigned`。
+兼容字段 `recommendedRoleProfileIds` 和 `allowedRoleProfileIds` 必须是包含同一个 Role ID 的单元素数组。Scheduler 在自动启动或用户人工重试时都可以记录内部 `task_assigned` 激活事件以保持事件兼容，但角色值只能从节点绑定派生，不能接受用户选择或 Agent 推荐，也不得生成 `task_reassigned`。
 
 ### 6.3 同一角色的并发
 
@@ -791,9 +791,9 @@ Local Knowledge Binding
 | 页面             | 核心能力                                                                                                              |
 | ---------------- | --------------------------------------------------------------------------------------------------------------------- |
 | Roles            | 创建、复制、版本化 Role Profile；独立组合 Executor、Provider、模型、Skills、MCP、知识库和策略                         |
-| Design Assistant | 选择已有 Model Profile，通过本地保存的对话草稿生成、检查和人工确认全新定义，或优化现有 Workflow 的下一版本               |
+| Design Assistant | 选择已有 Model Profile，通过本地保存的对话草稿生成、检查和人工确认全新定义，或优化现有 Workflow 的下一版本            |
 | Workflows        | 编辑节点、边、Artifact、角色绑定、动态任务、循环保护和合并策略                                                        |
-| Runs             | 查看图状态、ready tasks、节点固定角色、执行提示、attempts、成本和阻塞原因；使用固定角色直接运行或恢复中断执行          |
+| Runs             | 查看图状态、ready tasks、节点固定角色、执行提示、attempts、成本和阻塞原因；使用固定角色直接运行或恢复中断执行         |
 | My Role          | 选择本机参与角色，查看工作流固定给该角色的任务；启动前显示重复执行 warning，不提供 Task 角色选择或改派                |
 | Task             | 查看输入、结构化执行事件、Artifact、Git diff、提交、Attempt 时间线和返工记录；默认打开最新 Attempt，历史 Attempt 只读 |
 | Reviews          | 提交结构化审核结果，处理多 Reviewer 分歧                                                                              |
@@ -801,7 +801,7 @@ Local Knowledge Binding
 | Resources        | 管理 Skill Registry、MCP Server Profile 和 Knowledge Base Profile                                                     |
 | Settings         | 管理 Executor、Provider/Endpoint、Model Profile、本机 secret/local bindings、Git 和默认目录                           |
 
-Design Assistant 是定义设计入口，不是独立 Agent Session，也不是 Workflow 权威状态。对话草稿以未加密 JSON 保存在本机，不写入 Git；模型只能引用当前已注册的 Executor、Model、Skill、MCP Server 和 Knowledge Base。Design Assistant 必须支持带主进程门禁的多轮头脑风暴：每轮最多提出一个只涉及业务意图的必要问题；澄清充分后提供二至三个有实质差异且包含取舍的方案；用户明确选定方案后，按角色与职责、工作流与交接、审核/失败/验证三个以上部分逐项确认。模型不得伪造方案选择或部分确认；已确认部分的内容发生变化时确认自动失效。模型还应指出当前方案的缺陷并记录显式假设；问题、方案选择、部分确认或缺陷未解决时阻止人工确认。每次模型响应仍必须生成一份完整替换方案，并以一个可编译的标准 Role/Workflow 模板作为保底；头脑风暴期间的完整方案属于临时草稿，不得描述为可确认。Design Assistant 不自动读取项目文件、文档或 Git 历史，也不启动外部 Visual Companion 或浏览器服务。解析、引用和 Workflow 编译错误必须进入有界自动修复，耗尽后持久化错误和草稿，允许用户重试或恢复标准模板。新建设计创建全新的完整 Role Profile 和 Workflow Definition；优化设计必须选择当前活动 Workflow 作为基线，保留稳定 Workflow ID，并创建尚未占用的下一版本，既有版本和已固定版本的 Run 保持不变。优化设计可复用现有 Role Profile，只在方案确有需要时创建新的完整 Role Profile。模型生成的每个可执行节点必须固定一个角色。确认操作不得创建 Workflow Run、Task、Attempt、Review 或 Merge Queue 项；用户仍需在 Workflows 页面人工启动 Run，运行 Task 时系统直接使用节点固定角色。
+Design Assistant 是定义设计入口，不是独立 Agent Session，也不是 Workflow 权威状态。对话草稿以未加密 JSON 保存在本机，不写入 Git；模型只能引用当前已注册的 Executor、Model、Skill、MCP Server 和 Knowledge Base。Design Assistant 必须支持多轮头脑风暴：每轮最多提出一个只涉及业务意图的必要问题；澄清充分后提供二至三个有实质差异且包含取舍的方案；按角色与职责、工作流与交接、审核/失败/验证三个以上部分给出结构化建议。方案比较、设计分段和风险提示都是可选的协作信息，不要求用户逐项确认；用户可以在认为合适时直接确认当前完整替换方案。模型不得伪造方案选择或确认；若用户主动选择方案或提出修改，助手应记录并持续更新草稿。模型还应指出当前方案的缺陷并记录显式假设；未解决的问题和缺陷应在界面中清晰提示，但不阻止人工确认。每次模型响应仍必须生成一份完整替换方案，并以一个可编译的标准 Role/Workflow 模板作为保底。Design Assistant 不自动读取项目文件、文档或 Git 历史，也不启动外部 Visual Companion 或浏览器服务。解析、引用和 Workflow 编译错误必须进入有界自动修复，耗尽后持久化错误和草稿；只有实际编译错误或基线版本已过期时阻止创建，其他提示允许用户稍后修改或恢复标准模板。新建设计创建全新的完整 Role Profile 和 Workflow Definition；优化设计必须选择当前活动 Workflow 作为基线，保留稳定 Workflow ID，并创建尚未占用的下一版本，既有版本和已固定版本的 Run 保持不变。优化设计可复用现有 Role Profile，只在方案确有需要时创建新的完整 Role Profile。模型生成的每个可执行节点必须固定一个角色。确认操作不得创建 Workflow Run、Task、Attempt、Review 或 Merge Queue 项；用户仍需在 Workflows 页面人工启动 Run，运行 Task 时系统直接使用节点固定角色。
 
 同一程序窗口可以启动多个 Role Instance；也允许多个本地进程分别选择不同角色。
 
@@ -848,7 +848,7 @@ Roles、Resources 和 Settings 页面必须默认提供面向普通用户的字�
 | `src/shared/mam/domain/task.ts`                                        | TaskPackage、Attempt                                                | 删除 `assignedDeviceId`；增加固定角色绑定、ExecutionClaimNotice、Effective Config/Result snapshot 和 GitChange             |
 | `src/shared/mam/domain/runtime-kind.ts`                                | 执行后端枚举位置                                                    | 收敛为 `codex-cli`、`grok-cli`、`pi-rpc`                                                                                   |
 | `src/shared/mam/runtime-capabilities.ts`                               | capability preflight                                                | 删除 jcode、Claude、container 和设备能力                                                                                   |
-| `src/shared/mam/scheduler-protocol.ts`                                 | Command/Event envelope、幂等与 actor                                | 删除 device actor 和 lease rejection；增加固定角色激活、execution notice、Attempt result、dynamic task 和 merge events      |
+| `src/shared/mam/scheduler-protocol.ts`                                 | Command/Event envelope、幂等与 actor                                | 删除 device actor 和 lease rejection；增加固定角色激活、execution notice、Attempt result、dynamic task 和 merge events     |
 | `src/main/mam/workflow/workflow-compiler.ts`                           | YAML/JSON 解析、图校验、Artifact 校验、plan hash                    | 扩展节点类型和有界循环；现实现只接受 DAG                                                                                   |
 | `src/main/mam/scheduler/kernel.ts`                                     | 命令校验、权威事件生成、Artifact hash 检查                          | 删除设备派发和设备 lease；增加固定角色校验、非排他执行提示、Attempt result 和 merge authority                              |
 | `src/main/mam/state-store/append-only-event-store.ts`                  | event path 校验、replay 和 snapshot rebuild                         | `R2`：补真正批次原子性和并发 writer，再挂载到独立 `mam-state` worktree                                                     |
@@ -1083,12 +1083,12 @@ Renderer、CLI 和 Executor Bridge 都调用 Application API，不能直接操�
 
 如果使用一个主 Agent 加三个 subagent，建议按稳定边界并行：
 
-| 负责人   | 范围                                                                        |
-| -------- | --------------------------------------------------------------------------- |
-| 主 Agent | 新仓库基线、shared contracts、Application API、最终集成和验收               |
+| 负责人   | 范围                                                                          |
+| -------- | ----------------------------------------------------------------------------- |
+| 主 Agent | 新仓库基线、shared contracts、Application API、最终集成和验收                 |
 | Agent A  | Git state branch、events、固定角色激活/execution notice、projection、并发测试 |
-| Agent B  | Codex/Grok/Pi 结构化 Adapters、标准结果、Role materialization               |
-| Agent C  | Renderer、可视化 Workflow、Attempt timeline、Review/Merge Queue UI          |
+| Agent B  | Codex/Grok/Pi 结构化 Adapters、标准结果、Role materialization                 |
+| Agent C  | Renderer、可视化 Workflow、Attempt timeline、Review/Merge Queue UI            |
 
 Workflow/Kernel schema 由主 Agent 先冻结，其他 Agent 不并行修改 shared contracts、package lock、tsconfig、Electron 启动和 preload 文件。
 
@@ -1112,14 +1112,14 @@ Workflow/Kernel schema 由主 Agent 先冻结，其他 Agent 不并行修改 sha
 - 一个 Review 节点固定一个 Reviewer Role Profile；需要不同 Reviewer Role 时使用多个 Review 节点。
 - 工作流包含并行、join、condition、review、approval、dynamic tasks、有界返工和 git merge。
 - 可视化编辑器可以创建、连接、检查并 round-trip 上述节点及循环上限；源码编辑只是高级入口。
-- Design Assistant 使用已有 Model Profile，通过可恢复的本地多轮对话依次完成单问题澄清、二至三个方案比较、用户选定方案和至少三个设计部分的逐项确认，同时指出并修复工作流缺陷；模型不能写入用户选择或确认，部分内容变化会撤销对应确认；每轮保留完整替换草稿，任一头脑风暴门禁或缺陷未解决时不可确认；不自动读取项目文件/Git 历史，不启动外部可视化服务；最终生成全新角色和工作流，或基于所选现有工作流生成同一 ID 的下一版本；每个可执行节点固定一个角色；确认后只增加定义版本且不产生 Run、Task 或 Attempt，既有 Run 继续固定原版本。
+- Design Assistant 使用已有 Model Profile，通过可恢复的本地多轮对话进行单问题澄清、二至三个方案比较和至少三个设计部分的结构化建议，同时指出并修复工作流缺陷；方案选择、章节确认和缺陷提示服务于协作但不构成逐步门禁，用户可在认为合适时直接确认完整替换草稿；不自动读取项目文件/Git 历史，不启动外部可视化服务；实际解析、引用、编译错误或过期基线仍必须阻止创建；最终生成全新角色和工作流，或基于所选现有工作流生成同一 ID 的下一版本；每个可执行节点固定一个角色；确认后只增加定义版本且不产生 Run、Task 或 Attempt，既有 Run 继续固定原版本。
 - Role 不继承；产品没有 Session override、Executor/Model fallback 或独立 Agent Session 创建入口。
 
 ### 18.2 固定角色、执行提示与多实例
 
 - 同一机器同时运行至少 3 个角色实例。
 - 同一机器同一角色可以并行执行不同任务。
-- 每个可执行节点在 Workflow Definition 中固定且只固定一个 Role；Task 直接继承该角色，点击“运行任务”时不得再次要求选择角色。
+- 每个可执行节点在 Workflow Definition 中固定且只固定一个 Role；Task 直接继承该角色，自动启动或人工重试时不得再次要求选择角色。
 - 运行中不得把 Task 改派给其他 Role；`reassign_task` 必须返回 `workflow_role_binding_fixed`。更换角色只能创建新 Workflow Definition 版本和新 Run，历史 Attempt 不变。
 - 两个独立 clone 启动同一 Task 时都可以创建独立 Attempt，但两端都显示并记录 `concurrent_execution_warning`，全部历史不得覆盖。
 - 任意机器只需 clone、同步状态、选择 run 和 role，不需要预先注册设备。

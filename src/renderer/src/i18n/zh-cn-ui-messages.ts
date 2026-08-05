@@ -159,6 +159,7 @@ export const ZH_CN_UI_MESSAGES: Readonly<Record<string, string>> = {
   'Missing local executors, credentials, or required resources stop before any Attempt state is written.':
     '如果缺少本地执行器、凭证或必需资源，系统会在写入任何尝试状态前停止。',
   Cancel: '取消',
+  Delete: '删除',
   'Start replacement': '开始替代尝试',
   'Mark for reconciliation': '标记为待核对',
   selected: '已选择',
@@ -234,6 +235,8 @@ export const ZH_CN_UI_MESSAGES: Readonly<Record<string, string>> = {
   'Versioned Skills, MCP servers, Knowledge Bases, and their Role allowlists.':
     '管理版本化技能、MCP 服务、知识库及角色白名单。',
   'Import Skill': '导入技能',
+  'Import package': '导入工作流包',
+  'Export package': '导出工作流包',
   'Skill Registry': '技能注册表',
   'No imported Skills': '没有已导入技能',
   'MCP Server Profiles': 'MCP 服务配置',

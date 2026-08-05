@@ -3,6 +3,7 @@ import type {
   MamCancelWorkflowRunInput,
   MamCreateWorkflowRunInput,
   MamDeleteRoleProfileInput,
+  MamDeleteWorkflowInput,
   MamExecuteNextMergeInput,
   MamReassignTaskInput,
   MamRecoverAttemptInput,
@@ -17,6 +18,7 @@ import type {
   MamStartAttemptInput,
   MamSubmitReviewInput
 } from '../../../../shared/mam/application-command'
+import type { MamExportWorkflowPackageInput } from '../../../../shared/mam/workflow-package'
 import type {
   MamAttemptDiff,
   MamGetAttemptDiffInput
@@ -53,6 +55,9 @@ export type MamSnapshotState = Readonly<{
   saveModelConnection(input: MamSaveModelConnectionInput): Promise<void>
   fetchModelCatalog(input: MamFetchModelCatalogInput): Promise<MamModelCatalogResult>
   deleteRoleProfile(input: MamDeleteRoleProfileInput): Promise<void>
+  deleteWorkflow(input: MamDeleteWorkflowInput): Promise<void>
+  importWorkflowPackage(): Promise<void>
+  exportWorkflowPackage(input: MamExportWorkflowPackageInput): Promise<string | undefined>
   importSkill(): Promise<void>
   exportDiagnostics(): Promise<string | undefined>
   exportExecutionActivity(input: MamExportExecutionActivityInput): Promise<string | undefined>

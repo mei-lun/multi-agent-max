@@ -47,7 +47,7 @@ export class MamAttemptExecutionService {
   private readonly secretValues: AttemptSecretValueProvider
   private readonly now: () => string
   private readonly createId: (kind: string) => string
-  private readonly onStateChanged: () => void
+  private onStateChanged: () => void
   private readonly preflight: ExecutorLocalPreflight
   private readonly enabledExecutorKinds: ReadonlySet<ExecutorKind> | undefined
   private repository: GitStateRepository | undefined
@@ -75,6 +75,10 @@ export class MamAttemptExecutionService {
 
   setRepository(repository: GitStateRepository): void {
     this.repository = repository
+  }
+
+  setOnStateChanged(onStateChanged: () => void): void {
+    this.onStateChanged = onStateChanged
   }
 
   async start(input: unknown): Promise<MamUiSnapshot> {

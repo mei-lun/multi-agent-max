@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { MamDesignBrainstormPanel } from './MamDesignBrainstormPanel'
 
 describe('MamDesignBrainstormPanel', () => {
-  it('renders approach trade-offs and authoritative section approvals', () => {
+  it('renders approach trade-offs and design sections', () => {
     const markup = renderToStaticMarkup(
       <MamDesignBrainstormPanel
         brainstorm={{
@@ -43,7 +43,6 @@ describe('MamDesignBrainstormPanel', () => {
     expect(markup).toContain('Recommended')
     expect(markup).toContain('Additional latency')
     expect(markup).toContain('Roles and ownership')
-    expect(markup).toContain('Approved')
-    expect(markup).toContain('Approve section')
+    expect(markup).toContain('Reply with requested changes when you want a different direction.')
   })
 })

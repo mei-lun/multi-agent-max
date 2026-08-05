@@ -4,6 +4,7 @@ import { GitCommandRetryCoordinator } from '../state-store/git-command-retry-coo
 import type { GitStateRepository } from '../state-store/git-state-repository'
 import { publishMergeReadinessIfEligible } from './merge-readiness-publisher'
 import { advanceDeterministicNodes } from './deterministic-node-advancement'
+import { boundedReviewStatus } from '../review/review-revision-limit'
 
 export class MamReviewDisagreementCommandError extends Error {
   constructor(
@@ -33,16 +34,32 @@ export function resolveReviewDisagreementAndPublishMerge(input: {
       'The Review aggregation is unavailable'
     )
   }
+  const bundle = input.repository.loadRunBundle(request.workflowRunId)
+  const reviewNode = bundle?.definition.nodes.find(
+    (node) => node.type === 'review_gate' && node.id === aggregation.reviewNodeId
+  )
+  const attemptCount =
+    input.repository.rebuild(request.workflowRunId).tasks[aggregation.subject.taskId]
+      ?.knownAttemptIds.length ?? 1
+  const selectedStatus =
+    reviewNode?.type === 'review_gate'
+      ? boundedReviewStatus({
+          status: request.selectedStatus,
+          attemptCount,
+          maxRevisionAttempts: reviewNode.maxRevisionAttempts
+        })
+      : request.selectedStatus
   new GitCommandRetryCoordinator(input.repository).executeAndPush({
     command: resolveCommand({
       request,
       commandId: input.nextCommandId(),
       issuedAt: input.now(),
-      userId: input.userId
+      userId: input.userId,
+      selectedStatus
     }),
     schedulerId: input.schedulerId
   })
-  if (request.selectedStatus === 'approved') {
+  if (selectedStatus === 'approved') {
     publishMergeReadinessIfEligible({
       repository: input.repository,
       workflowRunId: request.workflowRunId,
@@ -66,6 +83,7 @@ function resolveCommand(input: {
   commandId: string
   issuedAt: string
   userId: string
+  selectedStatus: 'approved' | 'changes_requested' | 'blocked'
 }): SchedulerCommand {
   return {
     schemaVersion: '1.0.0',
@@ -75,6 +93,6 @@ function resolveCommand(input: {
     actor: { kind: 'user', userId: input.userId },
     type: 'resolve_approval_gate',
     gateId: `gate.${input.request.aggregationId}`,
-    option: input.request.selectedStatus
+    option: input.selectedStatus
   }
 }

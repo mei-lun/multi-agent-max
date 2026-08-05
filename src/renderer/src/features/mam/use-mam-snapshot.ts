@@ -4,7 +4,6 @@ import type {
   MamAssignTaskInput,
   MamCancelWorkflowRunInput,
   MamReassignTaskInput,
-  MamDeleteRoleProfileInput,
   MamCreateWorkflowRunInput,
   MamRecoverAttemptInput,
   MamRestartWorkflowRunInput,
@@ -25,6 +24,8 @@ import {
   type MamGetAttemptDiffInput
 } from '../../../../shared/mam/attempt-inspection'
 import type { MamFetchModelCatalogInput } from '../../../../shared/mam/model-catalog'
+import { useMamPackageActions } from './use-mam-package-actions'
+import { useMamDeletionActions } from './use-mam-deletion-actions'
 import { mamApplicationErrorMessage } from './mam-application-error-message'
 import type { MamSnapshotState } from './mam-snapshot-state'
 
@@ -239,20 +240,9 @@ export function useMamSnapshot(): MamSnapshotState {
     (input: MamFetchModelCatalogInput) => getMamRendererApi().fetchModelCatalog(input),
     []
   )
-  const deleteRoleProfile = useCallback(
-    (input: MamDeleteRoleProfileInput) =>
-      applyAuthoritativeChange(() => getMamRendererApi().deleteRoleProfile(input), {
-        rethrow: true,
-        surface: false
-      }),
-    [applyAuthoritativeChange]
-  )
-  const importSkill = useCallback(async () => {
-    await applyAuthoritativeChange(async () => {
-      const result = await getMamRendererApi().importSkill()
-      return result ?? getMamRendererApi().getUiSnapshot()
-    })
-  }, [applyAuthoritativeChange])
+  const { deleteRoleProfile, deleteWorkflow } = useMamDeletionActions(applyAuthoritativeChange)
+  const { importSkill, importWorkflowPackage, exportWorkflowPackage } =
+    useMamPackageActions(applyAuthoritativeChange)
   const exportDiagnostics = useCallback(() => getMamRendererApi().exportDiagnostics(), [])
   const exportExecutionActivity = useCallback(getMamRendererApi().exportExecutionActivity, [])
   const getAttemptDiff = useCallback(async (input: MamGetAttemptDiffInput) => {
@@ -292,7 +282,10 @@ export function useMamSnapshot(): MamSnapshotState {
     saveModelConnection,
     fetchModelCatalog,
     deleteRoleProfile,
+    deleteWorkflow,
     importSkill,
+    importWorkflowPackage,
+    exportWorkflowPackage,
     exportDiagnostics,
     exportExecutionActivity,
     getAttemptDiff

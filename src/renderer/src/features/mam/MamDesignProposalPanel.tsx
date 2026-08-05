@@ -59,8 +59,6 @@ export function MamDesignProposalPanel({
           <ApplyProposalDialog
             proposal={proposal}
             revision={draft.workflowRevision}
-            {...(draft.brainstorm ? { brainstorm: draft.brainstorm } : {})}
-            {...(draft.review ? { review: draft.review } : {})}
             pending={pending}
             onApply={onApply}
           />
@@ -230,18 +228,26 @@ function ProposalState({
   }
   if (brainstorm && brainstorm.phase !== 'ready') {
     const labels = {
-      clarifying: 'Waiting for your answer',
-      comparing_approaches: 'Waiting for an approach',
-      reviewing_design: 'Waiting for section approval',
+      clarifying: 'Assistant has a question',
+      comparing_approaches: 'Assistant has approach suggestions',
+      reviewing_design: 'Assistant has design suggestions',
       ready: 'Brainstorming complete'
     } as const
     return <p className="mt-0.5 text-[11px] text-muted-foreground">{labels[brainstorm.phase]}</p>
   }
   if (review?.readiness === 'needs_clarification') {
-    return <p className="mt-0.5 text-[11px] text-muted-foreground">Waiting for your answers</p>
+    return (
+      <p className="mt-0.5 text-[11px] text-muted-foreground">
+        Assistant has questions · confirmation remains available
+      </p>
+    )
   }
   if (review?.readiness === 'needs_revision') {
-    return <p className="mt-0.5 text-[11px] text-muted-foreground">Workflow review is open</p>
+    return (
+      <p className="mt-0.5 text-[11px] text-muted-foreground">
+        Assistant has review notes · confirmation remains available
+      </p>
+    )
   }
   return (
     <p className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">
@@ -286,24 +292,17 @@ function ProposalIssues({
 function ApplyProposalDialog({
   proposal,
   revision,
-  brainstorm,
-  review,
   pending,
   onApply
 }: Readonly<{
   proposal: MamDesignProposal
   revision?: MamDesignDraft['workflowRevision']
-  brainstorm?: MamDesignDraft['brainstorm']
-  review?: MamDesignDraft['review']
   pending: boolean
   onApply(): Promise<void>
 }>): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [error, setError] = useState<string>()
-  const blocked =
-    proposal.issues.some((issue) => issue.severity === 'error') ||
-    Boolean(brainstorm && brainstorm.phase !== 'ready') ||
-    Boolean(review && review.readiness !== 'ready')
+  const blocked = proposal.issues.some((issue) => issue.severity === 'error')
   const apply = async (): Promise<void> => {
     setError(undefined)
     try {

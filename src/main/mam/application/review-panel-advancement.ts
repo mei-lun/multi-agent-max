@@ -16,9 +16,12 @@ export function advanceReadyReviewPanel(input: {
   const bundle = input.repository.loadRunBundle(input.workflowRunId)
   if (!bundle) throw new Error('run_bundle_missing')
   const projection = input.repository.rebuild(input.workflowRunId)
-  const subject = latestSubmittedReviewSubject(projection, input.sourceTaskId)
+  const source = latestReviewPanelSource(projection, input.sourceTaskId, input.sourceNodeId)
+  const sourceTaskId = source.taskId
+  const sourceNodeId = source.nodeId
+  const subject = latestSubmittedReviewSubject(projection, sourceTaskId)
   if (!subject) return false
-  const eligible = new Set(reachableReviewNodeIds(bundle, input.sourceNodeId))
+  const eligible = new Set(reachableReviewNodeIds(bundle, sourceNodeId))
   const run = projectWorkflowRun(bundle, projection, input.issuedAt)
   const reviewNodeId = run.nodeRuns.find(
     (nodeRun) =>
@@ -35,7 +38,7 @@ export function advanceReadyReviewPanel(input: {
     commandId: input.commandId,
     issuedAt: input.issuedAt,
     workflowRunId: input.workflowRunId,
-    taskId: input.sourceTaskId,
+    taskId: sourceTaskId,
     actor: { kind: 'scheduler', schedulerId: input.schedulerId },
     type: 'create_review_panel',
     reviewNodeId,
@@ -46,4 +49,16 @@ export function advanceReadyReviewPanel(input: {
     schedulerId: input.schedulerId
   })
   return true
+}
+
+export function latestReviewPanelSource(
+  projection: Pick<Parameters<typeof latestSubmittedReviewSubject>[0], 'reviewTasks'>,
+  sourceTaskId: string,
+  sourceNodeId: string
+): Readonly<{ taskId: string; nodeId: string }> {
+  const sourceReviewTask = projection.reviewTasks[sourceTaskId]
+  return {
+    taskId: sourceReviewTask?.subject.taskId ?? sourceTaskId,
+    nodeId: sourceReviewTask?.reviewNodeId ?? sourceNodeId
+  }
 }

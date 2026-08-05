@@ -1,7 +1,8 @@
-import { Bot, BrainCircuit, Database } from 'lucide-react'
+import { Bot, BrainCircuit, Database, Download, Upload } from 'lucide-react'
 import { useState } from 'react'
 import type { MamUiSnapshot } from '../../../../shared/mam/ui-projection'
 import { Badge } from '../../components/ui/badge'
+import { Button } from '../../components/ui/button'
 import type {
   MamDeleteRoleProfileInput,
   MamSaveProfileInput
@@ -16,12 +17,19 @@ export function MamRolesPage({
   snapshot,
   pending,
   onSaveProfile,
-  onDeleteRoleProfile
+  onDeleteRoleProfile,
+  onImportWorkflowPackage,
+  onExportWorkflowPackage
 }: Readonly<{
   snapshot: MamUiSnapshot
   pending: boolean
   onSaveProfile(input: MamSaveProfileInput): Promise<void>
   onDeleteRoleProfile(input: MamDeleteRoleProfileInput): Promise<void>
+  onImportWorkflowPackage?(): Promise<void>
+  onExportWorkflowPackage?(input: {
+    definitionId: string
+    definitionVersion: number
+  }): Promise<string | undefined>
 }>): React.JSX.Element {
   const [selectedWorkflowId, setSelectedWorkflowId] = useState<string>()
   const selectedWorkflow = snapshot.workflows.find((workflow) => workflow.id === selectedWorkflowId)
@@ -43,6 +51,31 @@ export function MamRolesPage({
             workflow={selectedWorkflow}
             onChange={setSelectedWorkflowId}
           />
+          {onImportWorkflowPackage && (
+            <Button
+              variant="outline"
+              size="xs"
+              disabled={pending}
+              onClick={() => void onImportWorkflowPackage()}
+            >
+              <Upload /> Import package
+            </Button>
+          )}
+          {onExportWorkflowPackage && selectedWorkflow && (
+            <Button
+              variant="outline"
+              size="xs"
+              disabled={pending}
+              onClick={() =>
+                void onExportWorkflowPackage({
+                  definitionId: selectedWorkflow.id,
+                  definitionVersion: selectedWorkflow.version
+                })
+              }
+            >
+              <Download /> Export package
+            </Button>
+          )}
           <MamProfileEditorDialog
             kind="role"
             template={mamProfileTemplate('role', snapshot)}

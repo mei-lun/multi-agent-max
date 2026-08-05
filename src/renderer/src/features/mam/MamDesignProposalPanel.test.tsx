@@ -88,7 +88,7 @@ describe('MamDesignProposalPanel', () => {
     expect(markup).toContain('Confirm new version')
   })
 
-  it('does not offer confirmation while the Design review needs user input', () => {
+  it('keeps confirmation available while the Design review has suggestions', () => {
     const markup = renderToStaticMarkup(
       <MamDesignProposalPanel
         draft={{
@@ -133,7 +133,7 @@ describe('MamDesignProposalPanel', () => {
       />
     )
 
-    expect(markup).toContain('Waiting for your answers')
-    expect(markup).toContain('disabled=""')
+    expect(markup).toContain('Assistant has questions · confirmation remains available')
+    expect(markup).not.toContain('disabled=""')
   })
 })

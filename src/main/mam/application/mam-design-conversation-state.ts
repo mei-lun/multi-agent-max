@@ -36,10 +36,6 @@ export function normalizeMamDesignReview(review: MamDesignReview): MamDesignRevi
   return { ...review, readiness: review.readiness === 'ready' ? 'ready' : 'needs_revision' }
 }
 
-export function isMamDesignReviewReady(review: MamDesignReview | undefined): boolean {
-  return !review || review.readiness === 'ready'
-}
-
 export function applyMamDesignBrainstormDecision(
   state: MamDesignBrainstormState | undefined,
   decision: MamDesignBrainstormDecision | undefined
@@ -97,10 +93,6 @@ export function mergeMamDesignBrainstorm(
   }
 }
 
-export function isMamDesignBrainstormReady(state: MamDesignBrainstormState | undefined): boolean {
-  return !state || state.phase === 'ready'
-}
-
 export function invalidateMamDesignBrainstorm(
   state: MamDesignBrainstormState | undefined
 ): MamDesignBrainstormState | undefined {
@@ -128,14 +120,9 @@ function brainstormPhase(input: {
   review: MamDesignReview
 }): MamDesignBrainstormState['phase'] {
   if (input.question) return 'clarifying'
-  if (input.approaches.length < 2 || !input.selectedApproachId) return 'comparing_approaches'
-  if (
-    input.sections.length < 3 ||
-    input.sections.some(({ id }) => !input.approvedSectionIds.includes(id)) ||
-    input.review.readiness !== 'ready'
-  ) {
-    return 'reviewing_design'
-  }
+  if (input.approaches.length < 2) return 'comparing_approaches'
+  if (input.sections.length === 0) return 'comparing_approaches'
+  if (input.sections.length < 3) return 'reviewing_design'
   return 'ready'
 }
 

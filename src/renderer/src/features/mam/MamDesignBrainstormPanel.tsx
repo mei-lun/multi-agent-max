@@ -26,9 +26,7 @@ export function MamDesignBrainstormPanel({
       {brainstorm.approaches.length > 0 && (
         <ApproachCards brainstorm={brainstorm} pending={pending} onDecision={onDecision} />
       )}
-      {brainstorm.sections.length > 0 && (
-        <DesignSections brainstorm={brainstorm} pending={pending} onDecision={onDecision} />
-      )}
+      {brainstorm.sections.length > 0 && <DesignSections brainstorm={brainstorm} />}
     </section>
   )
 }
@@ -163,18 +161,13 @@ function ApproachPoints({ label, points }: Readonly<{ label: string; points: rea
 }
 
 function DesignSections({
-  brainstorm,
-  pending,
-  onDecision
+  brainstorm
 }: Readonly<{
   brainstorm: MamDesignBrainstormState
-  pending: boolean
-  onDecision(message: string, decision: MamDesignBrainstormDecision): Promise<void>
 }>): React.JSX.Element {
   return (
     <div className="space-y-2">
       {brainstorm.sections.map((section) => {
-        const approved = brainstorm.approvedSectionIds.includes(section.id)
         return (
           <article key={section.id} className="rounded-md border border-border bg-background p-3">
             <div className="flex items-start gap-2">
@@ -186,28 +179,12 @@ function DesignSections({
                   {section.summary}
                 </p>
               </div>
-              {approved && <Badge variant="outline">Approved</Badge>}
             </div>
-            {!approved && (
-              <Button
-                className="mt-3"
-                size="xs"
-                disabled={pending}
-                onClick={() =>
-                  void onDecision(`I approve the “${section.title}” Design section.`, {
-                    type: 'approve_section',
-                    sectionId: section.id
-                  })
-                }
-              >
-                <Check /> Approve section
-              </Button>
-            )}
           </article>
         )
       })}
       <p className="text-muted-foreground">
-        Reply with requested changes instead of approving a section that needs revision.
+        Reply with requested changes when you want a different direction.
       </p>
     </div>
   )

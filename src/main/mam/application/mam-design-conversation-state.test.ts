@@ -38,7 +38,7 @@ describe('MAM Design brainstorming state', () => {
     })
   })
 
-  it('requires an explicit approach choice and preserves it across model turns', () => {
+  it('preserves an optional approach choice across model turns', () => {
     const comparison = mergeMamDesignBrainstorm(approachPresentation(), undefined, readyReview)
 
     expect(comparison.phase).toBe('comparing_approaches')
@@ -50,12 +50,12 @@ describe('MAM Design brainstorming state', () => {
     const next = mergeMamDesignBrainstorm(approachPresentation(), selected, readyReview)
 
     expect(next).toMatchObject({
-      phase: 'reviewing_design',
+      phase: 'comparing_approaches',
       selectedApproachId: 'balanced'
     })
   })
 
-  it('becomes ready only after every unchanged Design section is approved', () => {
+  it('keeps complete design suggestions ready without section approvals', () => {
     const comparison = mergeMamDesignBrainstorm(approachPresentation(), undefined, readyReview)
     const selected = applyMamDesignBrainstormDecision(comparison, {
       type: 'select_approach',
@@ -86,16 +86,16 @@ describe('MAM Design brainstorming state', () => {
     })!
     const ready = mergeMamDesignBrainstorm(sectionPresentation(), qualityApproved, readyReview)
 
-    expect(ready).toMatchObject({
+    expect(review).toMatchObject({
       phase: 'ready',
-      approvedSectionIds: ['ownership', 'flow', 'quality']
+      approvedSectionIds: []
     })
 
     const changed = sectionPresentation()
     changed.sections[0] = { ...changed.sections[0]!, summary: 'Changed ownership design.' }
     const invalidated = mergeMamDesignBrainstorm(changed, ready, readyReview)
 
-    expect(invalidated.phase).toBe('reviewing_design')
+    expect(invalidated.phase).toBe('ready')
     expect(invalidated.approvedSectionIds).toEqual(['flow', 'quality'])
   })
 

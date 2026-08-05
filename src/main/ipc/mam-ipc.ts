@@ -28,6 +28,9 @@ import {
   MAM_SAVE_MODEL_CONNECTION_CHANNEL,
   MAM_FETCH_MODEL_CATALOG_CHANNEL,
   MAM_DELETE_ROLE_PROFILE_CHANNEL,
+  MAM_DELETE_WORKFLOW_CHANNEL,
+  MAM_IMPORT_WORKFLOW_PACKAGE_CHANNEL,
+  MAM_EXPORT_WORKFLOW_PACKAGE_CHANNEL,
   MAM_SAVE_PROFILE_CHANNEL,
   MAM_SELECT_ATTEMPT_CHANNEL,
   MAM_SUBMIT_REVIEW_CHANNEL,
@@ -54,6 +57,8 @@ export function registerMamIpc(
   mergeQueue: MamMergeQueueExecutionService,
   selectProject: () => Promise<unknown>,
   importSkill: () => Promise<unknown>,
+  importWorkflowPackage: () => Promise<unknown>,
+  exportWorkflowPackage: (input: unknown) => Promise<unknown>,
   exportDiagnostics: () => Promise<unknown>,
   exportExecutionActivity: (input: unknown) => Promise<unknown>,
   runtimeLogger?: DesktopRuntimeLogger
@@ -200,6 +205,18 @@ export function registerMamIpc(
     assertTrustedRenderer(event, window)
     return commands.deleteRoleProfile(input)
   })
+  handle(MAM_DELETE_WORKFLOW_CHANNEL, (event, input: unknown) => {
+    assertTrustedRenderer(event, window)
+    return commands.deleteWorkflow(input)
+  })
+  handle(MAM_IMPORT_WORKFLOW_PACKAGE_CHANNEL, (event) => {
+    assertTrustedRenderer(event, window)
+    return importWorkflowPackage()
+  })
+  handle(MAM_EXPORT_WORKFLOW_PACKAGE_CHANNEL, (event, input: unknown) => {
+    assertTrustedRenderer(event, window)
+    return exportWorkflowPackage(input)
+  })
   handle(MAM_IMPORT_SKILL_CHANNEL, (event) => {
     assertTrustedRenderer(event, window)
     return importSkill()
@@ -243,6 +260,9 @@ export function registerMamIpc(
     ipcMain.removeHandler(MAM_SAVE_MODEL_CONNECTION_CHANNEL)
     ipcMain.removeHandler(MAM_FETCH_MODEL_CATALOG_CHANNEL)
     ipcMain.removeHandler(MAM_DELETE_ROLE_PROFILE_CHANNEL)
+    ipcMain.removeHandler(MAM_DELETE_WORKFLOW_CHANNEL)
+    ipcMain.removeHandler(MAM_IMPORT_WORKFLOW_PACKAGE_CHANNEL)
+    ipcMain.removeHandler(MAM_EXPORT_WORKFLOW_PACKAGE_CHANNEL)
     ipcMain.removeHandler(MAM_IMPORT_SKILL_CHANNEL)
     ipcMain.removeHandler(MAM_EXPORT_DIAGNOSTICS_CHANNEL)
     ipcMain.removeHandler(MAM_EXPORT_EXECUTION_ACTIVITY_CHANNEL)
