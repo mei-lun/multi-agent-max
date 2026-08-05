@@ -16,6 +16,8 @@ import {
 import { MamStateBadge } from './MamStateBadge'
 import { MamStartAttemptDialog } from './MamStartAttemptDialog'
 import { MamLocalRoleParticipation } from './MamLocalRoleParticipation'
+import { MamWorkflowRoleFilter } from './MamWorkflowRoleFilter'
+import { rolesForWorkflow } from './mam-workflow-role-filter'
 
 type AssignedTask = Readonly<{
   run: MamUiRunSnapshot
@@ -37,7 +39,7 @@ export function MamMyRolePage({
   onStartAttempt(input: MamStartAttemptInput): Promise<void>
   onSaveLocalSettings(input: MamSaveLocalSettingsInput): Promise<void>
 }>): React.JSX.Element {
-  const selectableRoles = [
+  const allSelectableRoles = [
     ...new Map(
       [...snapshot.runs.flatMap((run) => run.roleProfiles), ...snapshot.roles].map((role) => [
         role.id,
@@ -45,20 +47,27 @@ export function MamMyRolePage({
       ])
     ).values()
   ].sort((left, right) => left.displayName.localeCompare(right.displayName))
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState<string>()
+  const selectedWorkflow = snapshot.workflows.find((workflow) => workflow.id === selectedWorkflowId)
+  const selectableRoles = rolesForWorkflow(allSelectableRoles, selectedWorkflow)
+  const participatingRoles = rolesForWorkflow(snapshot.roles, selectedWorkflow)
+  const visibleRuns = selectedWorkflow
+    ? snapshot.runs.filter((run) => run.run.definitionId === selectedWorkflow.id)
+    : snapshot.runs
   const [selectedRoleId, setSelectedRoleId] = useState<string>()
   const activeRoleId = selectableRoles.some((role) => role.id === selectedRoleId)
     ? selectedRoleId
     : selectableRoles[0]?.id
   const activeRole = selectableRoles.find((role) => role.id === activeRoleId)
   const tasks: AssignedTask[] = activeRoleId
-    ? snapshot.runs.flatMap((run) =>
+    ? visibleRuns.flatMap((run) =>
         run.tasks
           .filter((task) => task.roleProfileId === activeRoleId)
           .map((task) => ({ run, task }))
       )
     : []
   const availableTasks: AvailableTask[] = activeRole
-    ? snapshot.runs.flatMap((run) => {
+    ? visibleRuns.flatMap((run) => {
         const roleEntry = run.run.roleCatalog.find((entry) => entry.roleProfileId === activeRole.id)
         if (!roleEntry) return []
         return run.tasks
@@ -82,24 +91,32 @@ export function MamMyRolePage({
             View Tasks fixed to the selected Role Profile by their Workflow.
           </p>
         </div>
-        {activeRoleId && (
-          <Select value={activeRoleId} onValueChange={setSelectedRoleId}>
-            <SelectTrigger aria-label="Current Role">
-              <SelectValue placeholder="Select a Role" />
-            </SelectTrigger>
-            <SelectContent>
-              {selectableRoles.map((role) => (
-                <SelectItem key={role.id} value={role.id}>
-                  {role.displayName}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <MamWorkflowRoleFilter
+            workflows={snapshot.workflows}
+            workflow={selectedWorkflow}
+            onChange={setSelectedWorkflowId}
+          />
+          {activeRoleId && (
+            <Select value={activeRoleId} onValueChange={setSelectedRoleId}>
+              <SelectTrigger aria-label="Current Role">
+                <SelectValue placeholder="Select a Role" />
+              </SelectTrigger>
+              <SelectContent>
+                {selectableRoles.map((role) => (
+                  <SelectItem key={role.id} value={role.id}>
+                    {role.displayName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
       </div>
 
       <MamLocalRoleParticipation
         snapshot={snapshot}
+        roles={participatingRoles}
         pending={pending}
         onSave={onSaveLocalSettings}
       />
@@ -109,7 +126,9 @@ export function MamMyRolePage({
           <UserRoundCheck className="mx-auto mb-3 size-7 text-muted-foreground" />
           <p className="text-sm font-medium">No Role is available</p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Create a Role Profile or start a Run with a frozen Role catalog.
+            {selectedWorkflow
+              ? 'Choose another Workflow or update its Role bindings.'
+              : 'Create a Role Profile or start a Run with a frozen Role catalog.'}
           </p>
         </div>
       ) : (

@@ -146,6 +146,14 @@ export const ZH_CN_PROFILE_MESSAGES: Readonly<Record<string, string>> = {
   Remove: '移除',
   'Versioned execution, resource, and budget profiles.':
     '配置角色的执行器、模型、资源白名单与运行限制。',
+  'Filter Roles by Workflow': '按工作流筛选角色',
+  'All Roles': '全部角色',
+  'No active Roles are bound to this Workflow': '当前工作流未绑定活动角色',
+  'No active Roles are bound to this Workflow.': '当前工作流未绑定活动角色。',
+  'Choose another Workflow or All Roles to change the list.':
+    '请选择其他工作流或“全部角色”以切换列表。',
+  'Choose another Workflow or update its Role bindings.':
+    '请选择其他工作流，或更新该工作流的角色绑定。',
   Skills: '技能',
   'Configure Skill content on the Resources page.': '请在“资源”页面配置技能内容。',
   'MCP servers': 'MCP 服务',

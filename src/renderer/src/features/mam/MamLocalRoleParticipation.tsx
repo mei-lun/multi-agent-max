@@ -7,10 +7,12 @@ import { MamProfileCheckbox } from './MamProfileFieldControls'
 
 export function MamLocalRoleParticipation({
   snapshot,
+  roles,
   pending,
   onSave
 }: Readonly<{
   snapshot: MamUiSnapshot
+  roles: readonly MamUiSnapshot['roles'][number][]
   pending: boolean
   onSave(input: MamSaveLocalSettingsInput): Promise<void>
 }>): React.JSX.Element {
@@ -49,13 +51,15 @@ export function MamLocalRoleParticipation({
           {error}
         </p>
       )}
-      {snapshot.roles.length === 0 ? (
+      {roles.length === 0 ? (
         <p className="rounded-lg border border-dashed border-border p-4 text-xs text-muted-foreground">
-          Create Role Profiles before configuring this machine.
+          {snapshot.roles.length === 0
+            ? 'Create Role Profiles before configuring this machine.'
+            : 'No active Roles are bound to this Workflow.'}
         </p>
       ) : (
         <div className="grid gap-2 sm:grid-cols-2">
-          {snapshot.roles.map((role) => (
+          {roles.map((role) => (
             <MamProfileCheckbox
               key={role.id}
               label={role.displayName}

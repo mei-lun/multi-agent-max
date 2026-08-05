@@ -1,4 +1,5 @@
 import { Bot, BrainCircuit, Database } from 'lucide-react'
+import { useState } from 'react'
 import type { MamUiSnapshot } from '../../../../shared/mam/ui-projection'
 import { Badge } from '../../components/ui/badge'
 import type {
@@ -7,7 +8,9 @@ import type {
 } from '../../../../shared/mam/application-command'
 import { MamDeleteRoleDialog } from './MamDeleteRoleDialog'
 import { MamProfileEditorDialog } from './MamProfileEditorDialog'
+import { MamWorkflowRoleFilter } from './MamWorkflowRoleFilter'
 import { mamProfileTemplate } from './mam-profile-templates'
+import { rolesForWorkflow } from './mam-workflow-role-filter'
 
 export function MamRolesPage({
   snapshot,
@@ -20,7 +23,9 @@ export function MamRolesPage({
   onSaveProfile(input: MamSaveProfileInput): Promise<void>
   onDeleteRoleProfile(input: MamDeleteRoleProfileInput): Promise<void>
 }>): React.JSX.Element {
-  const roles = snapshot.roles
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState<string>()
+  const selectedWorkflow = snapshot.workflows.find((workflow) => workflow.id === selectedWorkflowId)
+  const roles = rolesForWorkflow(snapshot.roles, selectedWorkflow)
   return (
     <section aria-labelledby="roles-title" className="mx-auto w-full max-w-5xl space-y-6 p-6">
       <div className="flex items-start justify-between gap-4">
@@ -32,17 +37,26 @@ export function MamRolesPage({
             Versioned execution, resource, and budget profiles.
           </p>
         </div>
-        <MamProfileEditorDialog
-          kind="role"
-          template={mamProfileTemplate('role', snapshot)}
-          snapshot={snapshot}
-          pending={pending}
-          onSave={onSaveProfile}
-        />
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <MamWorkflowRoleFilter
+            workflows={snapshot.workflows}
+            workflow={selectedWorkflow}
+            onChange={setSelectedWorkflowId}
+          />
+          <MamProfileEditorDialog
+            kind="role"
+            template={mamProfileTemplate('role', snapshot)}
+            snapshot={snapshot}
+            pending={pending}
+            onSave={onSaveProfile}
+          />
+        </div>
       </div>
 
-      {roles.length === 0 ? (
+      {snapshot.roles.length === 0 ? (
         <EmptyRoles />
+      ) : roles.length === 0 ? (
+        <EmptyWorkflowRoles />
       ) : (
         <div className="grid gap-3 lg:grid-cols-2">
           {roles.map((role) => (
@@ -126,6 +140,18 @@ function EmptyRoles(): React.JSX.Element {
       <p className="text-sm font-medium">No active Role Profiles</p>
       <p className="mt-1 text-xs text-muted-foreground">
         Active versioned profiles appear after they are registered by the Application layer.
+      </p>
+    </div>
+  )
+}
+
+function EmptyWorkflowRoles(): React.JSX.Element {
+  return (
+    <div className="rounded-xl border border-dashed border-border p-10 text-center">
+      <Bot className="mx-auto mb-3 size-7 text-muted-foreground" />
+      <p className="text-sm font-medium">No active Roles are bound to this Workflow</p>
+      <p className="mt-1 text-xs text-muted-foreground">
+        Choose another Workflow or All Roles to change the list.
       </p>
     </div>
   )
