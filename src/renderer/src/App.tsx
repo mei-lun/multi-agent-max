@@ -8,6 +8,7 @@ import {
   MessagesSquare,
   Network,
   PackageOpen,
+  RadioTower,
   RefreshCw,
   Settings,
   Sparkles,
@@ -33,6 +34,7 @@ import { MamReviewsPage } from './features/mam/MamReviewsPage'
 import { MamResourcesPage } from './features/mam/MamResourcesPage'
 import { MamRolesPage } from './features/mam/MamRolesPage'
 import { MamRunsPage } from './features/mam/MamRunsPage'
+import { MamLiveActivityPage } from './features/mam/MamLiveActivityPage'
 import { MamSettingsPage } from './features/mam/MamSettingsPage'
 import { MamWorkflowsPage } from './features/mam/MamWorkflowsPage'
 import { useMamSnapshot } from './features/mam/use-mam-snapshot'
@@ -46,6 +48,7 @@ type Page =
   | 'roles'
   | 'workflows'
   | 'runs'
+  | 'live-activity'
   | 'my-role'
   | 'reviews'
   | 'merge-queue'
@@ -148,6 +151,12 @@ export function App(): React.JSX.Element {
             }}
           />
           <NavigationButton
+            current={page === 'live-activity'}
+            icon={RadioTower}
+            label="Live Activity"
+            onClick={() => setPage('live-activity')}
+          />
+          <NavigationButton
             current={page === 'my-role'}
             icon={UserRoundCheck}
             label="My Role"
@@ -212,7 +221,6 @@ export function App(): React.JSX.Element {
                 pending={state.pending}
                 onChooseProject={() => void state.selectProject()}
                 onAssignTask={state.assignTask}
-                onReassignTask={state.reassignTask}
                 onRecoverAttempt={state.recoverAttempt}
                 onStartAttempt={state.startAttempt}
                 onExecuteNextMerge={state.executeNextMerge}
@@ -233,6 +241,7 @@ export function App(): React.JSX.Element {
                 onFetchModelCatalog={state.fetchModelCatalog}
                 onImportSkill={state.importSkill}
                 onExportDiagnostics={state.exportDiagnostics}
+                onExportExecutionActivity={state.exportExecutionActivity}
                 onOpenSettings={() => setPage('settings')}
                 onDesignApplied={() => {
                   void state.refresh()
@@ -283,7 +292,6 @@ function ActivePage({
   pending,
   onChooseProject,
   onAssignTask,
-  onReassignTask,
   onRecoverAttempt,
   onStartAttempt,
   onExecuteNextMerge,
@@ -304,6 +312,7 @@ function ActivePage({
   onFetchModelCatalog,
   onImportSkill,
   onExportDiagnostics,
+  onExportExecutionActivity,
   onOpenSettings,
   onDesignApplied,
   focusedRunId,
@@ -321,7 +330,6 @@ function ActivePage({
   pending: boolean
   onChooseProject(): void
   onAssignTask: ReturnType<typeof useMamSnapshot>['assignTask']
-  onReassignTask: ReturnType<typeof useMamSnapshot>['reassignTask']
   onRecoverAttempt: ReturnType<typeof useMamSnapshot>['recoverAttempt']
   onStartAttempt: ReturnType<typeof useMamSnapshot>['startAttempt']
   onExecuteNextMerge: ReturnType<typeof useMamSnapshot>['executeNextMerge']
@@ -342,6 +350,7 @@ function ActivePage({
   onFetchModelCatalog: ReturnType<typeof useMamSnapshot>['fetchModelCatalog']
   onImportSkill: ReturnType<typeof useMamSnapshot>['importSkill']
   onExportDiagnostics: ReturnType<typeof useMamSnapshot>['exportDiagnostics']
+  onExportExecutionActivity: ReturnType<typeof useMamSnapshot>['exportExecutionActivity']
   onOpenSettings(): void
   onDesignApplied(): void
   focusedRunId?: string
@@ -401,11 +410,18 @@ function ActivePage({
         collaborationErrors={collaborationErrors}
         onSaveLocalSettings={onSaveLocalSettings}
         onRecoverAttempt={onRecoverAttempt}
-        onReassignTask={onReassignTask}
         onSelectAttempt={onSelectAttempt}
         onGetAttemptDiff={onGetAttemptDiff}
         onResolveApprovalGate={onResolveApprovalGate}
         onOpenIntegration={onOpenIntegration}
+      />
+    )
+  }
+  if (page === 'live-activity') {
+    return (
+      <MamLiveActivityPage
+        snapshot={snapshot}
+        onExportExecutionActivity={onExportExecutionActivity}
       />
     )
   }
@@ -415,7 +431,6 @@ function ActivePage({
         snapshot={snapshot}
         pending={pending}
         onAssignTask={onAssignTask}
-        onReassignTask={onReassignTask}
         onStartAttempt={onStartAttempt}
         onSaveLocalSettings={onSaveLocalSettings}
       />

@@ -15,8 +15,8 @@ export const TaskPlanItemSchema = z
     dependencies: z.array(MamEntityIdSchema),
     inputArtifacts: z.array(ArtifactRefSchema),
     outputContracts: z.array(ArtifactContractSchema).min(1),
-    recommendedRoleProfileIds: z.array(MamEntityIdSchema),
-    allowedRoleProfileIds: z.array(MamEntityIdSchema).min(1)
+    recommendedRoleProfileIds: z.array(MamEntityIdSchema).length(1),
+    allowedRoleProfileIds: z.array(MamEntityIdSchema).length(1)
   })
   .strict()
 
@@ -51,8 +51,8 @@ export const DynamicTaskDefinitionSchema = z
     dependencies: z.array(MamEntityIdSchema),
     inputArtifacts: z.array(ArtifactRefSchema),
     outputContracts: z.array(ArtifactContractSchema).min(1),
-    recommendedRoleProfileIds: z.array(MamEntityIdSchema),
-    allowedRoleProfileIds: z.array(MamEntityIdSchema).min(1)
+    recommendedRoleProfileIds: z.array(MamEntityIdSchema).length(1),
+    allowedRoleProfileIds: z.array(MamEntityIdSchema).length(1)
   })
   .strict()
 

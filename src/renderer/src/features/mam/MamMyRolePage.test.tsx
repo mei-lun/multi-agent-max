@@ -61,14 +61,14 @@ describe('MamMyRolePage', () => {
     })
     run.tasks.push({
       id: 'task.correctable',
-      title: 'Correctable assignment',
+      title: 'Fixed role assignment',
       kind: 'static',
       status: 'ready',
       roleProfileId: 'role.builder',
       roleProfileVersion: 1,
       dependencies: [],
-      recommendedRoleProfileIds: ['role.reviewer'],
-      allowedRoleProfileIds: ['role.builder', 'role.reviewer'],
+      recommendedRoleProfileIds: ['role.builder'],
+      allowedRoleProfileIds: ['role.builder'],
       attemptIds: [],
       reviewIds: [],
       executionWarningCount: 0
@@ -88,8 +88,7 @@ describe('MamMyRolePage', () => {
     const markup = renderToStaticMarkup(
       <MamMyRolePage
         pending={false}
-        onAssignTask={() => undefined}
-        onReassignTask={async () => undefined}
+        onAssignTask={async () => undefined}
         onStartAttempt={async () => undefined}
         onSaveLocalSettings={async () => undefined}
         snapshot={{
@@ -119,14 +118,13 @@ describe('MamMyRolePage', () => {
       />
     )
     expect(markup).toContain('Assigned implementation')
-    expect(markup).toContain('Assigned by user.owner')
+    expect(markup).not.toContain('Assigned by')
     expect(markup).toContain('2 concurrent execution warnings')
-    expect(markup).toContain('Start Attempt')
+    expect(markup).toContain('Run Task')
     expect(markup).toContain('Available implementation')
-    expect(markup).toContain('Assign to Builder')
-    expect(markup).toContain('Recover every active Attempt before changing this Role.')
-    expect(markup).toContain('Correctable assignment')
-    expect(markup).toContain('Change Role')
+    expect(markup).toContain('Fixed role assignment')
+    expect(markup).not.toContain('Assign to Builder')
+    expect(markup).not.toContain('Change Role')
     expect(markup).not.toContain('Other role task')
   })
 })

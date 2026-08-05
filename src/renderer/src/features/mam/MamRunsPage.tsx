@@ -4,7 +4,6 @@ import type {
   MamAssignTaskInput,
   MamCancelWorkflowRunInput,
   MamRecoverAttemptInput,
-  MamReassignTaskInput,
   MamRestartWorkflowRunInput,
   MamSaveLocalSettingsInput,
   MamResolveApprovalGateInput,
@@ -39,7 +38,6 @@ export function MamRunsPage({
   focusedRunId,
   localSettings,
   pending,
-  onReassignTask,
   onAssignTask,
   onStartAttempt,
   onCancelWorkflowRun,
@@ -58,7 +56,6 @@ export function MamRunsPage({
   focusedRunId?: string
   localSettings: MamLocalSettings
   pending: boolean
-  onReassignTask(input: MamReassignTaskInput): Promise<void>
   onAssignTask(input: MamAssignTaskInput): Promise<void>
   onStartAttempt(input: MamStartAttemptInput): Promise<void>
   onCancelWorkflowRun(input: MamCancelWorkflowRunInput): Promise<void>
@@ -160,7 +157,6 @@ export function MamRunsPage({
                     ? { executionError: collaborationErrors.get(run.run.id)! }
                     : {})}
                   onSaveLocalSettings={onSaveLocalSettings}
-                  onReassignTask={onReassignTask}
                   onRecoverAttempt={onRecoverAttempt}
                   onSelectAttempt={onSelectAttempt}
                   onGetAttemptDiff={onGetAttemptDiff}

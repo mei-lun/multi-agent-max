@@ -1,4 +1,7 @@
-import type { MamDesignProposal } from '../../../shared/mam/design-assistant'
+import type {
+  MamDesignProposal,
+  MamDesignWorkflowRevision
+} from '../../../shared/mam/design-assistant'
 import type { ProfileCatalog } from '../profiles/profile-catalog'
 import { validateMamDesignProposal } from './mam-design-proposal-validation'
 
@@ -6,6 +9,7 @@ type StagedDefinition = Readonly<{
   id: string
   version: number
   registry: ProfileCatalog['roles'] | ProfileCatalog['workflows']
+  previousVersion?: number
 }>
 
 export class MamDesignProposalWriterError extends Error {
@@ -20,12 +24,14 @@ export class MamDesignProposalWriterError extends Error {
 
 export function writeMamDesignProposal(
   proposal: MamDesignProposal,
-  profiles: ProfileCatalog
+  profiles: ProfileCatalog,
+  workflowRevision?: MamDesignWorkflowRevision
 ): void {
   const issues = validateMamDesignProposal({
     roles: proposal.roles,
     workflow: proposal.workflow,
-    profiles
+    profiles,
+    ...(workflowRevision ? { workflowRevision } : {})
   })
   const errors = issues.filter((issue) => issue.severity === 'error')
   if (errors.length > 0) {
@@ -44,7 +50,8 @@ export function writeMamDesignProposal(
     staged.push({
       id: proposal.workflow.id,
       version: proposal.workflow.version,
-      registry: profiles.workflows
+      registry: profiles.workflows,
+      ...(workflowRevision ? { previousVersion: workflowRevision.baseVersion } : {})
     })
     for (const item of staged) item.registry.activate(item.id, item.version)
   } catch (cause) {
@@ -59,6 +66,7 @@ function rollback(staged: readonly StagedDefinition[]): void {
     try {
       item.registry.deactivate(item.id)
       item.registry.discardInactive(item.id, item.version)
+      if (item.previousVersion) item.registry.activate(item.id, item.previousVersion)
     } catch (cause) {
       failures.push(cause instanceof Error ? cause.message : String(cause))
     }

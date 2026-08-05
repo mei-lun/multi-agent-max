@@ -20,7 +20,7 @@ afterEach(() => {
 })
 
 describe('MAM UI command service with real Git state', () => {
-  it('persists user Assignment and Scheduler recovery before returning a rebuilt snapshot', () => {
+  it('persists the fixed Workflow Role and Scheduler recovery before returning a snapshot', () => {
     const project = createProject()
     const repository = GitStateRepository.attach(project)
     const coordinator = new GitCommandRetryCoordinator(repository)
@@ -78,20 +78,16 @@ describe('MAM UI command service with real Git state', () => {
       roleProfileId: 'role.builder',
       assignedByUserId: 'user.owner'
     })
-    const reassigned = service.reassignTask({
-      workflowRunId: bundle.run.id,
-      taskId,
-      previousRoleProfileId: 'role.builder',
-      previousRoleProfileVersion: 2,
-      roleProfileId: 'role.reviewer',
-      roleProfileVersion: 1
-    })
-    expect(reassigned.runs[0]?.tasks[0]).toMatchObject({
-      status: 'ready',
-      roleProfileId: 'role.reviewer',
-      roleProfileVersion: 1,
-      assignedByUserId: 'user.owner'
-    })
+    expect(() =>
+      service.reassignTask({
+        workflowRunId: bundle.run.id,
+        taskId,
+        previousRoleProfileId: 'role.builder',
+        previousRoleProfileVersion: 2,
+        roleProfileId: 'role.reviewer',
+        roleProfileVersion: 1
+      })
+    ).toThrow(expect.objectContaining({ code: 'workflow_role_binding_fixed' }))
 
     coordinator.executeAndPush({
       command: {
@@ -122,15 +118,7 @@ describe('MAM UI command service with real Git state', () => {
       ])
     )
     expect(recovered.runs[0]?.tasks[0]?.status).toBe('ready')
-    const corrected = service.reassignTask({
-      workflowRunId: bundle.run.id,
-      taskId,
-      previousRoleProfileId: 'role.reviewer',
-      previousRoleProfileVersion: 1,
-      roleProfileId: 'role.builder',
-      roleProfileVersion: 2
-    })
-    expect(corrected.runs[0]?.tasks[0]).toMatchObject({
+    expect(recovered.runs[0]?.tasks[0]).toMatchObject({
       status: 'ready',
       roleProfileId: 'role.builder',
       roleProfileVersion: 2,
@@ -198,7 +186,7 @@ function workflow(): WorkflowDefinition {
         id: 'build',
         type: 'role_task',
         recommendedRoleProfileIds: ['role.builder'],
-        allowedRoleProfileIds: ['role.builder', 'role.reviewer'],
+        allowedRoleProfileIds: ['role.builder'],
         instruction: 'Build the command fixture.',
         workspaceMode: 'write',
         inputs: [],

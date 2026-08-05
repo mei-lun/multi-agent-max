@@ -22,7 +22,7 @@ const subject: ReviewSubject = {
 }
 
 describe('Review panel Scheduler event flow', () => {
-  it('persists generated reviewer Tasks and exposes only manual Assignment candidates', () => {
+  it('persists reviewer Tasks bound to the fixed Workflow Role', () => {
     const bundle = reviewBundle()
     expect(bundle.taskCatalog).toEqual([])
     let projection = targetProjection(bundle.run.id)
@@ -39,7 +39,7 @@ describe('Review panel Scheduler event flow', () => {
       reviewNodeId: 'review',
       reviewTasks: [
         { allowedRoleProfileIds: ['role.reviewer-a'] },
-        { allowedRoleProfileIds: ['role.reviewer-b'] }
+        { allowedRoleProfileIds: ['role.reviewer-a'] }
       ]
     })
 
@@ -183,7 +183,7 @@ function reviewWorkflow(): WorkflowDefinition {
         id: 'review',
         type: 'review_gate',
         recommendedRoleProfileIds: ['role.reviewer-a'],
-        allowedRoleProfileIds: ['role.reviewer-a', 'role.reviewer-b'],
+        allowedRoleProfileIds: ['role.reviewer-a'],
         inputs: [{ artifactId: 'artifact.target', version: 1, contentHash: hash }],
         reportContract: {
           schemaVersion: '1.0.0',

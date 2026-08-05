@@ -21,8 +21,8 @@ const DesignArtifactSpecSchema = z
 
 const DesignRoleSelectionSchema = z
   .object({
-    recommendedRoleKeys: z.array(MamEntityIdSchema).default([]),
-    allowedRoleKeys: z.array(MamEntityIdSchema).min(1)
+    recommendedRoleKeys: z.array(MamEntityIdSchema).max(1).default([]),
+    allowedRoleKeys: z.array(MamEntityIdSchema).length(1)
   })
   .strict()
 
@@ -206,7 +206,7 @@ export const MamDesignRoleSpecSchema = z
 
 export const MamDesignProposalSpecSchema = z
   .object({
-    roles: z.array(MamDesignRoleSpecSchema).min(1).max(50),
+    roles: z.array(MamDesignRoleSpecSchema).max(50),
     workflow: z
       .object({
         key: MamEntityIdSchema,

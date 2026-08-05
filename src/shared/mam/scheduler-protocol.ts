@@ -23,6 +23,12 @@ import {
   createWorkflowRunLifecycleCommandSchemas,
   createWorkflowRunLifecycleEventSchemas
 } from './workflow-run-lifecycle-scheduler-protocol'
+import {
+  createNodeCompletionReuseCommandSchema,
+  createNodeCompletionReuseEventSchema,
+  createTaskResultReuseCommandSchema,
+  createTaskResultReuseEventSchema
+} from './task-result-reuse-scheduler-protocol'
 
 export const EMPTY_SCHEDULER_REVISION =
   '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945'
@@ -67,6 +73,8 @@ const AttemptRecoveryDirectiveSchema = z.discriminatedUnion('kind', [
 export const SchedulerCommandSchema = z.discriminatedUnion('type', [
   ...workflowRunLifecycleCommands,
   ...taskAssignmentCommands,
+  createTaskResultReuseCommandSchema(commandEnvelope),
+  createNodeCompletionReuseCommandSchema(commandEnvelope),
   z
     .object({
       ...taskCommandEnvelope,
@@ -192,6 +200,8 @@ function event<T extends string, S extends z.ZodRawShape>(type: T, fields: S) {
 export const SchedulerEventSchema = z.discriminatedUnion('type', [
   ...createWorkflowRunLifecycleEventSchemas(eventEnvelope),
   ...createTaskAssignmentEventSchemas(eventEnvelope),
+  createTaskResultReuseEventSchema(eventEnvelope),
+  createNodeCompletionReuseEventSchema(eventEnvelope),
   event('execution_announced', {
     taskId: MamEntityIdSchema,
     claimId: MamEntityIdSchema,

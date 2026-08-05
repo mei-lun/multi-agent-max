@@ -12,6 +12,7 @@ import { GitCommandRetryCoordinator } from '../state-store/git-command-retry-coo
 import type { MamUiQueryService } from './mam-ui-query-service'
 import { createWorkflowRunBundle, createWorkflowRunCommand } from './workflow-run-factory'
 import { advanceDeterministicNodes } from './deterministic-node-advancement'
+import { reuseCompatibleWorkflowProgress } from './workflow-run-result-reuse'
 
 type ReadableRegistry<T> = Readonly<{
   get(id: string, version: number): T | undefined
@@ -58,6 +59,7 @@ export class MamWorkflowRunCommandService {
     const parsed = MamCreateWorkflowRunInputSchema.parse(input)
     const bundle = this.prepareBundle(parsed)
     this.publishBundle(bundle)
+    this.reusePreviousProgress(bundle)
     return this.query.getSnapshot()
   }
 
@@ -84,6 +86,7 @@ export class MamWorkflowRunCommandService {
     })
     this.publishCancellation(parsed.workflowRunId)
     this.publishBundle(replacement)
+    this.reusePreviousProgress(replacement)
     return this.query.getSnapshot()
   }
 
@@ -135,6 +138,24 @@ export class MamWorkflowRunCommandService {
       }),
       schedulerId: this.schedulerId,
       runBundle: bundle
+    })
+    advanceDeterministicNodes({
+      repository,
+      workflowRunId: bundle.run.id,
+      schedulerId: this.schedulerId,
+      nextCommandId: () => this.createId('command'),
+      now: this.now
+    })
+  }
+
+  private reusePreviousProgress(bundle: ReturnType<typeof createWorkflowRunBundle>): void {
+    const repository = this.requireRepository()
+    reuseCompatibleWorkflowProgress({
+      repository,
+      target: bundle,
+      schedulerId: this.schedulerId,
+      nextCommandId: () => this.createId('command'),
+      now: this.now
     })
     advanceDeterministicNodes({
       repository,

@@ -74,7 +74,10 @@ export function passedNodeIds(
   bundle: WorkflowRunBundle,
   projection: WorkflowRunProjection
 ): Set<string> {
-  const passed = new Set(projectWorkflowRoute(bundle, projection).cancelledNodeIds)
+  const passed = new Set([
+    ...projectWorkflowRoute(bundle, projection).cancelledNodeIds,
+    ...Object.keys(projection.reusedNodeCompletions)
+  ])
   const taskByNode = new Map(bundle.taskCatalog.map((task) => [task.nodeId, task]))
   for (const [nodeId, task] of taskByNode) {
     const status = projection.tasks[task.id]?.status

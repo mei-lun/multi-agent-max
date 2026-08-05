@@ -22,8 +22,8 @@ export const MergeConflictTaskDefinitionSchema = z
     mergeBase: z.string().min(7),
     conflictingPaths: z.array(z.string().min(1)).min(1),
     validationCommands: z.array(z.string().min(1)),
-    recommendedRoleProfileIds: z.array(MamEntityIdSchema),
-    allowedRoleProfileIds: z.array(MamEntityIdSchema),
+    recommendedRoleProfileIds: z.array(MamEntityIdSchema).length(1),
+    allowedRoleProfileIds: z.array(MamEntityIdSchema).length(1),
     initialStatus: z.literal('waiting_role_assignment'),
     createdAt: IsoTimestampSchema
   })

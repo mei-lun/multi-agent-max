@@ -1,8 +1,7 @@
 import { AlertTriangle, UserRoundCheck } from 'lucide-react'
 import { useState } from 'react'
-import type { MamAssignTaskInput } from '../../../../shared/mam/application-command'
-import type { MamReassignTaskInput } from '../../../../shared/mam/application-command'
 import type {
+  MamAssignTaskInput,
   MamSaveLocalSettingsInput,
   MamStartAttemptInput
 } from '../../../../shared/mam/application-command'
@@ -14,10 +13,8 @@ import {
   SelectTrigger,
   SelectValue
 } from '../../components/ui/select'
-import { Button } from '../../components/ui/button'
 import { MamStateBadge } from './MamStateBadge'
 import { MamStartAttemptDialog } from './MamStartAttemptDialog'
-import { MamTaskRoleDialog } from './MamTaskRoleDialog'
 import { MamLocalRoleParticipation } from './MamLocalRoleParticipation'
 
 type AssignedTask = Readonly<{
@@ -31,14 +28,12 @@ export function MamMyRolePage({
   snapshot,
   pending,
   onAssignTask,
-  onReassignTask,
   onStartAttempt,
   onSaveLocalSettings
 }: Readonly<{
   snapshot: MamUiSnapshot
   pending: boolean
-  onAssignTask(input: MamAssignTaskInput): void
-  onReassignTask(input: MamReassignTaskInput): Promise<void>
+  onAssignTask(input: MamAssignTaskInput): Promise<void>
   onStartAttempt(input: MamStartAttemptInput): Promise<void>
   onSaveLocalSettings(input: MamSaveLocalSettingsInput): Promise<void>
 }>): React.JSX.Element {
@@ -70,8 +65,8 @@ export function MamMyRolePage({
           .filter(
             (task) =>
               task.status === 'waiting_role_assignment' &&
-              (task.allowedRoleProfileIds.length === 0 ||
-                task.allowedRoleProfileIds.includes(activeRole.id))
+              task.allowedRoleProfileIds.length === 1 &&
+              task.allowedRoleProfileIds[0] === activeRole.id
           )
           .map((task) => ({ run, task, roleProfileVersion: roleEntry.roleProfileVersion }))
       })
@@ -84,7 +79,7 @@ export function MamMyRolePage({
             My Role
           </h1>
           <p className="text-sm text-muted-foreground">
-            View Tasks manually assigned to the selected Role Profile.
+            View Tasks fixed to the selected Role Profile by their Workflow.
           </p>
         </div>
         {activeRoleId && (
@@ -124,18 +119,18 @@ export function MamMyRolePage({
               <h2 className="text-sm font-semibold">{activeRole.displayName}</h2>
               <p className="mt-0.5 font-mono text-xs text-muted-foreground">{activeRole.id}</p>
             </div>
-            <span className="text-xs text-muted-foreground">{tasks.length} assigned</span>
+            <span className="text-xs text-muted-foreground">{tasks.length} Workflow Tasks</span>
           </div>
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <h3 className="text-xs font-medium text-muted-foreground">Assigned Tasks</h3>
+              <h3 className="text-xs font-medium text-muted-foreground">Workflow Tasks</h3>
               <span className="text-xs text-muted-foreground">{tasks.length}</span>
             </div>
             {tasks.length === 0 ? (
               <div className="rounded-xl border border-dashed border-border p-8 text-center">
-                <p className="text-sm font-medium">No Tasks assigned to this Role</p>
+                <p className="text-sm font-medium">No Workflow Tasks for this Role</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Tasks appear only after a user assignment is persisted in Git state.
+                  Tasks appear when a Workflow node is fixed to this Role.
                 </p>
               </div>
             ) : (
@@ -156,7 +151,6 @@ export function MamMyRolePage({
                     </div>
                     <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                       <span>{task.attemptIds.length} Attempts</span>
-                      {task.assignedByUserId && <span>Assigned by {task.assignedByUserId}</span>}
                       {task.executionWarningCount > 0 && (
                         <span className="flex items-center gap-1 text-destructive">
                           <AlertTriangle className="size-3.5" /> {task.executionWarningCount}{' '}
@@ -165,12 +159,6 @@ export function MamMyRolePage({
                       )}
                     </div>
                     <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
-                      <MamTaskRoleDialog
-                        run={run}
-                        task={task}
-                        pending={pending}
-                        onReassignTask={onReassignTask}
-                      />
                       {(task.status === 'ready' ||
                         task.status === 'changes_requested' ||
                         task.status === 'running') && (
@@ -196,12 +184,12 @@ export function MamMyRolePage({
 
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <h3 className="text-xs font-medium text-muted-foreground">Available Tasks</h3>
+              <h3 className="text-xs font-medium text-muted-foreground">Ready Tasks</h3>
               <span className="text-xs text-muted-foreground">{availableTasks.length}</span>
             </div>
             {availableTasks.length === 0 ? (
               <p className="rounded-xl border border-dashed border-border p-6 text-center text-xs text-muted-foreground">
-                No unassigned Tasks accept this Role version.
+                No waiting Tasks are fixed to this Role version.
               </p>
             ) : (
               <div className="overflow-hidden rounded-xl border border-border bg-card">
@@ -216,20 +204,20 @@ export function MamMyRolePage({
                         {run.definitionName} · <span className="font-mono">{task.id}</span>
                       </p>
                     </div>
-                    <Button
-                      size="sm"
-                      disabled={pending}
-                      onClick={() =>
-                        onAssignTask({
+                    <MamStartAttemptDialog
+                      input={{ workflowRunId: run.run.id, taskId: task.id }}
+                      activeAttemptIds={[]}
+                      pending={pending}
+                      onStart={async (input) => {
+                        await onAssignTask({
                           workflowRunId: run.run.id,
                           taskId: task.id,
                           roleProfileId: activeRole.id,
                           roleProfileVersion
                         })
-                      }
-                    >
-                      Assign to {activeRole.displayName}
-                    </Button>
+                        await onStartAttempt(input)
+                      }}
+                    />
                   </article>
                 ))}
               </div>

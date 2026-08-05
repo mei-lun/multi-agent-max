@@ -215,7 +215,7 @@ function readRendererState(window: BrowserWindow): Promise<SmokeState> {
       'saveLocalSettings', 'saveModelConnection', 'fetchModelCatalog', 'deleteRoleProfile',
       'getDesignDraft', 'selectDesignModel', 'sendDesignMessage', 'cancelDesignMessage',
       'resetDesignDraft', 'updateDesignProposal', 'applyDesignProposal',
-      'importSkill', 'exportDiagnostics']
+      'importSkill', 'exportDiagnostics', 'exportExecutionActivity']
       .every((name) => typeof window.mam?.[name] === 'function'),
     language: document.documentElement.lang,
     title: document.title,

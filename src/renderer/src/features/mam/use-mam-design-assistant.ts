@@ -16,7 +16,7 @@ export type MamDesignAssistantState = Readonly<{
   selectModel(modelProfileId: string): Promise<void>
   sendMessage(message: string, modelProfileId: string): Promise<void>
   cancelMessage(): Promise<void>
-  reset(modelProfileId?: string): Promise<void>
+  reset(modelProfileId?: string, workflowId?: string): Promise<void>
   createTemplate(modelProfileId: string): Promise<void>
   retryGeneration(): Promise<void>
   updateProposal(input: MamDesignUpdateProposalInput): Promise<void>
@@ -111,11 +111,19 @@ export function useMamDesignAssistant(onApplied: () => void): MamDesignAssistant
     if (id) await getMamRendererApi().cancelDesignMessage({ requestId: id })
   }, [])
   const reset = useCallback(
-    async (modelProfileId?: string) => {
+    async (modelProfileId?: string, workflowId?: string) => {
       setError(undefined)
-      acceptDraft(
-        await getMamRendererApi().resetDesignDraft(modelProfileId ? { modelProfileId } : {})
-      )
+      try {
+        acceptDraft(
+          await getMamRendererApi().resetDesignDraft({
+            ...(modelProfileId ? { modelProfileId } : {}),
+            ...(workflowId ? { workflowId } : {})
+          })
+        )
+      } catch (cause) {
+        if (mounted.current) setError(errorMessage(cause))
+        throw cause
+      }
     },
     [acceptDraft]
   )

@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -16,7 +16,7 @@ afterEach(() => {
 })
 
 describe('IntegrationWorktreeMergeExecutor with Git', () => {
-  it('updates local target refs without a remote', () => {
+  it('updates the checked-out local target branch, index, and files without a remote', () => {
     const fixture = repositoryFixture(false)
     const result = new IntegrationWorktreeMergeExecutor().execute({
       repositoryPath: fixture.repository,
@@ -29,6 +29,25 @@ describe('IntegrationWorktreeMergeExecutor with Git', () => {
     expect(result).toMatchObject({ status: 'merged', targetCommitBefore: fixture.targetCommit })
     if (result.status !== 'merged') throw new Error(JSON.stringify(result))
     expect(git(fixture.repository, ['rev-parse', 'refs/heads/develop'])).toBe(result.mergeCommit)
+    expect(git(fixture.repository, ['status', '--porcelain'])).toBe('')
+    expect(existsSync(join(fixture.repository, 'feature.txt'))).toBe(true)
+  })
+
+  it('does not publish over changes in a checked-out local target branch', () => {
+    const fixture = repositoryFixture(false)
+    writeFileSync(join(fixture.repository, 'local.txt'), 'uncommitted\n')
+
+    const result = new IntegrationWorktreeMergeExecutor().execute({
+      repositoryPath: fixture.repository,
+      integrationRoot: join(fixture.root, 'integration-dirty-target'),
+      remoteName: undefined,
+      entry: queueEntry(fixture.sourceCommit, 'tasks/feature'),
+      validationCommands: []
+    })
+
+    expect(result).toMatchObject({ status: 'failed', stage: 'preflight' })
+    expect(git(fixture.repository, ['rev-parse', 'refs/heads/develop'])).toBe(fixture.targetCommit)
+    expect(existsSync(join(fixture.repository, 'local.txt'))).toBe(true)
   })
 
   it('creates a missing local develop branch from main before integration', () => {

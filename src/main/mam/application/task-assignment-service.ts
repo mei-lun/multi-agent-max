@@ -55,10 +55,10 @@ export function assignTask(
     throw new TaskAssignmentError('assignment_task_mismatch', 'assignment targets another task')
   }
   if (
-    task.allowedRoleProfileIds.length > 0 &&
-    !task.allowedRoleProfileIds.includes(assignment.roleProfileId)
+    task.allowedRoleProfileIds.length !== 1 ||
+    task.allowedRoleProfileIds[0] !== assignment.roleProfileId
   ) {
-    throw new TaskAssignmentError('role_not_allowed', 'role is outside the task allowlist')
+    throw new TaskAssignmentError('role_not_allowed', 'role does not match the Workflow node')
   }
   const catalogEntry = roleCatalog.find(
     (entry) =>

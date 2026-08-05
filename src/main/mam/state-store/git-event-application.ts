@@ -19,6 +19,10 @@ import {
   updateProjectedTask as updateTask
 } from './task-attempt-event-state'
 import { applyTaskAssignmentEvent } from './task-assignment-event-application'
+import {
+  applyNodeCompletionReuse,
+  applyTaskResultReuse
+} from './workflow-progress-reuse-event-application'
 
 export function applyEvent(
   projection: WorkflowRunProjection,
@@ -39,6 +43,7 @@ export function applyEvent(
   const gates = { ...projection.resolvedApprovalGates }
   const conditions = { ...projection.resolvedConditions }
   const systemNodes = { ...projection.systemNodeExecutions }
+  const reusedNodeCompletions = { ...projection.reusedNodeCompletions }
   const conflictResolutions = { ...projection.conflictResolutions }
   switch (event.type) {
     case 'workflow_run_created':
@@ -67,6 +72,14 @@ export function applyEvent(
     case 'task_reassigned':
       applyTaskAssignmentEvent({ event, tasks })
       break
+    case 'task_result_reused': {
+      applyTaskResultReuse({ event, tasks, attempts })
+      break
+    }
+    case 'node_completion_reused': {
+      applyNodeCompletionReuse({ event, completions: reusedNodeCompletions })
+      break
+    }
     case 'execution_announced': {
       const task = requireTask(tasks, event.taskId)
       const { reviewPanelId: _reviewPanelId, ...taskWithoutReviewPanel } = task
@@ -269,6 +282,7 @@ export function applyEvent(
     resolvedApprovalGates: gates,
     resolvedConditions: conditions,
     systemNodeExecutions: systemNodes,
+    reusedNodeCompletions,
     conflictResolutions
   }
 }

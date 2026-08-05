@@ -82,6 +82,8 @@ export const ZH_CN_WORKFLOW_MESSAGES: Readonly<Record<string, string>> = {
   'Create merge commit': '创建合并提交',
   'Fast-forward only': '仅快进',
   'Post-merge validations': '合并后验证',
+  'Optional executable commands only, one per line. Review criteria and confirmation text do not belong here.':
+    '仅填写可选的可执行命令，每行一条；审核标准和确认文案不应填写在这里。',
   'Queue order is fixed to merge-ready time. Conflicts create a coordinator Attempt.':
     '队列顺序按可合并时间固定；发生冲突时会创建协调者尝试。',
   'One command per line. Commands run in order after integration.':
@@ -120,6 +122,19 @@ export const ZH_CN_WORKFLOW_MESSAGES: Readonly<Record<string, string>> = {
   'Remove Artifact reference': '移除产物引用',
   'Remove Artifact contract': '移除产物契约',
   'No Role is available': '没有可用角色',
+  'View Tasks fixed to the selected Role Profile by their Workflow.':
+    '查看工作流固定给所选角色配置的任务。',
+  'Workflow Tasks': '工作流任务',
+  'No Workflow Tasks for this Role': '没有固定给此角色的工作流任务',
+  'Tasks appear when a Workflow node is fixed to this Role.':
+    '当工作流节点固定为此角色时，任务会显示在这里。',
+  'Ready Tasks': '可运行任务',
+  'No waiting Tasks are fixed to this Role version.': '没有固定给此角色版本的待运行任务。',
+  'Fixed Role unavailable': '固定角色不可用',
+  'Node Role': '节点角色',
+  'This Role is fixed by the Workflow and cannot be changed while a Run is executing.':
+    '此角色由工作流固定，运行期间不可更改。',
+  'Select the fixed Role': '选择固定角色',
   'No Tasks assigned to this Role': '没有分配给此角色的任务',
   'concurrent execution warnings': '并发执行警告',
   'No unassigned Tasks accept this Role version.': '没有可分配给此角色版本的未分配任务。',

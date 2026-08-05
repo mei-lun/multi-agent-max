@@ -13,32 +13,27 @@ const subject = {
 }
 
 describe('Review fan-out service', () => {
-  it('creates deterministic unassigned reviewer Tasks from the frozen Run roles', () => {
+  it('creates deterministic review slots for the fixed Workflow Role', () => {
     const bundle = reviewBundle(2)
     const first = createReviewTasks({ bundle, reviewNodeId: 'review', subject })
     const second = createReviewTasks({ bundle, reviewNodeId: 'review', subject })
 
     expect(second).toEqual(first)
-    expect(first).toHaveLength(3)
+    expect(first).toHaveLength(2)
     expect(first.map((task) => task.allowedRoleProfileIds)).toEqual([
       ['role.reviewer-a'],
-      ['role.reviewer-b'],
-      ['role.reviewer-c']
+      ['role.reviewer-a']
     ])
     expect(first.map((task) => task.recommendedRoleProfileIds)).toEqual([
       ['role.reviewer-a'],
-      ['role.reviewer-b'],
-      []
+      ['role.reviewer-a']
     ])
     expect(first.every((task) => task.initialStatus === 'waiting_role_assignment')).toBe(true)
     expect(first.every((task) => !('assignment' in task))).toBe(true)
-    expect(first.map((task) => task.subject)).toEqual([subject, subject, subject])
+    expect(first.map((task) => task.subject)).toEqual([subject, subject])
   })
 
-  it('rejects unreachable quorum, duplicate role slots and roles outside the Run catalog', () => {
-    expect(() =>
-      createReviewTasks({ bundle: reviewBundle(4), reviewNodeId: 'review', subject })
-    ).toThrow(expect.objectContaining({ code: 'review_quorum_unreachable' }))
+  it('rejects a fixed Review Role outside the Run catalog', () => {
     const duplicate = reviewBundle(2)
     const duplicateNode = duplicate.definition.nodes.find((node) => node.id === 'review')!
     if (duplicateNode.type !== 'review_gate') throw new Error('expected review_gate')
@@ -52,26 +47,8 @@ describe('Review fan-out service', () => {
               ...duplicate.definition.nodes.filter((node) => node.id !== 'review'),
               {
                 ...duplicateNode,
-                allowedRoleProfileIds: ['role.reviewer-a', 'role.reviewer-a']
-              }
-            ]
-          }
-        },
-        reviewNodeId: 'review',
-        subject
-      })
-    ).toThrow(expect.objectContaining({ code: 'duplicate_review_role' }))
-    expect(() =>
-      createReviewTasks({
-        bundle: {
-          ...duplicate,
-          definition: {
-            ...duplicate.definition,
-            nodes: [
-              ...duplicate.definition.nodes.filter((node) => node.id !== 'review'),
-              {
-                ...duplicateNode,
-                allowedRoleProfileIds: ['role.reviewer-a', 'role.foreign']
+                recommendedRoleProfileIds: ['role.foreign'],
+                allowedRoleProfileIds: ['role.foreign']
               }
             ]
           }
@@ -122,8 +99,8 @@ function reviewWorkflow(minimumDecisions: number): WorkflowDefinition {
       {
         id: 'review',
         type: 'review_gate',
-        recommendedRoleProfileIds: ['role.reviewer-a', 'role.reviewer-b'],
-        allowedRoleProfileIds: ['role.reviewer-a', 'role.reviewer-b', 'role.reviewer-c'],
+        recommendedRoleProfileIds: ['role.reviewer-a'],
+        allowedRoleProfileIds: ['role.reviewer-a'],
         inputs: [reviewedArtifact],
         reportContract: {
           schemaVersion: '1.0.0',

@@ -1,7 +1,6 @@
 import type {
   MamAssignTaskInput,
   MamRecoverAttemptInput,
-  MamReassignTaskInput,
   MamSelectAttemptInput,
   MamStartAttemptInput
 } from '../../../../shared/mam/application-command'
@@ -11,11 +10,9 @@ import type {
 } from '../../../../shared/mam/attempt-inspection'
 import type { MamUiRunSnapshot } from '../../../../shared/mam/ui-projection'
 import { Badge } from '../../components/ui/badge'
-import { MamAssignTaskDialog } from './MamAssignTaskDialog'
 import { MamStartAttemptDialog } from './MamStartAttemptDialog'
 import { MamTaskAttemptLineage } from './MamTaskAttemptLineage'
 import { MamTaskContractList } from './MamAttemptPanel'
-import { MamTaskRoleDialog } from './MamTaskRoleDialog'
 import { frozenRoleName } from './mam-task-role-candidates'
 
 type Task = MamUiRunSnapshot['tasks'][number]
@@ -28,7 +25,6 @@ export function MamRunTaskDetails({
   pending,
   onAssignTask,
   onStartAttempt,
-  onReassignTask,
   onRecoverAttempt,
   onSelectAttempt,
   onGetAttemptDiff
@@ -39,7 +35,6 @@ export function MamRunTaskDetails({
   pending: boolean
   onAssignTask(input: MamAssignTaskInput): Promise<void>
   onStartAttempt(input: MamStartAttemptInput): Promise<void>
-  onReassignTask(input: MamReassignTaskInput): Promise<void>
   onRecoverAttempt(input: MamRecoverAttemptInput): Promise<void>
   onSelectAttempt(input: MamSelectAttemptInput): Promise<void>
   onGetAttemptDiff(input: MamGetAttemptDiffInput): Promise<MamAttemptDiff>
@@ -58,7 +53,6 @@ export function MamRunTaskDetails({
         pending={pending}
         onAssignTask={onAssignTask}
         onStartAttempt={onStartAttempt}
-        onReassignTask={onReassignTask}
       />
       <MamTaskAttemptLineage
         attempts={attempts}
@@ -73,6 +67,11 @@ export function MamRunTaskDetails({
         <summary className="cursor-pointer w-fit hover:text-foreground">Technical details</summary>
         <div className="mt-2 space-y-3 rounded-lg border border-border bg-card p-3">
           <p className="break-all font-mono">Task ID: {task.id}</p>
+          {task.reusedFrom && (
+            <p className="break-all font-mono">
+              Reused from: {task.reusedFrom.workflowRunId} · {task.reusedFrom.taskId}
+            </p>
+          )}
           <div className="grid gap-3 sm:grid-cols-2">
             <MamTaskContractList
               label="Inputs"
@@ -97,9 +96,10 @@ function TaskSummary({ run, task }: Readonly<{ run: MamUiRunSnapshot; task: Task
   const dependencies = task.dependencies.map(
     (dependency) => run.tasks.find((candidate) => candidate.id === dependency)?.title ?? dependency
   )
-  if (task.kind === 'static' && dependencies.length === 0) return <></>
+  if (task.kind === 'static' && dependencies.length === 0 && !task.reusedFrom) return <></>
   return (
     <div className="flex flex-wrap gap-2 text-xs">
+      {task.reusedFrom && <Badge variant="secondary">Reused verified result</Badge>}
       {task.kind !== 'static' && task.kind !== 'unknown' && (
         <Badge variant="outline">{taskKindLabel(task.kind)}</Badge>
       )}
@@ -118,8 +118,7 @@ function TaskAction({
   activeAttemptIds,
   pending,
   onAssignTask,
-  onStartAttempt,
-  onReassignTask
+  onStartAttempt
 }: Readonly<{
   run: MamUiRunSnapshot
   task: Task
@@ -127,22 +126,42 @@ function TaskAction({
   pending: boolean
   onAssignTask(input: MamAssignTaskInput): Promise<void>
   onStartAttempt(input: MamStartAttemptInput): Promise<void>
-  onReassignTask(input: MamReassignTaskInput): Promise<void>
 }>) {
   if (run.run.status === 'cancelled') {
     return <p className="text-xs text-muted-foreground">This Run has ended.</p>
   }
   if (run.run.status === 'completed') return <></>
   if (!task.roleProfileId || !task.roleProfileVersion) {
+    const roleId = task.allowedRoleProfileIds[0]
+    const roleEntry = run.run.roleCatalog.find((entry) => entry.roleProfileId === roleId)
+    if (!roleId || !roleEntry) {
+      return <p className="text-xs text-destructive">The fixed Workflow Role is unavailable.</p>
+    }
+    const roleName = frozenRoleName(run, roleId, roleEntry.roleProfileVersion)
     return (
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card p-3">
         <div>
-          <p className="text-sm font-medium">Assign a Role to continue</p>
+          <p className="text-sm font-medium">Workflow Role: {roleName}</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            This Task cannot start until you choose an allowed Role.
+            This Role was fixed when the Workflow was designed.
           </p>
         </div>
-        <MamAssignTaskDialog run={run} task={task} pending={pending} onAssign={onAssignTask} />
+        {task.status === 'waiting_role_assignment' && (
+          <MamStartAttemptDialog
+            input={{ workflowRunId: run.run.id, taskId: task.id }}
+            activeAttemptIds={activeAttemptIds}
+            pending={pending}
+            onStart={async (input) => {
+              await onAssignTask({
+                workflowRunId: run.run.id,
+                taskId: task.id,
+                roleProfileId: roleId,
+                roleProfileVersion: roleEntry.roleProfileVersion
+              })
+              await onStartAttempt(input)
+            }}
+          />
+        )}
       </div>
     )
   }
@@ -150,16 +169,10 @@ function TaskAction({
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card p-3 text-xs">
       <span className="text-muted-foreground">
-        Assigned to {frozenRoleName(run, task.roleProfileId, task.roleProfileVersion)} · v
+        Workflow Role: {frozenRoleName(run, task.roleProfileId, task.roleProfileVersion)} · v
         {task.roleProfileVersion}
       </span>
       <div className="flex flex-wrap gap-2">
-        <MamTaskRoleDialog
-          run={run}
-          task={task}
-          pending={pending}
-          onReassignTask={onReassignTask}
-        />
         {canStart && activeAttemptIds.length === 0 && (
           <MamStartAttemptDialog
             input={{ workflowRunId: run.run.id, taskId: task.id }}

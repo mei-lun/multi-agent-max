@@ -1,7 +1,18 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { basename, dirname, extname, join, resolve } from 'node:path'
-import { MamDesignDraftSchema, type MamDesignDraft } from '../../../shared/mam/design-assistant'
+import {
+  MamDesignDraftSchema,
+  type MamDesignDraft,
+  type MamDesignProposal,
+  type MamDesignWorkflowRevision
+} from '../../../shared/mam/design-assistant'
+
+type MamDesignDraftResetOptions = Readonly<{
+  modelProfileId?: string
+  workflowRevision?: MamDesignWorkflowRevision
+  proposal?: MamDesignProposal
+}>
 
 export class MamDesignDraftStore {
   private readonly path: string
@@ -39,13 +50,16 @@ export class MamDesignDraftStore {
     return structuredClone(draft)
   }
 
-  reset(modelProfileId?: string): MamDesignDraft {
+  reset(input?: string | MamDesignDraftResetOptions): MamDesignDraft {
+    const options = typeof input === 'string' ? { modelProfileId: input } : (input ?? {})
     const timestamp = this.now()
     return this.save({
       schemaVersion: '1.0.0',
       id: `design.${randomUUID().replaceAll('-', '')}`,
-      ...(modelProfileId ? { selectedModelProfileId: modelProfileId } : {}),
+      ...(options.modelProfileId ? { selectedModelProfileId: options.modelProfileId } : {}),
+      ...(options.workflowRevision ? { workflowRevision: options.workflowRevision } : {}),
       messages: [],
+      ...(options.proposal ? { proposal: options.proposal } : {}),
       status: 'draft',
       createdAt: timestamp,
       updatedAt: timestamp

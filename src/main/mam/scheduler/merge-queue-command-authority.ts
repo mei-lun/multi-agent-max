@@ -58,7 +58,7 @@ export function assertMergeReadyAuthority(
   context: SchedulerKernelContext
 ): void {
   assertScheduler(command, context.schedulerId)
-  if (task.status !== 'approved') {
+  if (task.status !== 'approved' && task.status !== 'completed') {
     reject('review_required', 'Merge readiness requires an approved Task revision')
   }
   if (

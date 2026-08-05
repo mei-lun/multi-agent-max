@@ -35,6 +35,13 @@ export class MamMergeQueueExecutionService {
   executeNext(input: unknown): MamUiSnapshot {
     const request = MamExecuteNextMergeInputSchema.parse(input)
     const repository = this.requireRepository()
+    publishMergeReadinessForApprovedTasks({
+      repository,
+      workflowRunId: request.workflowRunId,
+      schedulerId: this.schedulerId,
+      nextCommandId: this.createId,
+      now: this.now
+    })
     const projection = repository.rebuild(request.workflowRunId)
     const entry = MergeQueue.create(Object.values(projection.mergeQueueEntries))
       .list()

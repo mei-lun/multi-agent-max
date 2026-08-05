@@ -35,7 +35,8 @@ function hasReleasePath(workflow: WorkflowDefinition, sourceNodeId: string): boo
     if (!node) continue
     const stage = releaseStage(node, current.stage)
     if (node.type === 'finish' && stage === 4) return true
-    for (const successor of successors.get(node.id) ?? []) pending.push({ nodeId: successor, stage })
+    for (const successor of successors.get(node.id) ?? [])
+      pending.push({ nodeId: successor, stage })
   }
   return false
 }

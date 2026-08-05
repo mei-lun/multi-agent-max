@@ -2,7 +2,8 @@ import type { RoleProfile } from '../../../shared/mam/domain/role'
 import type { WorkflowDefinition } from '../../../shared/mam/domain/workflow'
 import type {
   MamDesignProposal,
-  MamDesignValidationIssue
+  MamDesignValidationIssue,
+  MamDesignWorkflowRevision
 } from '../../../shared/mam/design-assistant'
 import type { MamDesignProposalSpec } from '../../../shared/mam/design-proposal'
 import type { ProfileCatalog } from '../profiles/profile-catalog'
@@ -13,6 +14,8 @@ import {
   supportedDesignProviderProtocols
 } from './mam-design-execution-bindings'
 import { validateMamDesignDelivery } from './mam-design-delivery-validation'
+import { validateMamDesignWorkflowIdentity } from './mam-design-workflow-identity-validation'
+import { validateMamDesignMergeCommands } from './mam-design-merge-validation'
 
 export function createMamDesignProposal(input: {
   roles: readonly RoleProfile[]
@@ -20,6 +23,7 @@ export function createMamDesignProposal(input: {
   profiles: ProfileCatalog
   now: () => string
   source?: MamDesignProposalSpec
+  workflowRevision?: MamDesignWorkflowRevision
 }): MamDesignProposal {
   const roles = input.roles.map((role) => structuredClone(role))
   const workflow = structuredClone(input.workflow)
@@ -27,7 +31,12 @@ export function createMamDesignProposal(input: {
     hash: profileContentHash({ roles, workflow }),
     roles,
     workflow,
-    issues: validateMamDesignProposal({ roles, workflow, profiles: input.profiles }),
+    issues: validateMamDesignProposal({
+      roles,
+      workflow,
+      profiles: input.profiles,
+      ...(input.workflowRevision ? { workflowRevision: input.workflowRevision } : {})
+    }),
     ...(input.source ? { source: structuredClone(input.source) } : {}),
     createdAt: input.now()
   }
@@ -37,6 +46,7 @@ export function validateMamDesignProposal(input: {
   roles: readonly RoleProfile[]
   workflow: WorkflowDefinition
   profiles: ProfileCatalog
+  workflowRevision?: MamDesignWorkflowRevision
 }): MamDesignValidationIssue[] {
   const issues: MamDesignValidationIssue[] = []
   const roleIds = new Set<string>()
@@ -56,16 +66,14 @@ export function validateMamDesignProposal(input: {
     }
     validateRole(role, index, input.profiles, issues)
   }
-  if (input.profiles.workflows.listVersions(input.workflow.id).length > 0) {
-    add(
-      issues,
-      'workflow_id_exists',
-      'error',
-      `Workflow ID already exists: ${input.workflow.id}`,
-      'workflow.id'
-    )
-  }
-  validateWorkflowRoleReferences(input.workflow, roleIds, issues)
+  issues.push(...validateMamDesignWorkflowIdentity(input))
+  validateWorkflowRoleReferences(
+    input.workflow,
+    roleIds,
+    input.workflowRevision ? input.profiles : undefined,
+    issues
+  )
+  issues.push(...validateMamDesignMergeCommands(input.workflow))
   issues.push(...validateMamDesignDelivery(input.workflow))
   try {
     compileWorkflow(input.workflow)
@@ -263,17 +271,18 @@ function validateDuplicateResourceBindings(
 function validateWorkflowRoleReferences(
   workflow: WorkflowDefinition,
   generatedRoleIds: ReadonlySet<string>,
+  profiles: ProfileCatalog | undefined,
   issues: MamDesignValidationIssue[]
 ): void {
   for (const node of workflow.nodes) {
     if (!('allowedRoleProfileIds' in node)) continue
     for (const id of [...node.allowedRoleProfileIds, ...node.recommendedRoleProfileIds]) {
-      if (!generatedRoleIds.has(id)) {
+      if (!generatedRoleIds.has(id) && !profiles?.roles.getActive(id)) {
         add(
           issues,
-          'workflow_role_not_generated',
+          'workflow_role_not_available',
           'error',
-          `Workflow node ${node.id} references a Role outside this proposal: ${id}`,
+          `Workflow node ${node.id} references a Role unavailable to this proposal: ${id}`,
           `workflow.nodes.${node.id}`
         )
       }

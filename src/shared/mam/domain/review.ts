@@ -176,8 +176,8 @@ export const ReviewTaskDefinitionSchema = z
     specification: z.string().min(1).max(20_000),
     inputArtifacts: z.array(ArtifactRefSchema),
     outputContracts: z.array(ArtifactContractSchema).min(1),
-    recommendedRoleProfileIds: z.array(MamEntityIdSchema),
-    allowedRoleProfileIds: z.array(MamEntityIdSchema).min(1)
+    recommendedRoleProfileIds: z.array(MamEntityIdSchema).length(1),
+    allowedRoleProfileIds: z.array(MamEntityIdSchema).length(1)
   })
   .strict()
 

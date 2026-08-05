@@ -20,6 +20,7 @@ import type {
   MamExecuteNextMergeInput
 } from './application-command'
 import type { MamFetchModelCatalogInput, MamModelCatalogResult } from './model-catalog'
+import type { MamExportExecutionActivityInput } from './execution-activity-export'
 import type {
   MamDesignApplyProposalInput,
   MamDesignCancelInput,
@@ -56,6 +57,7 @@ export const MAM_FETCH_MODEL_CATALOG_CHANNEL = 'mam:fetch-model-catalog'
 export const MAM_DELETE_ROLE_PROFILE_CHANNEL = 'mam:delete-role-profile'
 export const MAM_IMPORT_SKILL_CHANNEL = 'mam:import-skill'
 export const MAM_EXPORT_DIAGNOSTICS_CHANNEL = 'mam:export-diagnostics'
+export const MAM_EXPORT_EXECUTION_ACTIVITY_CHANNEL = 'mam:export-execution-activity'
 export const MAM_GET_DESIGN_DRAFT_CHANNEL = 'mam:get-design-draft'
 export const MAM_SELECT_DESIGN_MODEL_CHANNEL = 'mam:select-design-model'
 export const MAM_SEND_DESIGN_MESSAGE_CHANNEL = 'mam:send-design-message'
@@ -90,6 +92,7 @@ export type MamRendererApi = Readonly<{
   deleteRoleProfile(input: MamDeleteRoleProfileInput): Promise<MamUiSnapshot>
   importSkill(): Promise<MamUiSnapshot | undefined>
   exportDiagnostics(): Promise<string | undefined>
+  exportExecutionActivity(input: MamExportExecutionActivityInput): Promise<string | undefined>
   getDesignDraft(): Promise<MamDesignDraft>
   selectDesignModel(input: MamDesignSelectModelInput): Promise<MamDesignDraft>
   sendDesignMessage(input: MamDesignSendMessageInput): Promise<MamDesignDraft>

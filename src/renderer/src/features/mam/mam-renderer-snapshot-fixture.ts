@@ -25,6 +25,7 @@ export function mamUiRunFixture(): MamUiRunSnapshot {
     readyTaskIds: [],
     tasks: [],
     attempts: [],
+    activities: [],
     reviews: [],
     reviewAggregations: [],
     reviewDisagreementResolutions: [],

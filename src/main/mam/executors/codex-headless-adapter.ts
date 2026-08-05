@@ -19,6 +19,7 @@ import {
 import { ExecutorLocalPreflight } from './executor-local-preflight'
 import { parseCodexJsonl } from './codex-jsonl-parser'
 import { runCodexProcess, type CodexProcessRunner } from './codex-process-runner'
+import { emitObservedExecutorEvent, type ExecutorEventListener } from './executor-event-listener'
 
 export type CodexHeadlessExecutionResult = Readonly<{
   invocation: CodexHeadlessInvocation
@@ -55,6 +56,7 @@ export class CodexHeadlessAdapter {
     prompt: string
     credentialValues: Readonly<Record<string, string>>
     authority: AttemptResultAuthority
+    onEvent?: ExecutorEventListener
   }): Promise<CodexHeadlessExecutionResult> {
     const preflight = this.preflight.check(input.profile, input.binding)
     if (!preflight.ok) {
@@ -79,7 +81,8 @@ export class CodexHeadlessAdapter {
     })
     const process = await this.processRunner(
       invocation,
-      input.snapshot.budget.maxDurationSeconds * 1000
+      input.snapshot.budget.maxDurationSeconds * 1000,
+      (line) => emitParsedLine(line, input.executorInvocationId, this.now(), input.onEvent)
     )
     const parsed = parseCodexJsonl({
       source: process.stdout,
@@ -115,6 +118,16 @@ export class CodexHeadlessAdapter {
       stderr: process.stderr
     }
   }
+}
+
+function emitParsedLine(
+  line: string,
+  executorInvocationId: string,
+  timestamp: string,
+  listener: ExecutorEventListener | undefined
+): void {
+  const parsed = parseCodexJsonl({ source: line, executorInvocationId, timestamp })
+  for (const event of parsed.events) emitObservedExecutorEvent(listener, event)
 }
 
 async function readStructuredResult(path: string, usage: ExecutorUsage) {

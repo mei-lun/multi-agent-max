@@ -101,6 +101,10 @@ describe('Merge Queue service', () => {
       bundle,
       projection: {
         ...projection,
+        tasks: {
+          ...projection.tasks,
+          'task.a': { ...projection.tasks['task.a']!, status: 'completed' }
+        },
         mergeQueueEntries: { [mergedDevelop.id]: mergedDevelop }
       },
       mergeNodeId: 'promote',
@@ -115,6 +119,28 @@ describe('Merge Queue service', () => {
       sourceBranch: 'develop',
       submittedCommit: 'abcdef1'
     })
+  })
+
+  it('does not treat an unpromoted completed Task as newly approved', () => {
+    const bundle = mergeBundle()
+    const projection = mergeProjection(['task.a'])
+    expect(() =>
+      createMergeQueueEntry({
+        bundle,
+        projection: {
+          ...projection,
+          tasks: {
+            ...projection.tasks,
+            'task.a': { ...projection.tasks['task.a']!, status: 'completed' }
+          }
+        },
+        mergeNodeId: 'merge',
+        taskId: 'task.a',
+        sourceBranch: 'tasks/task.a',
+        mergeReadyAt: '2026-07-28T18:03:00Z',
+        validationEvidence: { 'pnpm test': hash }
+      })
+    ).toThrow(expect.objectContaining({ code: 'merge_review_required' }))
   })
 })
 

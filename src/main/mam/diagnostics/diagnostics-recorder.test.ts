@@ -14,7 +14,8 @@ describe('DiagnosticsRecorder', () => {
       payload: {
         authorization: 'Bearer secret-token',
         nested: { apiKey: 'secret-key' },
-        message: 'token=secret-token'
+        message: 'token=secret-token',
+        output: 'received mam-canary-secret-provider and sk-testvalue123'
       }
     })
     expect(recorder.list()[0]).toMatchObject({
@@ -22,7 +23,8 @@ describe('DiagnosticsRecorder', () => {
       payload: {
         authorization: '[REDACTED]',
         nested: { apiKey: '[REDACTED]' },
-        message: 'token=[REDACTED]'
+        message: 'token=[REDACTED]',
+        output: 'received [REDACTED] and [REDACTED]'
       }
     })
   })

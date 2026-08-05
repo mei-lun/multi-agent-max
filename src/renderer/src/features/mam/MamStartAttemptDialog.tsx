@@ -40,15 +40,15 @@ export function MamStartAttemptDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button size="sm" disabled={pending}>
-          <Play /> Start Attempt
+          <Play /> Run Task
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Start local Attempt</DialogTitle>
+          <DialogTitle>Run this Task?</DialogTitle>
           <DialogDescription>
-            Preflight the assigned Role, freeze its Effective Config, and create an isolated task
-            branch and worktree.
+            Preflight the fixed Workflow Role, freeze its Effective Config, and create an isolated
+            task branch and worktree.
           </DialogDescription>
         </DialogHeader>
         {activeAttemptIds.length > 0 ? (
@@ -73,12 +73,12 @@ export function MamStartAttemptDialog({
           </Button>
           <Button disabled={pending} aria-busy={pending} onClick={() => void start()}>
             {pending ? <Loader2 className="animate-spin" /> : <Play />}
-            {pending ? 'Starting Attempt…' : 'Start Attempt'}
+            {pending ? 'Starting Task…' : 'Run Task'}
           </Button>
         </DialogFooter>
         {pending && (
           <p className="text-xs text-muted-foreground" role="status" aria-live="polite">
-            Preparing the Attempt and worktree…
+            Preparing the Task and worktree…
           </p>
         )}
         {error && (

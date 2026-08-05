@@ -24,6 +24,8 @@ import { MamDesignRecoveryCard } from './MamDesignRecoveryCard'
 import { MamWorkflowEditor } from './MamWorkflowEditor'
 import { useMamDesignAssistant } from './use-mam-design-assistant'
 
+const NEW_WORKFLOW_TARGET = '__new_workflow__'
+
 export function MamDesignPage({
   snapshot,
   onApplied,
@@ -44,7 +46,7 @@ export function MamDesignPage({
     return (
       <MamWorkflowEditor
         workflow={proposal.workflow}
-        roles={proposal.roles}
+        roles={[...snapshot.roles, ...proposal.roles]}
         pending={false}
         saveLabel="Save draft"
         versionLabel="unconfirmed draft"
@@ -119,6 +121,15 @@ export function MamDesignPage({
             ))}
           </SelectContent>
         </Select>
+        <DesignTargetSelect
+          workflows={snapshot.workflows}
+          value={draft.workflowRevision?.workflowId ?? NEW_WORKFLOW_TARGET}
+          disabled={pending}
+          hasContent={draft.messages.length > 0 || Boolean(draft.proposal)}
+          onSelect={(workflowId) =>
+            design.reset(activeModelId, workflowId === NEW_WORKFLOW_TARGET ? undefined : workflowId)
+          }
+        />
         <NewDesignDialog
           disabled={pending}
           hasContent={draft.messages.length > 0 || Boolean(draft.proposal)}
@@ -146,6 +157,79 @@ export function MamDesignPage({
         />
       </div>
     </section>
+  )
+}
+
+function DesignTargetSelect({
+  workflows,
+  value,
+  disabled,
+  hasContent,
+  onSelect
+}: Readonly<{
+  workflows: MamUiSnapshot['workflows']
+  value: string
+  disabled: boolean
+  hasContent: boolean
+  onSelect(workflowId: string): Promise<void>
+}>): React.JSX.Element {
+  const [pendingValue, setPendingValue] = useState<string>()
+  const select = (workflowId: string): void => {
+    if (workflowId === value) return
+    if (hasContent) setPendingValue(workflowId)
+    else void onSelect(workflowId).catch(() => undefined)
+  }
+  const target = workflows.find((workflow) => workflow.id === pendingValue)
+  return (
+    <>
+      <Select value={value} disabled={disabled} onValueChange={select}>
+        <SelectTrigger className="w-64" aria-label="Design target">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent align="end">
+          <SelectItem value={NEW_WORKFLOW_TARGET}>New Workflow</SelectItem>
+          {workflows.map((workflow) => (
+            <SelectItem key={workflow.id} value={workflow.id}>
+              {workflow.name} · v{workflow.version}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Dialog
+        open={Boolean(pendingValue)}
+        onOpenChange={(open) => !open && setPendingValue(undefined)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Start a different Design?</DialogTitle>
+            <DialogDescription>
+              The current local conversation and unconfirmed proposal will be removed. Created
+              definitions are not affected.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPendingValue(undefined)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={async () => {
+                const next = pendingValue
+                if (!next) return
+                try {
+                  await onSelect(next)
+                } catch {
+                  // The Design conversation surfaces the persistent error.
+                } finally {
+                  setPendingValue(undefined)
+                }
+              }}
+            >
+              {target ? `Optimize ${target.name}` : 'Start new Workflow'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
 

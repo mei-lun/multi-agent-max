@@ -13,15 +13,19 @@ import type {
   MergeConflictResolution,
   MergeConflictTaskDefinition
 } from '../../../shared/mam/domain/merge-conflict-task'
-import { EMPTY_SCHEDULER_REVISION } from '../../../shared/mam/scheduler-protocol'
 import type {
   SchedulerKernelContext,
   SchedulerTaskContext
 } from '../scheduler/scheduler-command-authority'
-import { withProjectionHash } from './git-state-stable-hash'
 import type { ConditionProjection } from './condition-projection'
 import type { SystemNodeExecutionProjection } from './system-node-execution-projection'
 import { projectTaskAttemptCommandContext } from './task-attempt-command-context'
+import type {
+  ReusedNodeCompletions,
+  ReusedTaskResultSource
+} from './workflow-progress-reuse-projection'
+
+export { emptyWorkflowRunProjection } from './empty-workflow-run-projection'
 
 export type ProjectedTaskStatus = SchedulerTaskContext['status']
 
@@ -43,6 +47,7 @@ export type TaskProjection = Readonly<{
   mergeReadyAt?: string
   dynamicTaskPlanHash?: string
   reviewPanelId?: string
+  reusedFrom?: ReusedTaskResultSource
   lastEventId: string
 }>
 
@@ -62,6 +67,7 @@ export type AttemptProjection = Readonly<{
   effectiveConfigSnapshotId?: string
   effectiveConfigHash?: string
   result?: AttemptResult
+  reusedFrom?: ReusedTaskResultSource
   lastEventId: string
 }>
 
@@ -135,6 +141,7 @@ export type WorkflowRunProjection = Readonly<{
   >
   resolvedConditions: Readonly<Record<string, ConditionProjection>>
   systemNodeExecutions: SystemNodeExecutionProjection
+  reusedNodeCompletions: ReusedNodeCompletions
   conflictResolutions: Readonly<
     Record<
       string,
@@ -147,34 +154,6 @@ export type WorkflowRunProjection = Readonly<{
   >
   lastEventAt: string
 }>
-
-export function emptyWorkflowRunProjection(workflowRunId: string): WorkflowRunProjection {
-  return withProjectionHash({
-    schemaVersion: '1.0.0',
-    workflowRunId,
-    revision: EMPTY_SCHEDULER_REVISION,
-    stateHash: '',
-    eventIds: [],
-    commandIds: [],
-    tasks: {},
-    attempts: {},
-    dynamicTaskPlans: {},
-    dynamicTasks: {},
-    reviews: {},
-    reviewAggregations: {},
-    reviewPanels: {},
-    reviewTasks: {},
-    reviewValidity: {},
-    mergeQueueEntries: {},
-    mergeConflictTasks: {},
-    mergeConflictResolutions: {},
-    resolvedApprovalGates: {},
-    resolvedConditions: {},
-    systemNodeExecutions: {},
-    conflictResolutions: {},
-    lastEventAt: '1970-01-01T00:00:00.000Z'
-  })
-}
 
 export function schedulerContextFromProjection(
   projection: WorkflowRunProjection,

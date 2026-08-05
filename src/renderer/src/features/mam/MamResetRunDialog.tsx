@@ -57,15 +57,15 @@ export function MamResetRunDialog({
     >
       <DialogTrigger asChild>
         <Button variant="outline" size="xs" disabled={pending}>
-          <RotateCcw /> Clear or restart
+          <RotateCcw /> Clean or continue
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Clear this active Run?</DialogTitle>
+          <DialogTitle>Clean up this active Run?</DialogTitle>
           <DialogDescription>
-            The Run will leave current work and move to Cancelled history. Git events and completed
-            Attempt evidence remain immutable.
+            The Run moves to Cancelled history. Git events, commits, Artifacts and completed Attempt
+            evidence remain available for reuse.
           </DialogDescription>
         </DialogHeader>
         {activeAttempts.length > 0 && (
@@ -76,10 +76,11 @@ export function MamResetRunDialog({
           </div>
         )}
         <div className="space-y-1 rounded-lg border border-border bg-muted/30 p-3 text-xs">
-          <p className="font-medium">Start over</p>
+          <p className="font-medium">Restart without repeating completed work</p>
           <p className="text-muted-foreground">
-            “Clear and restart” creates a fresh Run from the same Workflow version and external
-            inputs, using currently active Role versions.
+            “Clean and continue” creates a fresh Run from the same Workflow version and inputs.
+            Verified results whose Git commits are still available are imported automatically; only
+            unfinished or unsafe Tasks run again.
           </p>
         </div>
         {error && (
@@ -106,7 +107,7 @@ export function MamResetRunDialog({
             onClick={() => void submit('restart')}
           >
             {submitting === 'restart' ? <Loader2 className="animate-spin" /> : <RotateCcw />}
-            Clear and restart
+            Clean and continue
           </Button>
         </DialogFooter>
       </DialogContent>

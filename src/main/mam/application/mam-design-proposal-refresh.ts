@@ -20,7 +20,8 @@ export function refreshMamDesignProposal(input: {
     workflow: current.workflow,
     profiles: input.profiles,
     now: () => current.createdAt,
-    ...(current.source ? { source: current.source } : {})
+    ...(current.source ? { source: current.source } : {}),
+    ...(input.draft.workflowRevision ? { workflowRevision: input.draft.workflowRevision } : {})
   })
   const recovery = hasBlockingDesignIssues(proposal.issues)
     ? (input.draft.recovery ?? invalidProposalRecovery(proposal.issues, input.now()))

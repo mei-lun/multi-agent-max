@@ -22,6 +22,8 @@ import { MamUiCommandService } from './mam-ui-command-service'
 import { profileContentHash } from '../profiles/profile-content-hash'
 import type { EffectiveRoleConfigSnapshot } from '../../../shared/mam/domain/role'
 import { MamMergeQueueExecutionService } from './mam-merge-queue-execution-service'
+import { createWorkflowRunBundle, createWorkflowRunCommand } from './workflow-run-factory'
+import { reuseCompatibleWorkflowProgress } from './workflow-run-result-reuse'
 
 const fixtures: ReturnType<typeof createAttemptExecutionAcceptanceFixture>[] = []
 
@@ -60,7 +62,9 @@ describe('MAM Attempt execution with real Git state', () => {
   })
 
   it('preflights, freezes config, runs in a task worktree, validates Artifact, and submits', async () => {
-    const fixture = createAttemptExecutionAcceptanceFixture()
+    const fixture = createAttemptExecutionAcceptanceFixture({
+      mergeValidations: ['确认独立审核结论允许集成']
+    })
     fixtures.push(fixture)
     let notifyCompletion!: () => void
     const completed = new Promise<void>((resolve) => {
@@ -211,6 +215,56 @@ describe('MAM Attempt execution with real Git state', () => {
     expect(Object.values(replacement.reviewPanels)).toHaveLength(2)
   })
 
+  it('reuses approved Review evidence across repeated clean restarts', async () => {
+    const fixture = createAttemptExecutionAcceptanceFixture()
+    fixtures.push(fixture)
+    const ids = sequentialIds()
+    const completed = completionSignal()
+    await executionService(fixture, ids, completed.resolve).start({
+      workflowRunId: fixture.bundle.run.id,
+      taskId: fixture.taskId
+    })
+    await completed.promise
+    const source = fixture.repository.rebuild(fixture.bundle.run.id)
+    const sourceAttemptId = source.tasks[fixture.taskId]!.knownAttemptIds.at(-1)!
+    submitReviewDecision(fixture, sourceAttemptId, 'approved', ids)
+
+    for (const [index, runId] of ['run.reuse.second', 'run.reuse.third'].entries()) {
+      const bundle = createWorkflowRunBundle({
+        runId,
+        definition: fixture.bundle.definition,
+        roleCatalog: fixture.bundle.run.roleCatalog,
+        roleProfiles: fixture.bundle.roleProfiles!,
+        createdAt: `2026-07-28T23:1${String(index)}:00Z`
+      })
+      new GitCommandRetryCoordinator(fixture.repository).executeAndPush({
+        command: createWorkflowRunCommand({
+          bundle,
+          commandId: `command.create.${runId}`,
+          schedulerId: 'scheduler.desktop',
+          issuedAt: bundle.createdAt
+        }),
+        schedulerId: 'scheduler.desktop',
+        runBundle: bundle
+      })
+      reuseCompatibleWorkflowProgress({
+        repository: fixture.repository,
+        target: bundle,
+        schedulerId: 'scheduler.desktop',
+        nextCommandId: sequentialCommandIds(runId),
+        now: () => bundle.createdAt
+      })
+
+      const reused = fixture.repository.rebuild(runId)
+      expect(reused.tasks[bundle.taskCatalog[0]!.id]).toMatchObject({ status: 'approved' })
+      expect(reused.reusedNodeCompletions.review).toMatchObject({
+        sourceWorkflowRunId: fixture.bundle.run.id,
+        sourceEvidenceId: expect.any(String)
+      })
+      expect(Object.values(reused.reviewPanels)).toEqual([])
+    }
+  })
+
   it('records an interrupted Executor, confirms reconciliation, and consumes the planned Attempt', async () => {
     const fixture = createAttemptExecutionAcceptanceFixture()
     fixtures.push(fixture)
@@ -252,15 +306,6 @@ describe('MAM Attempt execution with real Git state', () => {
     const plannedAttempt = recovered.runs[0]!.attempts.find(
       (attempt) => attempt.status === 'recovery_planned'
     )!
-    commands.reassignTask({
-      workflowRunId: fixture.bundle.run.id,
-      taskId: fixture.taskId,
-      previousRoleProfileId: 'role.builder',
-      previousRoleProfileVersion: 1,
-      roleProfileId: fixture.reviewerRole.id,
-      roleProfileVersion: fixture.reviewerRole.version
-    })
-
     const completed = completionSignal()
     const replacementStarted = await executionService(fixture, ids, completed.resolve).start({
       workflowRunId: fixture.bundle.run.id,
@@ -281,8 +326,8 @@ describe('MAM Attempt execution with real Git state', () => {
       status: 'submitted'
     })
     expect(replacement.tasks[fixture.taskId]).toMatchObject({
-      roleProfileId: fixture.reviewerRole.id,
-      roleProfileVersion: fixture.reviewerRole.version
+      roleProfileId: 'role.builder',
+      roleProfileVersion: 1
     })
   })
 

@@ -11,7 +11,7 @@ import {
 } from './mam-local-collaboration-plan'
 
 describe('local collaboration plan', () => {
-  it('assigns an unassigned Task to a participating recommended Role', () => {
+  it('activates an unstarted Task with its participating fixed Workflow Role', () => {
     const run = mamUiRunFixture()
     run.run.roleCatalog = [
       { roleProfileId: 'role.design', roleProfileVersion: 2, contentHash: 'a'.repeat(64) }
@@ -40,7 +40,7 @@ describe('local collaboration plan', () => {
     })
   })
 
-  it('starts a ready Task assigned to a participating Role', () => {
+  it('starts a ready Task fixed to a participating Role', () => {
     const run = mamUiRunFixture()
     run.tasks.push({
       id: 'task.implement',
@@ -50,7 +50,7 @@ describe('local collaboration plan', () => {
       roleProfileId: 'role.developer',
       roleProfileVersion: 1,
       dependencies: [],
-      recommendedRoleProfileIds: [],
+      recommendedRoleProfileIds: ['role.developer'],
       allowedRoleProfileIds: ['role.developer'],
       attemptIds: [],
       reviewIds: [],
@@ -118,6 +118,164 @@ describe('local collaboration plan', () => {
     expect(nextMamLocalCollaborationAction(run, [])).toEqual({
       kind: 'merge',
       input: { workflowRunId: 'run.ui' }
+    })
+  })
+
+  it('repairs an approved Task whose Merge Queue entry was never published', () => {
+    const run = mamUiRunFixture()
+    run.tasks.push({
+      id: 'task.approved',
+      title: 'Approved delivery',
+      kind: 'static',
+      status: 'approved',
+      roleProfileId: 'role.developer',
+      roleProfileVersion: 1,
+      dependencies: [],
+      recommendedRoleProfileIds: ['role.developer'],
+      allowedRoleProfileIds: ['role.developer'],
+      attemptIds: ['attempt.approved'],
+      reviewIds: ['review.approved'],
+      executionWarningCount: 0
+    })
+
+    expect(nextMamLocalCollaborationAction(run, ['role.developer'])).toEqual({
+      kind: 'merge',
+      input: { workflowRunId: run.run.id }
+    })
+    expect(
+      nextMamLocalMergeRunId(
+        { ...mamUiSnapshotFixture(), runs: [run] },
+        [run.run.id],
+        ['role.developer']
+      )
+    ).toBe(run.run.id)
+  })
+
+  it('repairs main promotion readiness after develop integration and user approval', () => {
+    const run = runWithQueuedMerge('run.promotion', '2026-07-28T18:00:00Z')
+    run.mergeQueueEntries[0] = {
+      ...run.mergeQueueEntries[0]!,
+      targetBranch: 'develop',
+      status: 'merged',
+      mergeCommit: 'abcdef2',
+      completedAt: '2026-07-28T18:01:00Z'
+    }
+    run.tasks.push({
+      id: 'task.implement',
+      title: 'Integrated delivery',
+      kind: 'static',
+      status: 'completed',
+      roleProfileId: 'role.developer',
+      roleProfileVersion: 1,
+      dependencies: [],
+      recommendedRoleProfileIds: ['role.developer'],
+      allowedRoleProfileIds: ['role.developer'],
+      attemptIds: ['attempt.implement'],
+      reviewIds: ['review.one'],
+      executionWarningCount: 0
+    })
+    run.approvalGates = [
+      {
+        id: 'approve-release',
+        prompt: 'Publish?',
+        options: ['Publish'],
+        status: 'resolved',
+        selectedOption: 'Publish'
+      }
+    ]
+    run.nodeRuns.push({
+      schemaVersion: '1.0.0',
+      id: 'node-run.promote',
+      nodeId: 'promote-main',
+      status: 'ready',
+      attemptIds: []
+    })
+
+    expect(nextMamLocalCollaborationAction(run, ['role.developer'])).toEqual({
+      kind: 'merge',
+      input: { workflowRunId: run.run.id }
+    })
+  })
+
+  it('does not promote a completed integration before user approval', () => {
+    const run = runWithQueuedMerge('run.awaiting-approval', '2026-07-28T18:00:00Z')
+    run.mergeQueueEntries[0] = {
+      ...run.mergeQueueEntries[0]!,
+      targetBranch: 'develop',
+      status: 'merged',
+      mergeCommit: 'abcdef2',
+      completedAt: '2026-07-28T18:01:00Z'
+    }
+    run.tasks.push({
+      id: 'task.implement',
+      title: 'Integrated delivery',
+      kind: 'static',
+      status: 'completed',
+      dependencies: [],
+      recommendedRoleProfileIds: ['role.developer'],
+      allowedRoleProfileIds: ['role.developer'],
+      attemptIds: ['attempt.implement'],
+      reviewIds: ['review.one'],
+      executionWarningCount: 0
+    })
+    run.approvalGates = [
+      {
+        id: 'approve-release',
+        prompt: 'Publish?',
+        options: ['Publish'],
+        status: 'pending'
+      }
+    ]
+
+    expect(nextMamLocalCollaborationAction(run, ['role.developer'])).toMatchObject({
+      kind: 'wait',
+      reason: 'human_decision'
+    })
+  })
+
+  it('starts a ready replacement before repairing an approved Task merge', () => {
+    const run = mamUiRunFixture()
+    const role = mamUiRoleFixture()
+    run.tasks.push(
+      {
+        id: 'task.approved',
+        title: 'Reused implementation',
+        kind: 'static',
+        status: 'approved',
+        roleProfileId: 'role.developer',
+        roleProfileVersion: 1,
+        dependencies: [],
+        recommendedRoleProfileIds: ['role.developer'],
+        allowedRoleProfileIds: ['role.developer'],
+        attemptIds: ['attempt.approved'],
+        reviewIds: ['review.approved'],
+        executionWarningCount: 0
+      },
+      {
+        id: 'task.review',
+        title: 'Review current revision',
+        kind: 'review',
+        status: 'ready',
+        roleProfileId: role.id,
+        roleProfileVersion: role.version,
+        dependencies: [],
+        recommendedRoleProfileIds: [role.id],
+        allowedRoleProfileIds: [role.id],
+        attemptIds: ['attempt.review.old', 'attempt.review.replacement'],
+        reviewIds: [],
+        executionWarningCount: 0
+      }
+    )
+    run.attempts.push({
+      id: 'attempt.review.replacement',
+      taskId: 'task.review',
+      previousAttemptId: 'attempt.review.old',
+      status: 'recovery_planned'
+    })
+
+    expect(nextMamLocalCollaborationAction(run, [role.id])).toEqual({
+      kind: 'start',
+      input: { workflowRunId: run.run.id, taskId: 'task.review' }
     })
   })
 

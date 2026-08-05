@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { StringDecoder } from 'node:string_decoder'
 import type { CodexHeadlessInvocation } from './codex-headless-invocation'
 
 const MAX_OUTPUT_BYTES = 20 * 1024 * 1024
@@ -13,10 +14,11 @@ export type CodexProcessResult = Readonly<{
 
 export type CodexProcessRunner = (
   invocation: CodexHeadlessInvocation,
-  timeoutMs: number
+  timeoutMs: number,
+  onStdoutLine?: (line: string) => void
 ) => Promise<CodexProcessResult>
 
-export const runCodexProcess: CodexProcessRunner = (invocation, timeoutMs) =>
+export const runCodexProcess: CodexProcessRunner = (invocation, timeoutMs, onStdoutLine) =>
   new Promise((resolve, reject) => {
     const child = spawn(invocation.executablePath, [...invocation.args], {
       cwd: invocation.cwd,
@@ -29,6 +31,8 @@ export const runCodexProcess: CodexProcessRunner = (invocation, timeoutMs) =>
     let stdoutBytes = 0
     let stderrBytes = 0
     let timedOut = false
+    const decoder = new StringDecoder('utf8')
+    let liveLine = ''
     const timer = setTimeout(() => {
       timedOut = true
       child.kill('SIGTERM')
@@ -45,6 +49,10 @@ export const runCodexProcess: CodexProcessRunner = (invocation, timeoutMs) =>
         return
       }
       stdout.push(chunk)
+      liveLine += decoder.write(chunk)
+      const lines = liveLine.split(/\r?\n/)
+      liveLine = lines.pop() ?? ''
+      for (const line of lines) emitLine(onStdoutLine, line)
     })
     child.stderr.on('data', (chunk: Buffer) => {
       stderrBytes += chunk.byteLength
@@ -57,6 +65,8 @@ export const runCodexProcess: CodexProcessRunner = (invocation, timeoutMs) =>
     })
     child.on('close', (exitCode, signal) => {
       clearTimeout(timer)
+      liveLine += decoder.end()
+      if (liveLine) emitLine(onStdoutLine, liveLine)
       resolve({
         exitCode,
         signal,
@@ -70,4 +80,12 @@ export const runCodexProcess: CodexProcessRunner = (invocation, timeoutMs) =>
 
 function inputBytes(input: string): Buffer {
   return Buffer.from(input.endsWith('\n') ? input : `${input}\n`, 'utf8')
+}
+
+function emitLine(listener: ((line: string) => void) | undefined, line: string): void {
+  try {
+    listener?.(line)
+  } catch {
+    // A diagnostics consumer cannot interrupt the child process.
+  }
 }

@@ -8,6 +8,7 @@ import {
   MAM_GET_UI_SNAPSHOT_CHANNEL,
   MAM_GET_ATTEMPT_DIFF_CHANNEL,
   MAM_EXPORT_DIAGNOSTICS_CHANNEL,
+  MAM_EXPORT_EXECUTION_ACTIVITY_CHANNEL,
   MAM_GET_DESIGN_DRAFT_CHANNEL,
   MAM_SELECT_DESIGN_MODEL_CHANNEL,
   MAM_SEND_DESIGN_MESSAGE_CHANNEL,
@@ -105,6 +106,9 @@ const api: MamRendererApi = Object.freeze({
   },
   async exportDiagnostics() {
     return ipcRenderer.invoke(MAM_EXPORT_DIAGNOSTICS_CHANNEL)
+  },
+  async exportExecutionActivity(input) {
+    return ipcRenderer.invoke(MAM_EXPORT_EXECUTION_ACTIVITY_CHANNEL, input)
   },
   async getDesignDraft() {
     return ipcRenderer.invoke(MAM_GET_DESIGN_DRAFT_CHANNEL)

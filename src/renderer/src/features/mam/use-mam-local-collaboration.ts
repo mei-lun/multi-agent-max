@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { MamLocalSettings } from '../../../../shared/mam/local-settings'
-import type { MamSnapshotState } from './use-mam-snapshot'
+import type { MamSnapshotState } from './mam-snapshot-state'
 import {
   activeLocalCollaborationRunIds,
   nextMamLocalMergeRunId,

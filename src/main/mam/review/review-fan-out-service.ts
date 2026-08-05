@@ -30,32 +30,26 @@ export function createReviewTasks(input: {
   if (!node || node.type !== 'review_gate') {
     fail('review_node_invalid', 'Review fan-out requires a review_gate node')
   }
-  const roles = [...new Set(node.allowedRoleProfileIds)]
-  if (roles.length !== node.allowedRoleProfileIds.length) {
-    fail('duplicate_review_role', 'Review gate repeats an allowed Role')
-  }
-  if (roles.length < node.minimumDecisions) {
-    fail('review_quorum_unreachable', 'Review gate has fewer Role slots than its quorum')
-  }
+  const roleId = node.allowedRoleProfileIds[0]!
   const catalog = new Set(input.bundle.run.roleCatalog.map((entry) => entry.roleProfileId))
-  if (roles.some((roleId) => !catalog.has(roleId))) {
+  if (!catalog.has(roleId)) {
     fail('review_role_not_in_run_catalog', 'Review Role is outside the frozen Run catalog')
   }
   const nodeRun = input.bundle.run.nodeRuns.find((candidate) => candidate.nodeId === node.id)!
-  const definitions = roles.map((roleId, index) =>
+  const definitions = Array.from({ length: node.minimumDecisions }, (_, index) =>
     ReviewTaskDefinitionSchema.parse({
       schemaVersion: '1.0.0',
-      id: reviewTaskId(input.bundle.run.id, node.id, subject, roleId),
+      id: reviewTaskId(input.bundle.run.id, node.id, subject, roleId, index),
       workflowRunId: input.bundle.run.id,
       nodeRunId: nodeRun.id,
       reviewNodeId: node.id,
       subject,
       initialStatus: 'waiting_role_assignment',
-      title: `Review ${subject.taskId} (${index + 1}/${roles.length})`,
+      title: `Review ${subject.taskId} (${index + 1}/${node.minimumDecisions})`,
       specification: `Review immutable Attempt ${subject.attemptId} for ${node.id}.`,
       inputArtifacts: node.inputs,
       outputContracts: [node.reportContract],
-      recommendedRoleProfileIds: node.recommendedRoleProfileIds.includes(roleId) ? [roleId] : [],
+      recommendedRoleProfileIds: [roleId],
       allowedRoleProfileIds: [roleId]
     })
   )
@@ -69,10 +63,11 @@ function reviewTaskId(
   runId: string,
   nodeId: string,
   subject: ReviewSubject,
-  roleId: string
+  roleId: string,
+  slot: number
 ): string {
   const digest = createHash('sha256')
-    .update(`${runId}\0${nodeId}\0${subject.attemptId}\0${subject.resultHash}\0${roleId}`)
+    .update(`${runId}\0${nodeId}\0${subject.attemptId}\0${subject.resultHash}\0${roleId}\0${slot}`)
     .digest('hex')
   return `review-task.${digest.slice(0, 40)}`
 }

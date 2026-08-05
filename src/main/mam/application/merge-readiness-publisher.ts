@@ -1,13 +1,13 @@
 import type { SchedulerCommand } from '../../../shared/mam/scheduler-protocol'
 import type { WorkflowRunBundle } from '../../../shared/mam/domain/run-bundle'
 import type { WorkflowRunProjection } from '../state-store/git-state-projection'
-import { profileContentHash } from '../profiles/profile-content-hash'
 import { GitCommandRetryCoordinator } from '../state-store/git-command-retry-coordinator'
 import type { GitStateRepository } from '../state-store/git-state-repository'
 import { attemptBranchName } from './attempt-worktree-manager'
 import { createMergeQueueEntry } from './merge-queue-service'
 import { reachableGitMergeNodeIds } from './review-route-projection'
 import { passedNodeIds } from './workflow-task-context'
+import { mergeValidationEvidence } from './merge-validation-policy'
 
 export function publishMergeReadinessIfEligible(input: {
   repository: GitStateRepository
@@ -21,7 +21,7 @@ export function publishMergeReadinessIfEligible(input: {
   if (!bundle) throw new Error('run_bundle_missing')
   const projection = input.repository.rebuild(input.workflowRunId)
   const task = projection.tasks[input.taskId]
-  if (task?.status !== 'approved') return false
+  if (task?.status !== 'approved' && task?.status !== 'completed') return false
   const sourceNodeId =
     bundle.taskCatalog.find((definition) => definition.id === input.taskId)?.nodeId ??
     projection.dynamicTasks[input.taskId]?.nodeId
@@ -35,15 +35,10 @@ export function publishMergeReadinessIfEligible(input: {
   const attemptId = task.selectedAttemptId ?? task.knownAttemptIds.at(-1)
   const result = attemptId ? projection.attempts[attemptId]?.result : undefined
   if (!attemptId || !result) return false
-  const validationEvidence = Object.fromEntries(
-    mergeNode.validations.flatMap((command) => {
-      const verification = result.verifications.find(
-        (candidate) => candidate.command === command && candidate.status === 'passed'
-      )
-      return verification ? [[command, profileContentHash(verification)] as const] : []
-    })
+  const validationEvidence = mergeValidationEvidence(
+    mergeNode.validations,
+    result.system.submittedCommit
   )
-  if (Object.keys(validationEvidence).length !== mergeNode.validations.length) return false
   const entry = createMergeQueueEntry({
     bundle,
     projection,
@@ -77,11 +72,11 @@ export function publishMergeReadinessForApprovedTasks(input: {
   nextCommandId(): string
   now(): string
 }): number {
-  const approvedTaskIds = Object.entries(input.repository.rebuild(input.workflowRunId).tasks)
-    .filter(([, task]) => task.status === 'approved')
+  const candidateTaskIds = Object.entries(input.repository.rebuild(input.workflowRunId).tasks)
+    .filter(([, task]) => task.status === 'approved' || task.status === 'completed')
     .map(([taskId]) => taskId)
     .sort()
-  return approvedTaskIds.filter((taskId) =>
+  return candidateTaskIds.filter((taskId) =>
     publishMergeReadinessIfEligible({
       ...input,
       taskId,
@@ -109,8 +104,6 @@ function nextMergeNodeId(
       reachable.has(planNode.id) &&
       !occupied.has(planNode.id) &&
       planNode.dependencies.every((dependency) => passed.has(dependency)) &&
-      bundle.definition.nodes.some(
-        (node) => node.id === planNode.id && node.type === 'git_merge'
-      )
+      bundle.definition.nodes.some((node) => node.id === planNode.id && node.type === 'git_merge')
   )?.id
 }

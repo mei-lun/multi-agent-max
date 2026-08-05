@@ -67,6 +67,28 @@ describe('Merge Queue event flow', () => {
     })
   })
 
+  it('authorizes an exact promotion candidate after the reviewed Task completed integration', () => {
+    const entry = {
+      ...readyEntry('task.a', '2026-07-28T18:04:00Z'),
+      id: 'merge-entry.promote-task.a',
+      mergeNodeId: 'promote',
+      targetBranch: 'main'
+    }
+    const approved = approvedProjection(entry)
+    const projection = {
+      ...approved,
+      tasks: {
+        ...approved.tasks,
+        'task.a': { ...approved.tasks['task.a']!, status: 'completed' as const }
+      }
+    }
+
+    expect(
+      new SchedulerKernel().execute(markReadyCommand(entry), taskContext(projection, entry))
+        .events[0]
+    ).toMatchObject({ type: 'merge_ready_recorded', entry })
+  })
+
   it('supersedes a queued revision when a newer Attempt submits another commit', () => {
     const entry = readyEntry('task.a', '2026-07-28T18:01:00Z')
     const projection = applyEvent(approvedProjection(entry, true), newResultEvent('replacement01'))

@@ -84,6 +84,7 @@ function runSnapshot(): MamUiRunSnapshot {
     readyTaskIds: [],
     tasks: [],
     attempts: [],
+    activities: [],
     reviews: [],
     reviewAggregations: [],
     reviewDisagreementResolutions: [],

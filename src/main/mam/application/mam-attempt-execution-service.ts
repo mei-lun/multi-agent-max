@@ -107,7 +107,8 @@ export class MamAttemptExecutionService {
         diagnostics: this.diagnostics,
         schedulerId: this.schedulerId,
         now: this.now,
-        createId: this.createId
+        createId: this.createId,
+        onActivityChanged: this.onStateChanged
       },
       this.onStateChanged
     )

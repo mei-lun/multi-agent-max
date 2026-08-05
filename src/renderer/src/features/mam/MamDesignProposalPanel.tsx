@@ -49,7 +49,12 @@ export function MamDesignProposalPanel({
           {proposal && <ProposalState proposal={proposal} status={draft.status} />}
         </div>
         {proposal && draft.status === 'draft' && (
-          <ApplyProposalDialog proposal={proposal} pending={pending} onApply={onApply} />
+          <ApplyProposalDialog
+            proposal={proposal}
+            revision={draft.workflowRevision}
+            pending={pending}
+            onApply={onApply}
+          />
         )}
       </header>
       {draft.recovery && draft.status === 'draft' && (
@@ -82,10 +87,15 @@ export function MamDesignProposalPanel({
             <div className="flex items-center gap-2">
               <Users className="size-3.5 text-muted-foreground" />
               <h3 id="generated-roles-title" className="text-xs font-semibold">
-                Generated Roles
+                {draft.workflowRevision ? 'New Roles' : 'Generated Roles'}
               </h3>
               <Badge variant="outline">{proposal.roles.length}</Badge>
             </div>
+            {draft.workflowRevision && proposal.roles.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                This revision reuses existing Role Profiles.
+              </p>
+            )}
             <div className="space-y-2">
               {proposal.roles.map((role) => (
                 <article
@@ -128,8 +138,11 @@ export function MamDesignProposalPanel({
             <div className="flex items-center gap-2">
               <Network className="size-3.5 text-muted-foreground" />
               <h3 id="generated-workflow-title" className="text-xs font-semibold">
-                Generated Workflow
+                {draft.workflowRevision ? 'Workflow Revision' : 'Generated Workflow'}
               </h3>
+              {draft.workflowRevision && (
+                <Badge variant="outline">v{draft.workflowRevision.nextVersion}</Badge>
+              )}
             </div>
             <div className="rounded-md border border-border bg-background p-3">
               <p data-i18n-skip className="break-words text-sm font-medium">
@@ -241,10 +254,12 @@ function ProposalIssues({
 
 function ApplyProposalDialog({
   proposal,
+  revision,
   pending,
   onApply
 }: Readonly<{
   proposal: MamDesignProposal
+  revision?: MamDesignDraft['workflowRevision']
   pending: boolean
   onApply(): Promise<void>
 }>): React.JSX.Element {
@@ -263,7 +278,7 @@ function ApplyProposalDialog({
   return (
     <>
       <Button size="sm" disabled={pending || blocked} onClick={() => setOpen(true)}>
-        <CheckCircle2 /> Confirm and create
+        <CheckCircle2 /> {revision ? 'Confirm new version' : 'Confirm and create'}
       </Button>
       <Dialog
         open={open}
@@ -274,10 +289,13 @@ function ApplyProposalDialog({
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create generated definitions?</DialogTitle>
+            <DialogTitle>
+              {revision ? 'Create this Workflow version?' : 'Create generated definitions?'}
+            </DialogTitle>
             <DialogDescription>
-              This creates {proposal.roles.length} new Role Profiles and one new Workflow
-              Definition. It does not start a Run or assign any Tasks.
+              {revision
+                ? `This creates ${proposal.workflow.id} version ${proposal.workflow.version}${proposal.roles.length > 0 ? ` and ${proposal.roles.length} new Role Profiles` : ''}. Existing Runs keep their current Workflow version.`
+                : `This creates ${proposal.roles.length} new Role Profiles and one new Workflow Definition. It does not start a Run or assign any Tasks.`}
             </DialogDescription>
           </DialogHeader>
           {error && (
@@ -290,7 +308,7 @@ function ApplyProposalDialog({
               Cancel
             </Button>
             <Button disabled={pending} onClick={() => void apply()}>
-              Create definitions
+              {revision ? 'Create Workflow version' : 'Create definitions'}
             </Button>
           </DialogFooter>
         </DialogContent>

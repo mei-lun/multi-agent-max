@@ -56,6 +56,7 @@ export function MamAttemptPanel({
           </span>
           {selected && <Badge variant="outline">selected</Badge>}
           {latest && <Badge variant="secondary">latest</Badge>}
+          {attempt.reusedFrom && <Badge variant="secondary">reused</Badge>}
         </div>
         <MamStateBadge status={attempt.status} />
       </div>
@@ -144,6 +145,9 @@ export function MamAttemptPanel({
         <p className="mt-2 break-all font-mono">Attempt ID: {attempt.id}</p>
         {attempt.previousAttemptId && (
           <p className="mt-1 break-all font-mono">Previous Attempt: {attempt.previousAttemptId}</p>
+        )}
+        {attempt.reusedFrom && (
+          <p className="mt-1 break-all font-mono">Source Run: {attempt.reusedFrom.workflowRunId}</p>
         )}
       </details>
     </div>

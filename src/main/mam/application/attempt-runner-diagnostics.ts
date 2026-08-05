@@ -6,6 +6,7 @@ type AttemptRunnerDiagnosticsInput = Readonly<{
   prepared: PreparedAttempt
   diagnostics: DiagnosticsRecorder
   now(): string
+  onActivityChanged?(): void
 }>
 
 export function recordAttemptRunnerCost(
@@ -22,6 +23,7 @@ export function recordAttemptRunnerCost(
         usage.status === 'known' ? 'reported' : usage.status === 'partial' ? 'partial' : 'unknown'
     }
   })
+  input.onActivityChanged?.()
 }
 
 export function recordAttemptRunnerEvent(
@@ -34,6 +36,7 @@ export function recordAttemptRunnerEvent(
     kind,
     payload
   })
+  input.onActivityChanged?.()
 }
 
 export function attemptRunnerErrorCode(error: unknown): string {
@@ -50,6 +53,8 @@ function diagnosticIdentity(prepared: PreparedAttempt, at: string) {
     at,
     workflowRunId: prepared.workflowRunId,
     nodeId: prepared.nodeId,
+    taskId: prepared.taskId,
+    attemptId: prepared.attemptId,
     roleInstanceId: prepared.roleInstanceId,
     executorInvocationId: prepared.executorInvocationId
   }

@@ -1,14 +1,10 @@
 import type { SchedulerCommand } from '../../../shared/mam/scheduler-protocol'
-import type { WorkflowRunBundle } from '../../../shared/mam/domain/run-bundle'
-import type { ReviewDecision, ReviewSubject } from '../../../shared/mam/domain/review'
 import { materializeDynamicTaskPlan } from '../application/dynamic-task-plan-service'
 import {
   assertReviewAggregationAuthority,
   assertReviewPanelAuthority
 } from './review-command-authority'
 import { SchedulerCommandRejectedError } from './scheduler-command-rejection'
-import type { MergeQueueEntry } from '../../../shared/mam/domain/merge-queue'
-import type { MergeConflictResolution } from '../../../shared/mam/domain/merge-conflict-task'
 import {
   assertGlobalMergeQueueAuthority,
   assertMergeConflictResolutionAuthority,
@@ -19,67 +15,17 @@ import { assertSystemNodeCommandAuthority } from './system-node-command-authorit
 import { assertTaskAssignmentAuthority } from './task-assignment-command-authority'
 import { assertAttemptRecoveryAuthority } from './attempt-recovery-command-authority'
 import { assertActiveExecutorCommand } from './attempt-executor-command-authority'
+import {
+  assertNodeCompletionReuseAuthority,
+  assertTaskResultReuseAuthority
+} from './workflow-progress-reuse-command-authority'
+import type { SchedulerKernelContext, SchedulerTaskContext } from './scheduler-kernel-context'
 
-export type AttemptBinding = Readonly<{
-  roleInstanceId: string
-  executorInvocationId: string
-  effectiveConfigHash: string
-}>
-
-export type SchedulerTaskContext = Readonly<{
-  workflowRunId: string
-  taskId: string
-  status:
-    | 'waiting_dependencies'
-    | 'waiting_role_assignment'
-    | 'ready'
-    | 'running'
-    | 'submitted'
-    | 'in_review'
-    | 'changes_requested'
-    | 'approved'
-    | 'completed'
-    | 'blocked'
-    | 'cancelled'
-    | 'needs_attention'
-  assignedRoleProfileId?: string
-  assignedRoleProfileVersion?: number
-  activeAttemptIds: ReadonlySet<string>
-  reconcilingAttemptIds?: ReadonlySet<string>
-  knownAttemptIds: ReadonlySet<string>
-  submittedAttemptIds: ReadonlySet<string>
-  attemptBindings: ReadonlyMap<string, AttemptBinding>
-  allowedRoleProfileIds: ReadonlySet<string>
-  roleCatalogVersions: ReadonlyMap<string, ReadonlySet<number>>
-  dynamicTaskPlanHash?: string
-  reviewTarget?: ReviewSubject
-  allowedReviewNodeIds?: ReadonlySet<string>
-  reviewDecisions: ReadonlyMap<string, ReviewDecision>
-  minimumReviewDecisions?: number
-  reviewPanelId?: string
-  mergeCandidate?: MergeQueueEntry
-  mergeResolutionCandidate?: MergeConflictResolution
-}>
-
-export type SchedulerKernelContext = Readonly<{
-  schedulerId: string
-  runCancelled?: boolean
-  hasActiveAttempts?: boolean
-  task?: SchedulerTaskContext
-  approvalGates?: ReadonlyMap<
-    string,
-    Readonly<{ status: 'pending' | 'resolved'; options: ReadonlySet<string> }>
-  >
-  resolvedConditionNodeIds?: ReadonlySet<string>
-  nodeStatuses?: ReadonlyMap<string, string>
-  completedSystemNodeIds?: ReadonlySet<string>
-  validArtifactHashes: ReadonlySet<string>
-  processedCommandIds: ReadonlySet<string>
-  runBundle?: WorkflowRunBundle
-  existingTaskIds?: ReadonlySet<string>
-  mergeQueueEntries: ReadonlyMap<string, MergeQueueEntry>
-  revision?: string
-}>
+export type {
+  AttemptBinding,
+  SchedulerKernelContext,
+  SchedulerTaskContext
+} from './scheduler-kernel-context'
 
 export { SchedulerCommandRejectedError }
 
@@ -121,6 +67,17 @@ export function assertSchedulerCommandAuthority(
   }
   if (command.type === 'resolve_state_conflict') {
     return assertUser(command)
+  }
+  if (command.type === 'reuse_task_result') {
+    return assertTaskResultReuseAuthority({
+      command,
+      task: requireTask(command, context),
+      schedulerId: context.schedulerId,
+      reject
+    })
+  }
+  if (command.type === 'reuse_node_completion') {
+    return assertNodeCompletionReuseAuthority({ command, context, reject })
   }
   if (
     command.type === 'claim_merge_entry' ||

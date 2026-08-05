@@ -33,23 +33,10 @@ describe('SchedulerKernel', () => {
     ).toThrow(expect.objectContaining({ code: 'user_authority_required' }))
   })
 
-  it('records a compare-and-set Role reassignment before execution', () => {
+  it('rejects runtime reassignment of a fixed Workflow Role', () => {
     const kernel = new SchedulerKernel()
-    expect(kernel.execute(reassignCommand(), taskContext('ready')).events[0]).toMatchObject({
-      type: 'task_reassigned',
-      previousRoleProfileId: 'role.developer',
-      previousRoleProfileVersion: 1,
-      roleProfileId: 'role.reviewer',
-      roleProfileVersion: 2
-    })
-    expect(() =>
-      kernel.execute({ ...reassignCommand(), previousRoleProfileVersion: 2 }, taskContext('ready'))
-    ).toThrow(expect.objectContaining({ code: 'assignment_changed' }))
-    expect(() => kernel.execute(reassignCommand(), taskContext('ready', ['attempt.1']))).toThrow(
-      expect.objectContaining({ code: 'active_attempt_reassignment_forbidden' })
-    )
-    expect(() => kernel.execute(reassignCommand(), taskContext('needs_attention'))).toThrow(
-      expect.objectContaining({ code: 'invalid_transition' })
+    expect(() => kernel.execute(reassignCommand(), taskContext('ready'))).toThrow(
+      expect.objectContaining({ code: 'workflow_role_binding_fixed' })
     )
   })
 

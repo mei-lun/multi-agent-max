@@ -3,10 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { ArtifactContractSchema } from '../../../shared/mam/domain/artifact'
-import {
-  collectDirectAttemptResult,
-  materializeDirectAttemptResult
-} from './direct-attempt-result'
+import { collectDirectAttemptResult, materializeDirectAttemptResult } from './direct-attempt-result'
 
 const directories: string[] = []
 

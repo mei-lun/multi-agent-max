@@ -8,6 +8,11 @@ import {
   type ValidationCommandResult,
   type ValidationCommandRunner
 } from './validation-command-runner'
+import {
+  prepareLocalIntegrationTarget,
+  publishLocalIntegrationTarget,
+  type LocalIntegrationTarget
+} from './local-integration-target-publisher'
 
 type MergeStage = 'preflight' | 'fetch' | 'worktree' | 'merge' | 'validation' | 'push'
 
@@ -53,6 +58,7 @@ export class IntegrationWorktreeMergeExecutor {
     let stage: MergeStage = 'preflight'
     let worktreeAdded = false
     let targetCommitBefore = ''
+    let localTarget: LocalIntegrationTarget | undefined
     const validations: ValidationCommandResult[] = []
     const worktreePath = join(input.integrationRoot, worktreeName(input.entry.id))
     let outcome: IntegrationMergeResult
@@ -98,6 +104,15 @@ export class IntegrationWorktreeMergeExecutor {
           targetCommitBefore
         ])
       }
+      stage = 'preflight'
+      if (!input.remoteName) {
+        localTarget = prepareLocalIntegrationTarget({
+          git: this.git,
+          repositoryPath: input.repositoryPath,
+          targetBranch: input.entry.targetBranch,
+          targetCommitBefore
+        })
+      }
       const fetchedSourceCommit = this.git.run(input.repositoryPath, [
         'rev-parse',
         '--verify',
@@ -140,12 +155,14 @@ export class IntegrationWorktreeMergeExecutor {
             `HEAD:refs/heads/${input.entry.targetBranch}`
           ])
         } else {
-          this.git.run(input.repositoryPath, [
-            'update-ref',
-            `refs/heads/${input.entry.targetBranch}`,
+          if (!localTarget) throw new Error('Local integration target was not prepared')
+          publishLocalIntegrationTarget({
+            git: this.git,
+            repositoryPath: input.repositoryPath,
+            target: localTarget,
             mergeCommit,
             targetCommitBefore
-          ])
+          })
         }
         outcome = { status: 'merged', mergeCommit, targetCommitBefore, validations }
       }

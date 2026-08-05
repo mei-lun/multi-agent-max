@@ -92,6 +92,32 @@ export class SchedulerKernel {
           roleProfileVersion: command.roleProfileVersion,
           assignedByUserId: command.actor.kind === 'user' ? command.actor.userId : ''
         }
+      case 'reuse_task_result': {
+        return {
+          ...base,
+          type: 'task_result_reused',
+          taskId: command.taskId,
+          sourceWorkflowRunId: command.sourceWorkflowRunId,
+          sourceTaskId: command.sourceTaskId,
+          sourceAttemptId: command.sourceAttemptId,
+          sourceEventId: command.sourceEventId,
+          sourceNodeId: command.sourceNodeId,
+          status: command.status,
+          roleProfileId: command.roleProfileId,
+          roleProfileVersion: command.roleProfileVersion,
+          result: command.result
+        }
+      }
+      case 'reuse_node_completion': {
+        return {
+          ...base,
+          type: 'node_completion_reused',
+          nodeId: command.nodeId,
+          sourceWorkflowRunId: command.sourceWorkflowRunId,
+          sourceNodeId: command.sourceNodeId,
+          sourceEvidenceId: command.sourceEvidenceId
+        }
+      }
       case 'announce_execution':
         return {
           ...base,

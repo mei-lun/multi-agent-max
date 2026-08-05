@@ -11,7 +11,9 @@ import { GitStateRepository } from '../../state-store/git-state-repository'
 import { MamUiQueryService } from '../mam-ui-query-service'
 import { createWorkflowRunBundle, createWorkflowRunCommand } from '../workflow-run-factory'
 
-export function createAttemptExecutionAcceptanceFixture() {
+export function createAttemptExecutionAcceptanceFixture(input?: {
+  mergeValidations?: readonly string[]
+}) {
   const root = mkdtempSync(join(tmpdir(), 'mam-attempt-execution-'))
   const origin = join(root, 'origin.git')
   const project = join(root, 'project')
@@ -57,7 +59,7 @@ export function createAttemptExecutionAcceptanceFixture() {
   const reviewerRole = catalog.roles.save(
     roleProfile('role.reviewer', 'Reviewer', executor.id, model.id)
   )
-  const definition = catalog.workflows.save(workflow())
+  const definition = catalog.workflows.save(workflow(input?.mergeValidations))
   const settings = new MamLocalSettingsStore(join(root, 'local-settings.json'), 'machine.test')
   settings.save({
     schemaVersion: '1.0.0',
@@ -176,7 +178,7 @@ function roleProfile(
   }
 }
 
-function workflow(): WorkflowDefinition {
+function workflow(mergeValidations: readonly string[] = []): WorkflowDefinition {
   return {
     schemaVersion: '1.0.0',
     id: 'workflow.attempt-execution',
@@ -187,7 +189,7 @@ function workflow(): WorkflowDefinition {
         id: 'build',
         type: 'role_task',
         recommendedRoleProfileIds: ['role.builder'],
-        allowedRoleProfileIds: ['role.builder', 'role.reviewer'],
+        allowedRoleProfileIds: ['role.builder'],
         instruction: 'Update README and produce a diff Artifact.',
         workspaceMode: 'write',
         inputs: [],
@@ -233,7 +235,7 @@ function workflow(): WorkflowDefinition {
         orderBy: 'merge_ready_at',
         strategy: 'no_ff',
         conflictPolicy: 'coordinator_attempt',
-        validations: []
+        validations: [...mergeValidations]
       },
       { id: 'finish', type: 'finish', inputs: [] }
     ],

@@ -23,6 +23,7 @@ import { preparePiRpcInvocation, type PiRpcInvocation } from './pi-rpc-invocatio
 import { PiRpcLogWriter } from './pi-rpc-log-writer'
 import type { ExecutorCapabilityBridge } from '../application/executor-capability-bridge'
 import { startPiApplicationApiBridge } from './pi-application-api-bridge-server'
+import { emitObservedExecutorEvent, type ExecutorEventListener } from './executor-event-listener'
 
 export type PiRpcClient = Readonly<{
   start(): Promise<void>
@@ -86,6 +87,7 @@ export class PiRpcAdapter {
     credentialValues: Readonly<Record<string, string>>
     authority: AttemptResultAuthority
     capabilityBridge?: ExecutorCapabilityBridge
+    onEvent?: ExecutorEventListener
   }): Promise<PiRpcExecutionResult> {
     this.validateExecution(input)
     const hasResourceBindings =
@@ -111,19 +113,21 @@ export class PiRpcAdapter {
       const events: ExecutorEvent[] = []
       const unsubscribe = client.onEvent((event) => {
         void logger.append('event', event).catch(() => undefined)
-        if (eventType(event) === 'message_update') return
-        events.push(
-          normalizePiRpcEvent({
-            event,
-            executorInvocationId: input.executorInvocationId,
-            timestamp: this.now()
-          })
-        )
+        const normalized = normalizePiRpcEvent({
+          event,
+          executorInvocationId: input.executorInvocationId,
+          timestamp: this.now()
+        })
+        emitObservedExecutorEvent(input.onEvent, normalized)
+        if (eventType(event) !== 'message_update') events.push(normalized)
       })
       this.activeInvocations.set(input.executorInvocationId, { client, logger })
       try {
         await client.start()
-        const workPrompt = workspacePrompt(input.prompt, input.snapshot.permissions.writePaths.length > 0)
+        const workPrompt = workspacePrompt(
+          input.prompt,
+          input.snapshot.permissions.writePaths.length > 0
+        )
         await logger.append('command', { type: 'prompt', message: workPrompt })
         const idle = client.waitForIdle(input.snapshot.budget.maxDurationSeconds * 1000)
         await client.prompt(workPrompt)
@@ -139,7 +143,7 @@ export class PiRpcAdapter {
           effectiveConfigHash: input.snapshot.contentHash
         })
         if (result) {
-          events.push({
+          const completedEvent: ExecutorEvent = {
             schemaVersion: '1.0.0',
             type: 'invocation_completed',
             timestamp: this.now(),
@@ -147,7 +151,9 @@ export class PiRpcAdapter {
             executorInvocationId: input.executorInvocationId,
             sourceEventType: 'mam.standard_result.accepted',
             payload: {}
-          })
+          }
+          events.push(completedEvent)
+          emitObservedExecutorEvent(input.onEvent, completedEvent)
         }
         await client.stop()
         const stderr = client.getStderr()
@@ -246,11 +252,7 @@ function workspacePrompt(prompt: string, canWriteWorkspace: boolean): string {
         'For a document, report, or other textual output, return the complete deliverable directly as your final response.',
         'Do not claim that unavailable tools prevented completion and do not describe commands as chat text.'
       ]
-  return [
-    prompt,
-    '',
-    ...completionInstruction
-  ].join('\n')
+  return [prompt, '', ...completionInstruction].join('\n')
 }
 
 function tryParseStructuredResult(

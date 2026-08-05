@@ -1,13 +1,13 @@
 {
   "schemaVersion": "1.0.0",
-  "generatedAt": "2026-07-28T20:26:59.237Z",
+  "generatedAt": "2026-08-04T15:45:05.254Z",
   "platform": "darwin",
   "architecture": "x64",
   "probes": [
     {
       "kind": "codex-cli",
       "executable": "codex",
-      "version": "codex-cli 0.146.0-alpha.3.1",
+      "version": "codex-cli 0.146.0-alpha.9.2",
       "status": "ready",
       "missing": [],
       "appServerSchemaGenerated": true

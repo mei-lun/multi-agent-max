@@ -69,7 +69,7 @@ export function nextMamLocalCollaborationAction(
     if (!role) {
       return wait(
         'local_setup',
-        `Select an allowed local Role for ${unassigned.title} to continue.`
+        `Activate the fixed Workflow Role for ${unassigned.title} on this machine to continue.`
       )
     }
     return {
@@ -103,14 +103,33 @@ export function nextMamLocalCollaborationAction(
   if (remoteAssignment) {
     return wait(
       'local_setup',
-      `${remoteAssignment.title} is assigned to a Role that is not active on this machine.`
+      `${remoteAssignment.title} is fixed to a Role that is not active on this machine.`
     )
+  }
+  if (
+    run.tasks.some((task) => task.status === 'approved') ||
+    hasMissingPromotionReadiness(run)
+  ) {
+    return { kind: 'merge', input: { workflowRunId: run.run.id } }
   }
   return wait(
     'workflow',
     run.run.status === 'blocked'
       ? 'The Workflow cannot advance automatically. Open the affected Task for the required action.'
       : 'Waiting for the Workflow to produce the next Task.'
+  )
+}
+
+function hasMissingPromotionReadiness(run: MamUiRunSnapshot): boolean {
+  const completedTaskIds = new Set(
+    run.tasks.filter((task) => task.status === 'completed').map((task) => task.id)
+  )
+  return (
+    run.approvalGates?.some((gate) => gate.status === 'resolved') === true &&
+    run.nodeRuns.some((node) => node.status === 'ready') &&
+    run.mergeQueueEntries.some(
+      (entry) => entry.status === 'merged' && completedTaskIds.has(entry.taskId)
+    )
   )
 }
 
@@ -167,11 +186,12 @@ export function nextMamLocalMergeRunId(
   activeRunIds: readonly string[],
   participatingRoleProfileIds: readonly string[]
 ): string | undefined {
-  return snapshot.runs
+  const candidates = snapshot.runs
     .filter((run) => activeRunIds.includes(run.run.id))
     .filter(
       (run) => nextMamLocalCollaborationAction(run, participatingRoleProfileIds).kind === 'merge'
     )
+  const queued = candidates
     .flatMap((run) =>
       run.mergeQueueEntries
         .filter((entry) => entry.status === 'queued')
@@ -183,6 +203,9 @@ export function nextMamLocalMergeRunId(
         left.entry.taskId.localeCompare(right.entry.taskId) ||
         left.entry.id.localeCompare(right.entry.id)
     )[0]?.workflowRunId
+  return (
+    queued ?? candidates.sort((left, right) => left.run.id.localeCompare(right.run.id))[0]?.run.id
+  )
 }
 
 function selectedRoleForTask(
@@ -190,18 +213,9 @@ function selectedRoleForTask(
   task: MamUiRunSnapshot['tasks'][number],
   participatingRoleProfileIds: readonly string[]
 ) {
-  const allowed =
-    task.allowedRoleProfileIds.length > 0
-      ? new Set(task.allowedRoleProfileIds)
-      : new Set(run.run.roleCatalog.map((entry) => entry.roleProfileId))
-  const candidates = run.run.roleCatalog.filter(
-    (entry) =>
-      participatingRoleProfileIds.includes(entry.roleProfileId) && allowed.has(entry.roleProfileId)
-  )
-  return (
-    candidates.find((entry) => task.recommendedRoleProfileIds.includes(entry.roleProfileId)) ??
-    candidates[0]
-  )
+  const roleProfileId = task.allowedRoleProfileIds[0]
+  if (!roleProfileId || !participatingRoleProfileIds.includes(roleProfileId)) return undefined
+  return run.run.roleCatalog.find((entry) => entry.roleProfileId === roleProfileId)
 }
 
 function wait(

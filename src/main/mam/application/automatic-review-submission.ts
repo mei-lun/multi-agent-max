@@ -7,6 +7,7 @@ import type { ValidatedAttemptArtifacts } from './attempt-artifact-validator'
 import type { PreparedAttempt } from './mam-attempt-execution-types'
 import type { GitStateRepository } from '../state-store/git-state-repository'
 import { submitReviewAndAggregate } from './mam-review-command-service'
+import { MamEntityIdSchema } from '../../../shared/mam/domain/primitives'
 
 const automaticReviewReportSchema = z
   .object({
@@ -45,7 +46,7 @@ export function automaticReviewSubmission(
     summary: report.summary,
     findings: report.findings.map((finding) => ({
       severity: finding.severity,
-      category: finding.category,
+      category: reviewCategoryId(finding.category, finding.summary),
       summary: finding.summary,
       ...(finding.filePath ? { filePath: finding.filePath } : {}),
       ...(finding.line ? { line: finding.line } : {})
@@ -203,6 +204,12 @@ function reviewCategory(value: string): string {
   if (/visual|style|样式|视觉/i.test(value)) return 'visual'
   if (/input|validation|输入|校验/i.test(value)) return 'validation'
   return 'review'
+}
+
+function reviewCategoryId(category: string, summary: string): string {
+  return MamEntityIdSchema.safeParse(category).success
+    ? category
+    : reviewCategory(`${category} ${summary}`)
 }
 
 function isGenericChangeSummary(value: string): boolean {

@@ -9,6 +9,7 @@ import type { WorkflowRunBundle } from '../../../shared/mam/domain/run-bundle'
 import { profileContentHash } from '../profiles/profile-content-hash'
 import type { IntegrationMergeResult } from './integration-worktree-merge-executor'
 import type { ConflictResolutionResult } from './conflict-resolution-worktree-manager'
+import { executableMergeValidationCommands } from './merge-validation-policy'
 
 export class MergeConflictTaskError extends Error {
   constructor(
@@ -58,7 +59,7 @@ export function createMergeConflictTask(input: {
     parentAttemptId: input.entry.attemptId,
     targetBranch: input.entry.targetBranch,
     sourceBranch: input.entry.sourceBranch,
-    validationCommands: node.validations,
+    validationCommands: executableMergeValidationCommands(node.validations),
     recommendedRoleProfileIds: node.recommendedRoleProfileIds,
     allowedRoleProfileIds: node.allowedRoleProfileIds,
     initialStatus: 'waiting_role_assignment',

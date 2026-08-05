@@ -35,12 +35,12 @@ describe('MAM Workflow Inspector', () => {
         onRename={() => undefined}
       />
     )
-    expect(task).toContain('Role selection')
+    expect(task).toContain('Node Role')
     expect(task).toContain('Workspace access')
     expect(task).toContain('Output Artifact contracts')
     expect(merge).toContain('Target branch')
     expect(merge).toContain('Merge strategy')
     expect(merge).toContain('Post-merge validations')
-    expect(task.indexOf('Role selection')).toBeLessThan(task.indexOf('Advanced JSON'))
+    expect(task.indexOf('Node Role')).toBeLessThan(task.indexOf('Advanced JSON'))
   })
 })

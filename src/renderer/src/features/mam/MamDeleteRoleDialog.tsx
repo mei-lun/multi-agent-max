@@ -120,7 +120,7 @@ function roleRemovalCopy(
   if (locale === 'zh-CN') {
     return {
       title: `从本机活动角色中移除“${displayName}”？`,
-      description: '该角色将不再出现在新运行和任务分配中；已保存的不可变版本不会被销毁。',
+      description: '该角色将不再用于新运行和新的工作流节点绑定；已保存的不可变版本不会被销毁。',
       history: `${impact.historicalRuns} 条历史运行继续保留其冻结角色版本。`,
       workflows: `${impact.workflowReferences} 个活动工作流仍引用此角色；更新工作流或重新创建该角色后才能启动新运行。`,
       confirm: '移除角色',
@@ -130,7 +130,7 @@ function roleRemovalCopy(
   return {
     title: `Remove “${displayName}” from active local Roles?`,
     description:
-      'The Role will disappear from new Runs and Task assignment. Stored immutable versions are not destroyed.',
+      'The Role will disappear from new Runs and new Workflow node bindings. Stored immutable versions are not destroyed.',
     history: `${impact.historicalRuns} historical Runs keep their frozen Role version.`,
     workflows: `${impact.workflowReferences} active Workflows still reference this Role. Update them or recreate the Role before starting a new Run.`,
     confirm: 'Remove Role',

@@ -119,6 +119,23 @@ export class GitStateRepository {
     ])
   }
 
+  hasProjectCommit(commit: string): boolean {
+    return this.gitClient.succeeds(this.projectDirectory, [
+      'rev-parse',
+      '--verify',
+      `${commit}^{commit}`
+    ])
+  }
+
+  projectRefCommit(ref: string): string | undefined {
+    if (
+      !this.gitClient.succeeds(this.projectDirectory, ['rev-parse', '--verify', `${ref}^{commit}`])
+    ) {
+      return undefined
+    }
+    return this.gitClient.run(this.projectDirectory, ['rev-parse', '--verify', `${ref}^{commit}`])
+  }
+
   readStateArtifact(storageRef: string): Buffer {
     return readSystemArtifact(this.stateDirectory, storageRef)
   }

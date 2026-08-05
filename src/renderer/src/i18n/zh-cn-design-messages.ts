@@ -15,6 +15,10 @@ export const ZH_CN_DESIGN_MESSAGES: Readonly<Record<string, string>> = {
   'Open Settings': '打开设置',
   'Local draft · not part of Workflow state': '本地草稿 · 不属于工作流状态',
   'Design model': '设计模型',
+  'Design target': '设计目标',
+  'New Workflow': '新工作流',
+  'Start a different Design?': '要开始另一个设计吗？',
+  'Start new Workflow': '开始新工作流',
   'Use standard template': '使用标准模板',
   'Design request': '设计需求',
   'Your message': '你的消息',
@@ -22,6 +26,8 @@ export const ZH_CN_DESIGN_MESSAGES: Readonly<Record<string, string>> = {
   'Discard this Design draft?': '要放弃这份设计草稿吗？',
   'The local conversation and unconfirmed proposal will be removed. Created definitions are not affected.':
     '本地对话和未确认方案将被删除，已经创建的定义不受影响。',
+  'The current local conversation and unconfirmed proposal will be removed. Created definitions are not affected.':
+    '当前本地对话和未确认方案将被删除，已经创建的定义不受影响。',
   'Discard and start new': '放弃并新建',
   'Design proposal': '设计方案',
   Proposal: '方案',
@@ -36,8 +42,11 @@ export const ZH_CN_DESIGN_MESSAGES: Readonly<Record<string, string>> = {
   'The current unconfirmed Role and Workflow draft will be replaced. The local conversation will remain available.':
     '当前未确认的角色与工作流草稿将被替换，本地对话仍会保留。',
   'Generated Roles': '生成的角色',
+  'New Roles': '新角色',
+  'This revision reuses existing Role Profiles.': '此版本会复用现有角色配置。',
   resources: '项资源',
   'Generated Workflow': '生成的工作流',
+  'Workflow Revision': '工作流新版本',
   'Inspect in canvas': '在画布中检查',
   'Created from this draft': '已根据此草稿创建',
   'Validated and ready to confirm': '已校验，可以确认',
@@ -45,6 +54,9 @@ export const ZH_CN_DESIGN_MESSAGES: Readonly<Record<string, string>> = {
   Error: '错误',
   Warning: '警告',
   'Confirm and create': '确认并创建',
+  'Confirm new version': '确认新版本',
+  'Create this Workflow version?': '要创建这个工作流版本吗？',
+  'Create Workflow version': '创建工作流版本',
   'Create generated definitions?': '要创建生成的定义吗？',
   'This creates': '将创建',
   'new Role Profiles and one new Workflow Definition. It does not start a Run or assign any Tasks.':

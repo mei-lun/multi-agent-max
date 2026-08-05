@@ -23,6 +23,20 @@ export const ZH_CN_RUN_MESSAGES: Readonly<Record<string, string>> = {
   Back: '返回',
   'Clear Run': '清除运行',
   'Clear and restart': '清除并重新开始',
+  'Stuck or want to restart without losing completed work?':
+    '执行卡住了，或想在不丢失已完成成果的情况下重新开始？',
+  'Clean up this active Run?': '清理当前运行？',
+  'The Run moves to Cancelled history. Git events, commits, Artifacts and completed Attempt evidence remain available for reuse.':
+    '该运行将移入“已取消”历史。Git 事件、提交、制品和已完成的尝试证据仍可继续复用。',
+  'Restart without repeating completed work': '重新开始，但不重复已完成的工作',
+  '“Clean and continue” creates a fresh Run from the same Workflow version and inputs. Verified results whose Git commits are still available are imported automatically; only unfinished or unsafe Tasks run again.':
+    '“清理并继续”会使用相同的工作流版本和输入创建新运行。仍可访问 Git 提交的已验证成果会自动导入，只有未完成或无法安全复用的任务才会重新执行。',
+  'Clean and continue': '清理并继续',
+  'Clean or continue': '清理或继续',
+  'Reused verified result': '已复用验证通过的成果',
+  reused: '已复用',
+  'Reused from:': '复用来源：',
+  'Source Run:': '来源运行：',
   'No allowed Role is available in this Run.': '此运行中没有可用的允许角色。',
   'Assign Role': '分配角色',
   'Assign this Task': '分配此任务',
@@ -36,6 +50,14 @@ export const ZH_CN_RUN_MESSAGES: Readonly<Record<string, string>> = {
   'Latest Attempt': '最新尝试',
   'Historical Attempt': '历史尝试',
   'This Run has ended.': '此运行已结束。',
+  'The fixed Workflow Role is unavailable.': '工作流固定的角色不可用。',
+  'Workflow Role:': '工作流角色：',
+  'This Role was fixed when the Workflow was designed.': '此角色已在设计工作流时固定。',
+  'Run Task': '运行任务',
+  'Run this Task?': '要运行此任务吗？',
+  'Preflight the fixed Workflow Role, freeze its Effective Config, and create an isolated task branch and worktree.':
+    '预检工作流固定的角色，冻结其有效配置，并创建隔离的任务分支和工作树。',
+  'Preparing the Task and worktree…': '正在准备任务和工作树…',
   'Review submitted work': '审核已提交的成果',
   'Check the submitted work against its inputs and expected outputs, then produce the review report.':
     '根据输入和预期输出检查已提交的成果，然后生成审核报告。',

@@ -46,6 +46,75 @@ describe('MAM Design Assistant service', () => {
     expect(service.getDraft().status).toBe('applied')
   })
 
+  it('optimizes an existing Workflow as a new version without changing its history', async () => {
+    const { profiles, service } = createServiceFixture()
+    const initial = await service.sendMessage({
+      requestId: 'design-request.initial',
+      modelProfileId: 'model.designer',
+      message: 'Create a writing workflow.'
+    })
+    service.applyProposal({ proposalHash: initial.proposal!.hash })
+
+    const revision = service.reset({
+      modelProfileId: 'model.designer',
+      workflowId: 'workflow.article'
+    })
+
+    expect(revision.workflowRevision).toEqual({
+      workflowId: 'workflow.article',
+      baseVersion: 1,
+      nextVersion: 2
+    })
+    expect(revision.proposal).toMatchObject({
+      roles: [],
+      workflow: { id: 'workflow.article', version: 2, name: 'Write article' },
+      issues: []
+    })
+
+    const updated = service.updateProposal({
+      expectedProposalHash: revision.proposal!.hash,
+      roles: [],
+      workflow: { ...revision.proposal!.workflow, name: 'Write and review article' }
+    })
+    const snapshot = service.applyProposal({ proposalHash: updated.proposal!.hash })
+
+    expect(profiles.workflows.listVersions('workflow.article')).toMatchObject([
+      { version: 1, name: 'Write article' },
+      { version: 2, name: 'Write and review article' }
+    ])
+    expect(snapshot.workflows).toMatchObject([
+      { id: 'workflow.article', version: 2, name: 'Write and review article' }
+    ])
+    expect(snapshot.roles).toHaveLength(1)
+    expect(snapshot.runs).toEqual([])
+  })
+
+  it('blocks a Workflow revision when another version is saved first', async () => {
+    const { profiles, service } = createServiceFixture()
+    const initial = await service.sendMessage({
+      requestId: 'design-request.stale-initial',
+      modelProfileId: 'model.designer',
+      message: 'Create a writing workflow.'
+    })
+    service.applyProposal({ proposalHash: initial.proposal!.hash })
+    const revision = service.reset({ workflowId: 'workflow.article' })
+    const current = profiles.workflows.getActive('workflow.article')!
+    profiles.workflows.save({ ...current, version: 2, name: 'Edited elsewhere' })
+
+    const refreshed = service.getDraft()
+
+    expect(refreshed.proposal?.issues.map(({ code }) => code)).toEqual(
+      expect.arrayContaining(['workflow_revision_stale', 'workflow_revision_version_exists'])
+    )
+    expect(() => service.applyProposal({ proposalHash: revision.proposal!.hash })).toThrow(
+      'Resolve proposal errors before creating definitions'
+    )
+    expect(profiles.workflows.getActive('workflow.article')).toMatchObject({
+      version: 2,
+      name: 'Edited elsewhere'
+    })
+  })
+
   it('keeps the proposal recoverable when confirmation fails after a catalog change', async () => {
     const { profiles, service } = createServiceFixture()
     const draft = await service.sendMessage({

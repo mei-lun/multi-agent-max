@@ -26,6 +26,7 @@ import {
 import { shouldAutomaticallyRetryAttempt } from './attempt-automatic-retry'
 import { buildAttemptResultCommand } from './attempt-result-command'
 import { normalizePreparedReviewContracts } from './automatic-review-contract'
+import { AttemptExecutorEventObserver } from './attempt-executor-event-observer'
 import {
   attemptRunnerErrorCode as errorCode,
   recordAttemptRunnerCost as recordCost,
@@ -44,10 +45,12 @@ export type PreparedAttemptRunnerInput = Readonly<{
   schedulerId: string
   now(): string
   createId(kind: string): string
+  onActivityChanged?(): void
 }>
 
 export async function runPreparedAttempt(input: PreparedAttemptRunnerInput): Promise<void> {
   const prepared = normalizePreparedReviewContracts(input.prepared)
+  const eventObserver = new AttemptExecutorEventObserver(input)
   let executorCompleted = false
   try {
     const authority = attemptGatewayAuthority(prepared)
@@ -76,11 +79,12 @@ export async function runPreparedAttempt(input: PreparedAttemptRunnerInput): Pro
         prompt: prepared.prompt,
         credentialValues: prepared.credentialValues,
         authority: attemptAuthority(prepared, input.now()),
-        capabilityBridge
+        capabilityBridge,
+        onEvent: eventObserver.observe
       })
       .finally(() => resourceApplication.dispose())
     executorCompleted = true
-    for (const event of execution.events) record(input, 'executor', { event })
+    eventObserver.recordReturned(execution.events)
     const collected = execution.result
       ? undefined
       : await collectPreparedAttemptResult({
@@ -201,6 +205,7 @@ export async function runPreparedAttempt(input: PreparedAttemptRunnerInput): Pro
     }
     recordCost(input, execution.usage)
   } catch (error) {
+    eventObserver.flush()
     let recoveryStatus: string
     try {
       recoveryStatus = recordAttemptInterruption({

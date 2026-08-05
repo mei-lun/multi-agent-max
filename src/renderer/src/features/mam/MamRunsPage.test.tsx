@@ -130,7 +130,6 @@ describe('MamRunsPage', () => {
         onStartAttempt={async () => undefined}
         onCancelWorkflowRun={async () => undefined}
         onRestartWorkflowRun={async () => mamUiSnapshotFixture()}
-        onReassignTask={async () => undefined}
         onRecoverAttempt={async () => undefined}
         onSelectAttempt={async () => undefined}
         onResolveApprovalGate={async () => undefined}
@@ -151,8 +150,11 @@ describe('MamRunsPage', () => {
     expect(markup).toContain('Release this revision?')
     expect(markup).toContain('Continue')
     expect(markup).toContain('Confirm before retry')
-    expect(markup).toContain('Clear or restart')
-    expect(markup).toContain('Assign Role')
+    expect(markup).toContain('Clean or continue')
+    expect(markup).toContain('Workflow Role: Builder')
+    expect(markup).toContain('Run Task')
+    expect(markup).not.toContain('Assign Role')
+    expect(markup).not.toContain('Change Role')
     expect(markup).toContain('Technical details')
     expect(markup).toContain('Expected outputs')
   })
@@ -200,7 +202,6 @@ describe('MamRunsPage', () => {
         onStartAttempt={async () => undefined}
         onCancelWorkflowRun={async () => undefined}
         onRestartWorkflowRun={async () => mamUiSnapshotFixture()}
-        onReassignTask={async () => undefined}
         onRecoverAttempt={async () => undefined}
         onSelectAttempt={async () => undefined}
         onResolveApprovalGate={async () => undefined}

@@ -5,6 +5,8 @@ export type DiagnosticEvent = Readonly<{
   at: string
   workflowRunId: string
   nodeId: string
+  taskId?: string
+  attemptId?: string
   roleInstanceId: string
   executorInvocationId: string
   kind: 'scheduler' | 'executor' | 'policy' | 'tool' | 'cost' | 'resource'
@@ -80,6 +82,8 @@ function redactSecrets(value: unknown, key?: string): unknown {
     return value
       .replace(/(api[_-]?key|token|authorization|secret)(\s*[:=]\s*)[^\s,]+/gi, '$1$2[REDACTED]')
       .replace(/Bearer\s+[^\s]+/gi, 'Bearer [REDACTED]')
+      .replace(/\b(?:sk|xai|api)-[A-Za-z0-9_-]{8,}\b/g, '[REDACTED]')
+      .replace(/mam-canary-secret-[A-Za-z0-9_-]+/g, '[REDACTED]')
   }
   if (Array.isArray(value)) {
     return value.map((entry) => redactSecrets(entry, key))

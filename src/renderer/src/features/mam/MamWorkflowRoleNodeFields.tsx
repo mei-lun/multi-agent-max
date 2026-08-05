@@ -177,7 +177,7 @@ export function MamWorkflowRoleNodeFields({
       </div>
       <MamWorkflowStringListField
         label="Post-merge validations"
-        description="One command per line. Commands run in order after integration."
+        description="Optional executable commands only, one per line. Review criteria and confirmation text do not belong here."
         values={node.validations}
         onChange={(validations) => onChange({ ...node, validations })}
       />

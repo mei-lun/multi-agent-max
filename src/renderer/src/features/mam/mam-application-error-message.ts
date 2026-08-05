@@ -45,7 +45,7 @@ const ERROR_MESSAGES: readonly Readonly<{ token: string; message: string }>[] = 
   },
   {
     token: 'task_role_assignment_required',
-    message: 'Select an allowed local Role for this Task, then try again.'
+    message: 'The fixed Workflow Role was not activated. Run the Task again.'
   },
   {
     token: 'ENOENT',

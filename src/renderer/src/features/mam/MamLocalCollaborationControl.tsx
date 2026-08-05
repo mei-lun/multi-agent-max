@@ -85,7 +85,7 @@ function localRoleSummary(
 
 function activeActionMessage(action: ReturnType<typeof nextMamLocalCollaborationAction>): string {
   if (action.kind === 'wait') return action.message
-  if (action.kind === 'assign') return 'Assigning the next Task to a local Role…'
+  if (action.kind === 'assign') return 'Activating the next Task’s fixed Workflow Role…'
   if (action.kind === 'recover') return 'Preparing a safe replacement result automatically…'
   if (action.kind === 'merge') return 'Adding the reviewed result to the project…'
   return 'Starting the next local Role…'

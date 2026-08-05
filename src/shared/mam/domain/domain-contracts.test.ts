@@ -63,6 +63,37 @@ describe('MAM domain contracts', () => {
     expect(WorkflowDefinitionSchema.safeParse(unbounded).success).toBe(false)
   })
 
+  it('requires every executable node to bind exactly one fixed Role', () => {
+    const workflow = workflowDefinition()
+    const node = workflow.nodes[0]!
+    expect(
+      WorkflowDefinitionSchema.safeParse({
+        ...workflow,
+        nodes: [
+          {
+            ...node,
+            recommendedRoleProfileIds: ['role.developer'],
+            allowedRoleProfileIds: ['role.reviewer']
+          },
+          workflow.nodes[1]!
+        ]
+      }).success
+    ).toBe(false)
+    expect(
+      WorkflowDefinitionSchema.safeParse({
+        ...workflow,
+        nodes: [
+          {
+            ...node,
+            recommendedRoleProfileIds: ['role.developer', 'role.reviewer'],
+            allowedRoleProfileIds: ['role.developer', 'role.reviewer']
+          },
+          workflow.nodes[1]!
+        ]
+      }).success
+    ).toBe(false)
+  })
+
   it('requires every Artifact version to identify its Task and availability', () => {
     const artifact = {
       schemaVersion: '1.0.0',

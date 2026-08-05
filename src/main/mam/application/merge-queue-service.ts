@@ -5,6 +5,7 @@ import type { WorkflowRunBundle } from '../../../shared/mam/domain/run-bundle'
 import type { WorkflowRunProjection } from '../state-store/git-state-projection'
 import { profileContentHash } from '../profiles/profile-content-hash'
 import { resolvedReviewStatus } from './review-disagreement-resolution'
+import { executableMergeValidationCommands } from './merge-validation-policy'
 
 export class MergeQueueError extends Error {
   constructor(
@@ -30,7 +31,8 @@ export function createMergeQueueEntry(input: {
     fail('merge_node_invalid', 'Merge readiness requires a git_merge node')
   }
   const task = input.projection.tasks[input.taskId]
-  if (!task || task.status !== 'approved') {
+  const promotion = promotionSource(input.bundle, input.projection, node.id, input.taskId)
+  if (!task || (task.status !== 'approved' && !(task.status === 'completed' && promotion))) {
     fail('merge_review_required', 'Merge candidate is not approved')
   }
   const attemptId = task.selectedAttemptId ?? task.knownAttemptIds.at(-1)
@@ -39,8 +41,7 @@ export function createMergeQueueEntry(input: {
     fail('merge_attempt_invalid', 'Merge candidate has no latest submitted Attempt Result')
   }
   const reviewedCommit = attempt.result.system.submittedCommit
-  if (!reviewedCommit)
-    fail('merge_commit_required', 'Code merge candidate has no submitted commit')
+  if (!reviewedCommit) fail('merge_commit_required', 'Code merge candidate has no submitted commit')
   const resultHash = profileContentHash(attempt.result)
   const reviews = task.reviewIds.flatMap((reviewId) => {
     const review = input.projection.reviews[reviewId]
@@ -64,8 +65,10 @@ export function createMergeQueueEntry(input: {
   ) {
     fail('merge_revision_mismatch', 'Approved Review targets another result revision')
   }
-  assertValidationEvidence(node.validations, input.validationEvidence)
-  const promotion = promotionSource(input.bundle, input.projection, node.id, input.taskId)
+  assertValidationEvidence(
+    executableMergeValidationCommands(node.validations),
+    input.validationEvidence
+  )
   const ready = {
     workflowRunId: input.bundle.run.id,
     mergeNodeId: node.id,

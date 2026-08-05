@@ -16,6 +16,7 @@ import {
   MAM_GET_UI_SNAPSHOT_CHANNEL,
   MAM_GET_ATTEMPT_DIFF_CHANNEL,
   MAM_EXPORT_DIAGNOSTICS_CHANNEL,
+  MAM_EXPORT_EXECUTION_ACTIVITY_CHANNEL,
   MAM_IMPORT_SKILL_CHANNEL,
   MAM_RECOVER_ATTEMPT_CHANNEL,
   MAM_START_ATTEMPT_CHANNEL,
@@ -54,6 +55,7 @@ export function registerMamIpc(
   selectProject: () => Promise<unknown>,
   importSkill: () => Promise<unknown>,
   exportDiagnostics: () => Promise<unknown>,
+  exportExecutionActivity: (input: unknown) => Promise<unknown>,
   runtimeLogger?: DesktopRuntimeLogger
 ): () => void {
   const handle = (
@@ -206,6 +208,10 @@ export function registerMamIpc(
     assertTrustedRenderer(event, window)
     return exportDiagnostics()
   })
+  handle(MAM_EXPORT_EXECUTION_ACTIVITY_CHANNEL, (event, input: unknown) => {
+    assertTrustedRenderer(event, window)
+    return exportExecutionActivity(input)
+  })
   return () => {
     ipcMain.removeHandler(MAM_GET_UI_SNAPSHOT_CHANNEL)
     ipcMain.removeHandler(MAM_GET_DESIGN_DRAFT_CHANNEL)
@@ -239,6 +245,7 @@ export function registerMamIpc(
     ipcMain.removeHandler(MAM_DELETE_ROLE_PROFILE_CHANNEL)
     ipcMain.removeHandler(MAM_IMPORT_SKILL_CHANNEL)
     ipcMain.removeHandler(MAM_EXPORT_DIAGNOSTICS_CHANNEL)
+    ipcMain.removeHandler(MAM_EXPORT_EXECUTION_ACTIVITY_CHANNEL)
   }
 }
 

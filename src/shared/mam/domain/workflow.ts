@@ -8,8 +8,8 @@ import {
 } from './primitives'
 
 const roleSelection = {
-  recommendedRoleProfileIds: z.array(MamEntityIdSchema),
-  allowedRoleProfileIds: z.array(MamEntityIdSchema)
+  recommendedRoleProfileIds: z.array(MamEntityIdSchema).length(1),
+  allowedRoleProfileIds: z.array(MamEntityIdSchema).length(1)
 }
 
 const roleTaskNode = z
@@ -223,11 +223,29 @@ export const WorkflowRunSchema = z
 
 function validateWorkflowGraph(
   definition: {
-    nodes: { id: string; type: string }[]
+    nodes: {
+      id: string
+      type: string
+      recommendedRoleProfileIds?: string[]
+      allowedRoleProfileIds?: string[]
+    }[]
     edges: { from: string; to: string; maxTraversals?: number | undefined }[]
   },
   context: z.RefinementCtx
 ): void {
+  for (const node of definition.nodes) {
+    if (
+      node.allowedRoleProfileIds &&
+      node.recommendedRoleProfileIds &&
+      node.allowedRoleProfileIds[0] !== node.recommendedRoleProfileIds[0]
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['nodes'],
+        message: `node ${node.id} must bind one fixed Role`
+      })
+    }
+  }
   const nodeIds = new Set<string>()
   for (const node of definition.nodes) {
     if (nodeIds.has(node.id)) {

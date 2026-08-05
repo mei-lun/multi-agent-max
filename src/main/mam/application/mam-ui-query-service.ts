@@ -18,7 +18,7 @@ import {
   type MamUiSnapshot
 } from '../../../shared/mam/ui-projection'
 import type { WorkflowRunProjection } from '../state-store/git-state-projection'
-import type { DiagnosticsRecorder } from '../diagnostics/diagnostics-recorder'
+import type { DiagnosticEvent, DiagnosticsRecorder } from '../diagnostics/diagnostics-recorder'
 import { projectWorkflowRun } from './workflow-run-projection'
 import { reviewDisagreementResolution } from './review-disagreement-resolution'
 import {
@@ -28,6 +28,7 @@ import {
 } from './attempt-interruption-projection'
 import { projectBinding } from './mam-ui-project-binding'
 import { collectMamUiTaskDefinitions } from './mam-ui-task-definitions'
+import { projectExecutionActivities } from './execution-activity-projection'
 
 type ActiveRegistry<T> = Readonly<{ listActive(): readonly T[] }>
 
@@ -69,8 +70,9 @@ export class MamUiQueryService {
 
   getSnapshot(): MamUiSnapshot {
     const generatedAt = this.now()
+    const diagnosticEvents = this.diagnostics?.list() ?? []
     const interruptions = indexAttemptInterruptions(
-      this.diagnostics?.listInterruptionEvents?.() ?? this.diagnostics?.list() ?? []
+      this.diagnostics?.listInterruptionEvents?.() ?? diagnosticEvents
     )
     const runSnapshots: MamUiRunSnapshot[] = []
     const issues: MamUiSnapshot['issues'][number][] = []
@@ -86,7 +88,13 @@ export class MamUiQueryService {
           continue
         }
         runSnapshots.push(
-          createRunSnapshot(bundle, this.runs!.rebuild(workflowRunId), generatedAt, interruptions)
+          createRunSnapshot(
+            bundle,
+            this.runs!.rebuild(workflowRunId),
+            generatedAt,
+            interruptions,
+            diagnosticEvents
+          )
         )
       } catch (error) {
         issues.push({
@@ -119,10 +127,30 @@ function createRunSnapshot(
   bundle: WorkflowRunBundle,
   projection: WorkflowRunProjection,
   generatedAt: string,
-  interruptions: AttemptInterruptionIndex
+  interruptions: AttemptInterruptionIndex,
+  diagnosticEvents: readonly DiagnosticEvent[]
 ): MamUiRunSnapshot {
   const application = projectWorkflowRun(bundle, projection, generatedAt)
   const taskDefinitions = collectMamUiTaskDefinitions(bundle, projection)
+  const nodeStatuses = new Map(application.nodeRuns.map((node) => [node.nodeId, node.status]))
+  const attempts: MamUiRunSnapshot['attempts'] = Object.entries(projection.attempts)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([id, attempt]) => {
+      const interruption = projectAttemptInterruption(bundle.run.id, attempt, interruptions)
+      return {
+        id,
+        taskId: attempt.taskId,
+        ...(attempt.previousAttemptId ? { previousAttemptId: attempt.previousAttemptId } : {}),
+        status: attempt.status,
+        ...(attempt.roleInstanceId ? { roleInstanceId: attempt.roleInstanceId } : {}),
+        ...(attempt.effectiveConfigHash
+          ? { effectiveConfigHash: attempt.effectiveConfigHash }
+          : {}),
+        ...(interruption ? { interruption } : {}),
+        ...(attempt.result ? { result: attempt.result } : {}),
+        ...(attempt.reusedFrom ? { reusedFrom: attempt.reusedFrom } : {})
+      }
+    })
   return {
     run: application.run,
     definitionName: bundle.definition.name,
@@ -133,6 +161,11 @@ function createRunSnapshot(
     readyTaskIds: [...application.readyTaskIds],
     approvalGates: bundle.definition.nodes
       .filter((node) => node.type === 'approval_gate')
+      .filter(
+        (node) =>
+          Boolean(projection.resolvedApprovalGates[node.id]) ||
+          nodeStatuses.get(node.id) === 'waiting_for_approval'
+      )
       .map((node) => ({
         id: node.id,
         prompt: node.prompt,
@@ -171,26 +204,12 @@ function createRunSnapshot(
           ...(task?.selectedAttemptId ? { selectedAttemptId: task.selectedAttemptId } : {}),
           ...(definition?.reviewSubject ? { reviewSubject: definition.reviewSubject } : {}),
           reviewIds: [...(task?.reviewIds ?? [])],
-          executionWarningCount: task?.executionWarnings.length ?? 0
+          executionWarningCount: task?.executionWarnings.length ?? 0,
+          ...(task?.reusedFrom ? { reusedFrom: task.reusedFrom } : {})
         }
       }),
-    attempts: Object.entries(projection.attempts)
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([id, attempt]) => {
-        const interruption = projectAttemptInterruption(bundle.run.id, attempt, interruptions)
-        return {
-          id,
-          taskId: attempt.taskId,
-          ...(attempt.previousAttemptId ? { previousAttemptId: attempt.previousAttemptId } : {}),
-          status: attempt.status,
-          ...(attempt.roleInstanceId ? { roleInstanceId: attempt.roleInstanceId } : {}),
-          ...(attempt.effectiveConfigHash
-            ? { effectiveConfigHash: attempt.effectiveConfigHash }
-            : {}),
-          ...(interruption ? { interruption } : {}),
-          ...(attempt.result ? { result: attempt.result } : {})
-        }
-      }),
+    attempts,
+    activities: projectExecutionActivities(bundle.run.id, diagnosticEvents, attempts),
     reviews: sortCreatedAt(Object.values(projection.reviews)),
     reviewAggregations: sortCreatedAt(Object.values(projection.reviewAggregations)),
     reviewDisagreementResolutions: Object.values(projection.reviewAggregations).flatMap(

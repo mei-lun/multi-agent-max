@@ -1,5 +1,8 @@
 import type { ProfileCatalog } from '../profiles/profile-catalog'
-import type { MamDesignProposal } from '../../../shared/mam/design-assistant'
+import type {
+  MamDesignProposal,
+  MamDesignWorkflowRevision
+} from '../../../shared/mam/design-assistant'
 import type { MamDesignProposalSpec } from '../../../shared/mam/design-proposal'
 import { failMamDesignAssistant } from './mam-design-assistant-error'
 import { materializeMamDesignProposal } from './mam-design-proposal-materializer'
@@ -29,6 +32,7 @@ export function buildMamDesignProposal(input: {
   template: MamDesignProposalSpec
   profiles: ProfileCatalog
   now: () => string
+  workflowRevision?: MamDesignWorkflowRevision
 }): MamDesignProposal {
   const role = input.template.roles[0]
   if (!role?.executorProfileId || !role.modelProfileId) {
@@ -43,12 +47,19 @@ export function buildMamDesignProposal(input: {
     {
       executorProfileId: role.executorProfileId,
       modelProfileId: role.modelProfileId
-    }
+    },
+    input.workflowRevision
+      ? {
+          revision: input.workflowRevision,
+          existingRoleIds: input.profiles.roles.listActive().map(({ id }) => id)
+        }
+      : undefined
   )
   return createMamDesignProposal({
     ...materialized,
     profiles: input.profiles,
     now: input.now,
-    source: input.source
+    source: input.source,
+    ...(input.workflowRevision ? { workflowRevision: input.workflowRevision } : {})
   })
 }

@@ -39,10 +39,7 @@ describe('MAM Design standard template', () => {
       executorProfileId: 'executor.pi',
       modelProfileId: 'model.designer'
     })
-    expect(template.roles.map((role) => role.key)).toEqual([
-      'delivery-author',
-      'delivery-reviewer'
-    ])
+    expect(template.roles.map((role) => role.key)).toEqual(['delivery-author', 'delivery-reviewer'])
     expect(template.workflow.edges).toEqual([
       { from: 'prepare-delivery', to: 'review-delivery' },
       { from: 'review-delivery', to: 'integrate-develop' },
@@ -73,8 +70,104 @@ describe('MAM Design standard template', () => {
     expect(prompt).toContain('Never use maxTraversals on a normal forward or conditional branch.')
     expect(prompt).toContain('git_merge to develop')
     expect(prompt).toContain('git_merge from the integrated revision to main')
+    expect(prompt).toContain(
+      'Never put prose, review criteria, or confirmation text in validations'
+    )
     expect(prompt).toContain('"preferredExecutionBinding"')
     expect(prompt).toContain(JSON.stringify(template))
+  })
+
+  it('rejects prose checklists in post-merge command validation fields', () => {
+    const root = mkdtempSync(join(tmpdir(), 'mam-design-merge-validation-'))
+    temporaryDirectories.push(root)
+    const profiles = new ProfileCatalog(join(root, 'catalog'))
+    seedProfiles(profiles)
+    const template = structuredClone(
+      createMamDesignStandardTemplate({ profiles, modelProfileId: 'model.designer' })
+    )
+    const merge = template.workflow.nodes.find((node) => node.type === 'git_merge')
+    if (!merge || merge.type !== 'git_merge') throw new Error('template merge node missing')
+    merge.validations = ['Confirm that Review approved this revision']
+    const materialized = materializeMamDesignProposal(template, (_kind, id) => id)
+    const proposal = createMamDesignProposal({
+      ...materialized,
+      profiles,
+      now: () => '2026-07-30T00:00:00Z',
+      source: template
+    })
+
+    expect(proposal.issues).toContainEqual(
+      expect.objectContaining({ code: 'merge_validation_command_required', severity: 'error' })
+    )
+  })
+
+  it('instructs revisions to preserve the selected Workflow identity', () => {
+    const root = mkdtempSync(join(tmpdir(), 'mam-design-revision-prompt-'))
+    temporaryDirectories.push(root)
+    const profiles = new ProfileCatalog(join(root, 'catalog'))
+    seedProfiles(profiles)
+    const template = createMamDesignStandardTemplate({
+      profiles,
+      modelProfileId: 'model.designer'
+    })
+
+    const prompt = buildMamDesignSystemPrompt({
+      profiles,
+      selectedModelProfileId: 'model.designer',
+      standardTemplate: template,
+      workflowRevision: {
+        workflowId: 'workflow.delivery',
+        baseVersion: 3,
+        nextVersion: 4
+      }
+    })
+
+    expect(prompt).toContain('Optimize Workflow workflow.delivery version 3 as version 4.')
+    expect(prompt).toContain('Preserve the current Workflow as the baseline')
+    expect(prompt).toContain('same single full ID from existingRoles')
+  })
+
+  it('materializes a revision with existing Role IDs and no duplicate Roles', () => {
+    const source = {
+      roles: [],
+      workflow: {
+        key: 'replacement-key',
+        name: 'Improved delivery',
+        nodes: [
+          {
+            key: 'write',
+            type: 'role_task' as const,
+            recommendedRoleKeys: ['role.writer'],
+            allowedRoleKeys: ['role.writer'],
+            instruction: 'Write the delivery.',
+            workspaceMode: 'none' as const,
+            inputArtifactKeys: [],
+            outputs: [{ key: 'delivery' }]
+          },
+          { key: 'finish', type: 'finish' as const, inputArtifactKeys: ['delivery'] }
+        ],
+        edges: [{ from: 'write', to: 'finish' }],
+        maxTransitions: 10,
+        maxRunCostUsd: 5,
+        maxRunDurationSeconds: 1_800
+      }
+    }
+
+    const materialized = materializeMamDesignProposal(source, (_kind, id) => id, undefined, {
+      revision: { workflowId: 'workflow.delivery', baseVersion: 1, nextVersion: 2 },
+      existingRoleIds: ['role.writer']
+    })
+
+    expect(materialized.roles).toEqual([])
+    expect(materialized.workflow).toMatchObject({
+      id: 'workflow.delivery',
+      version: 2
+    })
+    expect(materialized.workflow.nodes[0]).toMatchObject({
+      id: 'write',
+      allowedRoleProfileIds: ['role.writer'],
+      recommendedRoleProfileIds: ['role.writer']
+    })
   })
 
   it('materializes generated Review reports with the internal structured contract', () => {

@@ -9,6 +9,7 @@ import {
   MamDesignProposalSpecSchema,
   type MamDesignProposalSpec
 } from '../../../shared/mam/design-proposal'
+import type { MamDesignWorkflowRevision } from '../../../shared/mam/design-assistant'
 import { automaticReviewArtifactContract } from './automatic-review-contract'
 
 const EMPTY_HASH = '0'.repeat(64)
@@ -28,6 +29,11 @@ export type MamDesignDefaultExecutionBinding = Readonly<{
   modelProfileId: string
 }>
 
+export type MamDesignProposalRevisionContext = Readonly<{
+  revision: MamDesignWorkflowRevision
+  existingRoleIds: readonly string[]
+}>
+
 export class MamDesignProposalMaterializationError extends Error {
   constructor(
     readonly code: string,
@@ -41,10 +47,14 @@ export class MamDesignProposalMaterializationError extends Error {
 export function materializeMamDesignProposal(
   input: unknown,
   allocateId: MamDesignProposalIdAllocator,
-  defaultExecutionBinding?: MamDesignDefaultExecutionBinding
+  defaultExecutionBinding?: MamDesignDefaultExecutionBinding,
+  revisionContext?: MamDesignProposalRevisionContext
 ): MamDesignMaterializedProposal {
   const proposal = MamDesignProposalSpecSchema.parse(input)
-  const roleIds = buildRoleIds(proposal, allocateId)
+  const roleIds = new Map(buildRoleIds(proposal, allocateId))
+  for (const roleId of revisionContext?.existingRoleIds ?? []) {
+    if (!roleIds.has(roleId)) roleIds.set(roleId, roleId)
+  }
   const artifactTypes = buildArtifactTypes(proposal)
   const roles = proposal.roles.map((role) =>
     RoleProfileSchema.parse({
@@ -79,9 +89,11 @@ export function materializeMamDesignProposal(
   )
   const workflow = WorkflowDefinitionSchema.parse({
     schemaVersion: '1.0.0',
-    id: allocateId('workflow', prefixedId('workflow', proposal.workflow.key)),
+    id:
+      revisionContext?.revision.workflowId ??
+      allocateId('workflow', prefixedId('workflow', proposal.workflow.key)),
     name: proposal.workflow.name,
-    version: 1,
+    version: revisionContext?.revision.nextVersion ?? 1,
     nodes: proposal.workflow.nodes.map((node) => materializeNode(node, roleIds, artifactTypes)),
     edges: proposal.workflow.edges,
     maxTransitions: proposal.workflow.maxTransitions,
@@ -216,9 +228,9 @@ function roleSelection(
   roleIds: ReadonlyMap<string, string>
 ) {
   const allowedRoleProfileIds = input.allowedRoleKeys.map((key) => requireRoleId(key, roleIds))
-  const recommendedRoleProfileIds = input.recommendedRoleKeys.map((key) =>
-    requireRoleId(key, roleIds)
-  )
+  const recommendedKeys =
+    input.recommendedRoleKeys.length > 0 ? input.recommendedRoleKeys : input.allowedRoleKeys
+  const recommendedRoleProfileIds = recommendedKeys.map((key) => requireRoleId(key, roleIds))
   const allowed = new Set(allowedRoleProfileIds)
   if (recommendedRoleProfileIds.some((id) => !allowed.has(id))) {
     fail('recommended_role_not_allowed', 'Every recommended Role must also be allowed')

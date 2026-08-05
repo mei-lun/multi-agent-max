@@ -102,11 +102,16 @@ describe('PiRpcAdapter', () => {
       readyPreflight()
     )
 
-    const execution = await adapter.execute(executionInput(fixture))
+    const onEvent = vi.fn()
+    const execution = await adapter.execute({ ...executionInput(fixture), onEvent })
 
     expect(execution.assistantText).toContain('# Deliverable')
     expect(execution.events).toHaveLength(1)
     expect(execution.events[0]?.sourceEventType).toBe('agent_settled')
+    expect(onEvent).toHaveBeenCalledTimes(2_001)
+    expect(onEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'agent_message', sourceEventType: 'message_update' })
+    )
     expect(execution.invocation.launchOptions.args).toContain('--tools')
     expect(execution.invocation.launchOptions.args).toContain('read,grep,find,ls')
   })

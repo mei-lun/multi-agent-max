@@ -10,7 +10,8 @@ import {
   MamDesignSendMessageInputSchema,
   MamDesignUpdateProposalInputSchema,
   type MamDesignDraft,
-  type MamDesignMessage
+  type MamDesignMessage,
+  type MamDesignWorkflowRevision
 } from '../../../shared/mam/design-assistant'
 import type { ProfileCatalog } from '../profiles/profile-catalog'
 import type { MamUiQueryService } from './mam-ui-query-service'
@@ -82,7 +83,22 @@ export class MamDesignAssistantService {
   reset(input: unknown): MamDesignDraft {
     const parsed = MamDesignResetInputSchema.parse(input)
     if (parsed.modelProfileId) requireMamDesignTemplateModel(this.profiles, parsed.modelProfileId)
-    return this.drafts.reset(parsed.modelProfileId)
+    if (!parsed.workflowId) return this.drafts.reset(parsed.modelProfileId)
+    const workflow = this.profiles.workflows.getActive(parsed.workflowId)
+    if (!workflow) fail('design_workflow_not_found', `Workflow is not active: ${parsed.workflowId}`)
+    const revision = this.workflowRevision(workflow.id, workflow.version)
+    const proposal = createMamDesignProposal({
+      roles: [],
+      workflow: { ...workflow, version: revision.nextVersion },
+      profiles: this.profiles,
+      now: this.now,
+      workflowRevision: revision
+    })
+    return this.drafts.reset({
+      ...(parsed.modelProfileId ? { modelProfileId: parsed.modelProfileId } : {}),
+      workflowRevision: revision,
+      proposal
+    })
   }
 
   createTemplate(input: unknown): MamDesignDraft {
@@ -98,7 +114,8 @@ export class MamDesignAssistantService {
       source,
       template: source,
       profiles: this.profiles,
-      now: this.now
+      now: this.now,
+      ...(draft.workflowRevision ? { workflowRevision: draft.workflowRevision } : {})
     })
     const { recovery: _recovery, ...rest } = draft
     return this.drafts.save({
@@ -154,7 +171,8 @@ export class MamDesignAssistantService {
       roles: parsed.roles,
       workflow: parsed.workflow,
       profiles: this.profiles,
-      now: this.now
+      now: this.now,
+      ...(draft.workflowRevision ? { workflowRevision: draft.workflowRevision } : {})
     })
     const { recovery: _recovery, ...rest } = draft
     const recovery = hasBlockingDesignIssues(proposal.issues)
@@ -178,7 +196,7 @@ export class MamDesignAssistantService {
       fail('design_proposal_invalid', 'Resolve proposal errors before creating definitions')
     }
     try {
-      writeMamDesignProposal(draft.proposal, this.profiles)
+      writeMamDesignProposal(draft.proposal, this.profiles, draft.workflowRevision)
     } catch (cause) {
       this.drafts.save({
         ...draft,
@@ -214,7 +232,8 @@ export class MamDesignAssistantService {
           selectedModelProfileId: modelProfileId,
           standardTemplate: template,
           ...(draft.proposal ? { currentProposal: draft.proposal } : {}),
-          ...(draft.recovery ? { recovery: draft.recovery } : {})
+          ...(draft.recovery ? { recovery: draft.recovery } : {}),
+          ...(draft.workflowRevision ? { workflowRevision: draft.workflowRevision } : {})
         }),
         messages: draft.messages.slice(-MAX_GATEWAY_MESSAGES),
         signal: controller.signal
@@ -227,7 +246,8 @@ export class MamDesignAssistantService {
           source,
           template,
           profiles: this.profiles,
-          now: this.now
+          now: this.now,
+          ...(draft.workflowRevision ? { workflowRevision: draft.workflowRevision } : {})
         })
       )
       const { recovery: _recovery, ...rest } = draft
@@ -267,6 +287,13 @@ export class MamDesignAssistantService {
     if (draft.status !== 'draft')
       fail('design_draft_applied', 'Start a new Design before continuing')
     return draft
+  }
+
+  private workflowRevision(workflowId: string, baseVersion: number): MamDesignWorkflowRevision {
+    const latestVersion = this.profiles.workflows
+      .listVersions(workflowId)
+      .reduce((latest, workflow) => Math.max(latest, workflow.version), baseVersion)
+    return { workflowId, baseVersion, nextVersion: latestVersion + 1 }
   }
 
   private message(role: MamDesignMessage['role'], content: string): MamDesignMessage {

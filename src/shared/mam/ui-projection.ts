@@ -61,7 +61,16 @@ export const MamUiTaskSnapshotSchema = z
     selectedAttemptId: MamEntityIdSchema.optional(),
     reviewSubject: ReviewSubjectSchema.optional(),
     reviewIds: z.array(MamEntityIdSchema),
-    executionWarningCount: z.number().int().nonnegative()
+    executionWarningCount: z.number().int().nonnegative(),
+    reusedFrom: z
+      .object({
+        workflowRunId: MamEntityIdSchema,
+        taskId: MamEntityIdSchema,
+        attemptId: MamEntityIdSchema,
+        nodeId: MamEntityIdSchema
+      })
+      .strict()
+      .optional()
   })
   .strict()
 
@@ -92,7 +101,32 @@ export const MamUiAttemptSnapshotSchema = z
     roleInstanceId: MamEntityIdSchema.optional(),
     effectiveConfigHash: Sha256Schema.optional(),
     interruption: MamUiAttemptInterruptionSchema.optional(),
-    result: AttemptResultSchema.optional()
+    result: AttemptResultSchema.optional(),
+    reusedFrom: z
+      .object({
+        workflowRunId: MamEntityIdSchema,
+        taskId: MamEntityIdSchema,
+        attemptId: MamEntityIdSchema,
+        nodeId: MamEntityIdSchema
+      })
+      .strict()
+      .optional()
+  })
+  .strict()
+
+export const MamUiExecutionActivitySchema = z
+  .object({
+    id: MamEntityIdSchema,
+    at: IsoTimestampSchema,
+    nodeId: MamEntityIdSchema,
+    roleInstanceId: MamEntityIdSchema,
+    executorInvocationId: MamEntityIdSchema,
+    taskId: MamEntityIdSchema.optional(),
+    attemptId: MamEntityIdSchema.optional(),
+    category: z.enum(['status', 'message', 'command', 'tool', 'usage', 'error']),
+    title: z.string().min(1).max(120),
+    detail: z.string().min(1).max(2_000).optional(),
+    sourceEventType: z.string().min(1).max(160).optional()
   })
   .strict()
 
@@ -120,6 +154,7 @@ export const MamUiRunSnapshotSchema = z
       .optional(),
     tasks: z.array(MamUiTaskSnapshotSchema),
     attempts: z.array(MamUiAttemptSnapshotSchema),
+    activities: z.array(MamUiExecutionActivitySchema).default([]),
     reviews: z.array(ReviewDecisionSchema),
     reviewAggregations: z.array(ReviewAggregationSchema),
     reviewDisagreementResolutions: z.array(ReviewDisagreementResolutionSchema),
@@ -167,3 +202,4 @@ export const MamUiSnapshotSchema = z
 
 export type MamUiSnapshot = z.infer<typeof MamUiSnapshotSchema>
 export type MamUiRunSnapshot = z.infer<typeof MamUiRunSnapshotSchema>
+export type MamUiExecutionActivity = z.infer<typeof MamUiExecutionActivitySchema>

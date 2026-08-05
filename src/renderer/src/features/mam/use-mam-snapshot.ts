@@ -28,8 +28,6 @@ import type { MamFetchModelCatalogInput } from '../../../../shared/mam/model-cat
 import { mamApplicationErrorMessage } from './mam-application-error-message'
 import type { MamSnapshotState } from './mam-snapshot-state'
 
-export type { MamSnapshotState } from './mam-snapshot-state'
-
 export function useMamSnapshot(): MamSnapshotState {
   const [snapshot, setSnapshot] = useState<MamUiSnapshot>()
   const [error, setError] = useState<string>()
@@ -256,6 +254,7 @@ export function useMamSnapshot(): MamSnapshotState {
     })
   }, [applyAuthoritativeChange])
   const exportDiagnostics = useCallback(() => getMamRendererApi().exportDiagnostics(), [])
+  const exportExecutionActivity = useCallback(getMamRendererApi().exportExecutionActivity, [])
   const getAttemptDiff = useCallback(async (input: MamGetAttemptDiffInput) => {
     return MamAttemptDiffSchema.parse(await getMamRendererApi().getAttemptDiff(input))
   }, [])
@@ -295,6 +294,7 @@ export function useMamSnapshot(): MamSnapshotState {
     deleteRoleProfile,
     importSkill,
     exportDiagnostics,
+    exportExecutionActivity,
     getAttemptDiff
   }
 }

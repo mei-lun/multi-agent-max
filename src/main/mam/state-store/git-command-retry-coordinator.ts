@@ -186,10 +186,21 @@ export class GitCommandRetryCoordinator {
         mergeResolutionCandidate: input.command.resolution
       }
     }
+    const application = bundle
+      ? projectWorkflowRun(bundle, projection, input.command.issuedAt)
+      : undefined
+    const nodeStatuses = new Map(
+      application?.nodeRuns.map((node) => [node.nodeId, node.status]) ?? []
+    )
     const approvalGates = bundle
       ? new Map([
           ...bundle.definition.nodes
             .filter((node) => node.type === 'approval_gate')
+            .filter(
+              (node) =>
+                Boolean(projection.resolvedApprovalGates[node.id]) ||
+                nodeStatuses.get(node.id) === 'waiting_for_approval'
+            )
             .map(
               (node) =>
                 [
@@ -231,12 +242,7 @@ export class GitCommandRetryCoordinator {
           ...baseContext,
           resolvedConditionNodeIds: new Set(Object.keys(projection.resolvedConditions)),
           completedSystemNodeIds: new Set(Object.keys(projection.systemNodeExecutions)),
-          nodeStatuses: new Map(
-            projectWorkflowRun(bundle, projection, input.command.issuedAt).nodeRuns.map((node) => [
-              node.nodeId,
-              node.status
-            ])
-          )
+          nodeStatuses
         }
       : baseContext
     return {

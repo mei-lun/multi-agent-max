@@ -4,7 +4,6 @@ import type {
   MamAssignTaskInput,
   MamCancelWorkflowRunInput,
   MamRecoverAttemptInput,
-  MamReassignTaskInput,
   MamRestartWorkflowRunInput,
   MamSaveLocalSettingsInput,
   MamResolveApprovalGateInput,
@@ -41,7 +40,6 @@ export function MamRunRecordPanel({
   onRestartWorkflowRun,
   executionError,
   onSaveLocalSettings,
-  onReassignTask,
   onRecoverAttempt,
   onSelectAttempt,
   onGetAttemptDiff,
@@ -61,7 +59,6 @@ export function MamRunRecordPanel({
   onRestartWorkflowRun(input: MamRestartWorkflowRunInput): Promise<void>
   executionError?: string
   onSaveLocalSettings(input: MamSaveLocalSettingsInput): Promise<void>
-  onReassignTask(input: MamReassignTaskInput): Promise<void>
   onRecoverAttempt(input: MamRecoverAttemptInput): Promise<void>
   onSelectAttempt(input: MamSelectAttemptInput): Promise<void>
   onGetAttemptDiff(input: MamGetAttemptDiffInput): Promise<MamAttemptDiff>
@@ -110,7 +107,9 @@ export function MamRunRecordPanel({
           />
           {!['completed', 'cancelled'].includes(run.run.status) && (
             <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
-              <p className="text-xs text-muted-foreground">Wrong setup or want a clean start?</p>
+              <p className="text-xs text-muted-foreground">
+                Stuck or want to restart without losing completed work?
+              </p>
               <MamResetRunDialog
                 run={run}
                 pending={pending}
@@ -126,7 +125,6 @@ export function MamRunRecordPanel({
             pending={pending}
             onAssignTask={onAssignTask}
             onStartAttempt={onStartAttempt}
-            onReassignTask={onReassignTask}
             onRecoverAttempt={onRecoverAttempt}
             onSelectAttempt={onSelectAttempt}
             onGetAttemptDiff={onGetAttemptDiff}
@@ -143,7 +141,6 @@ function RunTasks({
   pending,
   onAssignTask,
   onStartAttempt,
-  onReassignTask,
   onRecoverAttempt,
   onSelectAttempt,
   onGetAttemptDiff
@@ -153,7 +150,6 @@ function RunTasks({
   pending: boolean
   onAssignTask(input: MamAssignTaskInput): Promise<void>
   onStartAttempt(input: MamStartAttemptInput): Promise<void>
-  onReassignTask(input: MamReassignTaskInput): Promise<void>
   onRecoverAttempt(input: MamRecoverAttemptInput): Promise<void>
   onSelectAttempt(input: MamSelectAttemptInput): Promise<void>
   onGetAttemptDiff(input: MamGetAttemptDiffInput): Promise<MamAttemptDiff>
@@ -203,7 +199,6 @@ function RunTasks({
               pending={pending}
               onAssignTask={onAssignTask}
               onStartAttempt={onStartAttempt}
-              onReassignTask={onReassignTask}
               onRecoverAttempt={onRecoverAttempt}
               onSelectAttempt={onSelectAttempt}
               onGetAttemptDiff={onGetAttemptDiff}
@@ -224,7 +219,14 @@ function taskRoleName(
   task: MamUiRunSnapshot['tasks'][number],
   roleNames: ReadonlyMap<string, string>
 ): string {
-  if (!task.roleProfileId) return 'Unassigned'
+  if (!task.roleProfileId) {
+    const fixedRoleId = task.allowedRoleProfileIds[0]
+    const roleEntry = run.run.roleCatalog.find((entry) => entry.roleProfileId === fixedRoleId)
+    if (fixedRoleId && roleEntry) {
+      return frozenRoleName(run, fixedRoleId, roleEntry.roleProfileVersion)
+    }
+    return 'Fixed Role unavailable'
+  }
   if (task.roleProfileVersion) {
     return frozenRoleName(run, task.roleProfileId, task.roleProfileVersion)
   }

@@ -30,6 +30,8 @@ import { ensureBuiltinPiProfile } from './mam/profiles/builtin-pi-profile'
 import { MamDesignDraftStore } from './mam/application/mam-design-draft-store'
 import { MamDesignAssistantService } from './mam/application/mam-design-assistant-service'
 import { DesktopRuntimeLogger } from './mam/diagnostics/desktop-runtime-logger'
+import { MamExportExecutionActivityInputSchema } from '../shared/mam/execution-activity-export'
+import { selectExecutionActivityEvents } from './mam/diagnostics/execution-activity-export-selection'
 
 let unregisterMamIpc: (() => void) | undefined
 
@@ -51,6 +53,7 @@ function createMainWindow(): void {
       sandbox: true
     }
   })
+  const notifySnapshotChanged = createSnapshotChangeNotifier(window)
   const mamRoot = join(app.getPath('userData'), 'mam')
   const runtimeLogger = new DesktopRuntimeLogger(join(mamRoot, 'diagnostics', 'runtime.jsonl'))
   const stopRuntimeHeartbeat = runtimeLogger.startHeartbeat()
@@ -135,9 +138,7 @@ function createMainWindow(): void {
     workspaceRoot: join(app.getPath('userData'), 'mam', 'attempt-worktrees'),
     secretValues,
     ...(initialRepository ? { repository: initialRepository } : {}),
-    onStateChanged: () => {
-      if (!window.isDestroyed()) window.webContents.send(MAM_UI_SNAPSHOT_CHANGED_CHANNEL)
-    }
+    onStateChanged: notifySnapshotChanged
   })
   const attemptInspection = new MamAttemptInspectionService(initialRepository, () =>
     createGitCommandClient(localSettings.get().gitExecutable)
@@ -196,6 +197,18 @@ function createMainWindow(): void {
       if (result.canceled || !result.filePath) return undefined
       return diagnostics.exportBundle(result.filePath)
     },
+    async (input) => {
+      const parsed = MamExportExecutionActivityInputSchema.parse(input)
+      const scope = parsed.nodeId ?? parsed.workflowRunId
+      const result = await dialog.showSaveDialog(window, {
+        title: parsed.nodeId ? 'Export node execution activity' : 'Export Run execution activity',
+        defaultPath: join(app.getPath('documents'), `mam-execution-${safeFileName(scope)}.json`),
+        filters: [{ name: 'JSON', extensions: ['json'] }]
+      })
+      if (result.canceled || !result.filePath) return undefined
+      const events = selectExecutionActivityEvents(diagnostics.list(), parsed)
+      return diagnostics.exportBundle(result.filePath, events)
+    },
     runtimeLogger
   )
 
@@ -230,6 +243,21 @@ function createMainWindow(): void {
   const developmentUrl = process.env.ELECTRON_RENDERER_URL
   if (developmentUrl) void window.loadURL(developmentUrl)
   else void window.loadFile(join(__dirname, '../renderer/index.html'))
+}
+
+function safeFileName(value: string): string {
+  return value.replace(/[^A-Za-z0-9._-]+/g, '-').slice(0, 96)
+}
+
+function createSnapshotChangeNotifier(window: BrowserWindow): () => void {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  return () => {
+    if (timer || window.isDestroyed()) return
+    timer = setTimeout(() => {
+      timer = undefined
+      if (!window.isDestroyed()) window.webContents.send(MAM_UI_SNAPSHOT_CHANGED_CHANNEL)
+    }, 120)
+  }
 }
 
 function configuredStateRepository(

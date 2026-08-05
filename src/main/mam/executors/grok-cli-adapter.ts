@@ -21,6 +21,7 @@ import type { GrokAcpNotification, GrokAcpTransport } from './grok-acp-protocol'
 import { GrokAcpStdioTransport } from './grok-acp-transport'
 import { prepareGrokCliInvocation, type GrokCliInvocation } from './grok-cli-invocation'
 import { ExecutorLocalPreflight } from './executor-local-preflight'
+import { emitObservedExecutorEvent, type ExecutorEventListener } from './executor-event-listener'
 
 export type GrokCliExecutionResult = Readonly<{
   invocation: GrokCliInvocation
@@ -71,6 +72,7 @@ export class GrokCliAdapter {
     prompt: string
     credentialValues: Readonly<Record<string, string>>
     authority: AttemptResultAuthority
+    onEvent?: ExecutorEventListener
   }): Promise<GrokCliExecutionResult> {
     this.validateExecution(input)
     const invocation = await prepareGrokCliInvocation({
@@ -81,7 +83,9 @@ export class GrokCliAdapter {
     const events: ExecutorEvent[] = []
     let resultText = ''
     const unsubscribe = transport.onNotification((notification) => {
-      events.push(normalizeNotification(notification, input.executorInvocationId, this.now()))
+      const event = normalizeNotification(notification, input.executorInvocationId, this.now())
+      events.push(event)
+      emitObservedExecutorEvent(input.onEvent, event)
       resultText += extractAgentText(notification)
     })
     let sessionId: string | undefined
@@ -111,7 +115,9 @@ export class GrokCliAdapter {
         executorInvocationId: input.executorInvocationId,
         effectiveConfigHash: input.snapshot.contentHash
       }
-      events.push(acceptedResultEvent(input.executorInvocationId, this.now()))
+      const completedEvent = acceptedResultEvent(input.executorInvocationId, this.now())
+      events.push(completedEvent)
+      emitObservedExecutorEvent(input.onEvent, completedEvent)
       await transport.stop()
       return {
         invocation,

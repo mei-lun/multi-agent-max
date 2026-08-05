@@ -14,14 +14,13 @@ describe('Attempt recovery projection', () => {
     run.execute(assignmentCommand())
     run.execute(announcementCommand('attempt.old'))
     run.execute(recoveryCommand({ kind: 'start_new_attempt', newAttemptId: 'attempt.new' }))
-    run.execute(reassignmentCommand())
 
     expect(run.projection.attempts['attempt.old']?.status).toBe('blocked')
     expect(run.projection.attempts['attempt.new']?.status).toBe('recovery_planned')
     expect(run.projection.tasks['task.recovery']).toMatchObject({
       status: 'ready',
-      roleProfileId: 'role.reviewer',
-      roleProfileVersion: 2,
+      roleProfileId: 'role.developer',
+      roleProfileVersion: 1,
       activeAttemptIds: [],
       knownAttemptIds: ['attempt.old', 'attempt.new']
     })
@@ -54,7 +53,7 @@ describe('Attempt recovery projection', () => {
     })
   })
 
-  it('requires every concurrent interruption to be reconciled before reassignment', () => {
+  it('requires every concurrent interruption to be reconciled before retry', () => {
     const run = new RecoveryRun()
     run.execute(assignmentCommand())
     run.execute(announcementCommand('attempt.first'))
@@ -78,16 +77,12 @@ describe('Attempt recovery projection', () => {
 
     run.execute(reconciliationResolutionCommand('attempt.first', 'attempt.first-replacement'))
     expect(run.projection.tasks['task.recovery']?.status).toBe('needs_attention')
-    expect(() => run.execute(reassignmentCommand())).toThrow(
-      expect.objectContaining({ code: 'invalid_transition' })
-    )
 
     run.execute(reconciliationResolutionCommand('attempt.second', 'attempt.second-replacement'))
-    run.execute(reassignmentCommand())
     expect(run.projection.tasks['task.recovery']).toMatchObject({
       status: 'ready',
-      roleProfileId: 'role.reviewer',
-      roleProfileVersion: 2,
+      roleProfileId: 'role.developer',
+      roleProfileVersion: 1,
       activeAttemptIds: []
     })
     expect(run.projection.attempts['attempt.first-replacement']).toMatchObject({
@@ -136,7 +131,7 @@ class RecoveryRun {
             taskId: command.taskId,
             taskDefinition: {
               initialStatus: 'waiting_role_assignment' as const,
-              allowedRoleProfileIds: ['role.developer', 'role.reviewer'],
+              allowedRoleProfileIds: ['role.developer'],
               roleCatalogVersions: new Map([
                 ['role.developer', new Set([1])],
                 ['role.reviewer', new Set([2])]
@@ -217,18 +212,6 @@ function resultCommand(attemptId: string): SchedulerCommand {
         createdAt: '2026-07-27T14:05:00Z'
       }
     }
-  }
-}
-
-function reassignmentCommand(): SchedulerCommand {
-  return {
-    ...baseCommand('command.reassign'),
-    actor: { kind: 'user', userId: 'user.owner' },
-    type: 'reassign_task',
-    previousRoleProfileId: 'role.developer',
-    previousRoleProfileVersion: 1,
-    roleProfileId: 'role.reviewer',
-    roleProfileVersion: 2
   }
 }
 

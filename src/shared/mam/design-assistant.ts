@@ -25,11 +25,19 @@ export const MamDesignValidationIssueSchema = z
 export const MamDesignProposalSchema = z
   .object({
     hash: Sha256Schema,
-    roles: z.array(RoleProfileSchema).min(1).max(50),
+    roles: z.array(RoleProfileSchema).max(50),
     workflow: WorkflowDefinitionSchema,
     issues: z.array(MamDesignValidationIssueSchema),
     source: MamDesignProposalSpecSchema.optional(),
     createdAt: IsoTimestampSchema
+  })
+  .strict()
+
+export const MamDesignWorkflowRevisionSchema = z
+  .object({
+    workflowId: MamEntityIdSchema,
+    baseVersion: z.number().int().positive(),
+    nextVersion: z.number().int().positive()
   })
   .strict()
 
@@ -48,6 +56,7 @@ export const MamDesignDraftSchema = z
     schemaVersion: z.literal('1.0.0'),
     id: MamEntityIdSchema,
     selectedModelProfileId: MamEntityIdSchema.optional(),
+    workflowRevision: MamDesignWorkflowRevisionSchema.optional(),
     messages: z.array(MamDesignMessageSchema).max(200),
     proposal: MamDesignProposalSchema.optional(),
     recovery: MamDesignRecoverySchema.optional(),
@@ -73,7 +82,10 @@ export const MamDesignSelectModelInputSchema = z
   .strict()
 
 export const MamDesignResetInputSchema = z
-  .object({ modelProfileId: MamEntityIdSchema.optional() })
+  .object({
+    modelProfileId: MamEntityIdSchema.optional(),
+    workflowId: MamEntityIdSchema.optional()
+  })
   .strict()
 
 export const MamDesignCreateTemplateInputSchema = z
@@ -85,7 +97,7 @@ export const MamDesignRetryInputSchema = z.object({ requestId: MamEntityIdSchema
 export const MamDesignUpdateProposalInputSchema = z
   .object({
     expectedProposalHash: Sha256Schema,
-    roles: z.array(RoleProfileSchema).min(1).max(50),
+    roles: z.array(RoleProfileSchema).max(50),
     workflow: WorkflowDefinitionSchema
   })
   .strict()
@@ -95,6 +107,7 @@ export const MamDesignApplyProposalInputSchema = z.object({ proposalHash: Sha256
 export type MamDesignMessage = z.infer<typeof MamDesignMessageSchema>
 export type MamDesignValidationIssue = z.infer<typeof MamDesignValidationIssueSchema>
 export type MamDesignProposal = z.infer<typeof MamDesignProposalSchema>
+export type MamDesignWorkflowRevision = z.infer<typeof MamDesignWorkflowRevisionSchema>
 export type MamDesignRecovery = z.infer<typeof MamDesignRecoverySchema>
 export type MamDesignDraft = z.infer<typeof MamDesignDraftSchema>
 export type MamDesignSendMessageInput = z.infer<typeof MamDesignSendMessageInputSchema>

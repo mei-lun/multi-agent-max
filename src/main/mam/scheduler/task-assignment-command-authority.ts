@@ -19,25 +19,7 @@ export function assertTaskAssignmentAuthority(input: {
     assertTargetRoleAllowed(command, task, reject)
     return
   }
-  if (task.status !== 'ready' && task.status !== 'changes_requested') {
-    reject('invalid_transition', 'Role can change only before the next Attempt starts')
-  }
-  if (task.activeAttemptIds.size > 0) {
-    reject('active_attempt_reassignment_forbidden', 'recover active Attempts before changing Role')
-  }
-  if (
-    task.assignedRoleProfileId !== command.previousRoleProfileId ||
-    task.assignedRoleProfileVersion !== command.previousRoleProfileVersion
-  ) {
-    reject('assignment_changed', 'Role Assignment changed before this command was applied')
-  }
-  if (
-    command.roleProfileId === command.previousRoleProfileId &&
-    command.roleProfileVersion === command.previousRoleProfileVersion
-  ) {
-    reject('assignment_unchanged', 'select a different Role version')
-  }
-  assertTargetRoleAllowed(command, task, reject)
+  reject('workflow_role_binding_fixed', 'Workflow node Roles cannot be reassigned during a Run')
 }
 
 function assertTargetRoleAllowed(
@@ -45,11 +27,11 @@ function assertTargetRoleAllowed(
   task: SchedulerTaskContext,
   reject: (code: string, message: string) => never
 ): void {
-  if (
-    task.allowedRoleProfileIds.size > 0 &&
-    !task.allowedRoleProfileIds.has(command.roleProfileId)
-  ) {
-    reject('role_not_allowed', 'Role is outside the Task allowlist')
+  if (task.allowedRoleProfileIds.size !== 1) {
+    reject('fixed_role_required', 'Task must have exactly one Workflow Role')
+  }
+  if (!task.allowedRoleProfileIds.has(command.roleProfileId)) {
+    reject('role_not_allowed', 'Role does not match the fixed Workflow Role')
   }
   if (!task.roleCatalogVersions.get(command.roleProfileId)?.has(command.roleProfileVersion)) {
     reject('role_not_in_run_catalog', 'Role version is outside the frozen Run catalog')

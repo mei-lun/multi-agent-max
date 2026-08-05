@@ -56,6 +56,8 @@ export function translateUiText(source: string, locale: UiLocale): string {
     [/^(\d+) attempts$/, (count) => `${count} 次尝试`],
     [/^(\d+) decisions$/, (count) => `${count} 条结论`],
     [/^(\d+) findings$/, (count) => `${count} 条发现`],
+    [/^(\d+) events$/, (count) => `${count} 条事件`],
+    [/^Complete observed execution activity for (.+)\.$/, (role) => `${role} 的完整执行活动。`],
     [/^(\d+) Roles$/, (count) => `${count} 个角色`],
     [/^(\d+) blocking issues$/, (count) => `${count} 个阻塞问题`],
     [

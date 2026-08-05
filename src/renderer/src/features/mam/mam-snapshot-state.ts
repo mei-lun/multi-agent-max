@@ -26,6 +26,7 @@ import type {
   MamModelCatalogResult
 } from '../../../../shared/mam/model-catalog'
 import type { MamUiSnapshot } from '../../../../shared/mam/ui-projection'
+import type { MamExportExecutionActivityInput } from '../../../../shared/mam/execution-activity-export'
 
 export type MamSnapshotState = Readonly<{
   snapshot?: MamUiSnapshot
@@ -54,5 +55,6 @@ export type MamSnapshotState = Readonly<{
   deleteRoleProfile(input: MamDeleteRoleProfileInput): Promise<void>
   importSkill(): Promise<void>
   exportDiagnostics(): Promise<string | undefined>
+  exportExecutionActivity(input: MamExportExecutionActivityInput): Promise<string | undefined>
   getAttemptDiff(input: MamGetAttemptDiffInput): Promise<MamAttemptDiff>
 }>

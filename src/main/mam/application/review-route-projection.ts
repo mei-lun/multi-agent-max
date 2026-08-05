@@ -31,7 +31,8 @@ export function reachableReviewNodeIds(
     sourceNodeId,
     new Set(
       bundle.definition.nodes.filter((node) => node.type === 'review_gate').map((node) => node.id)
-    )
+    ),
+    new Set(bundle.taskCatalog.map((task) => task.nodeId))
   )
 }
 
@@ -51,7 +52,8 @@ export function reachableGitMergeNodeIds(
 function reachableNodeIds(
   bundle: WorkflowRunBundle,
   sourceNodeId: string,
-  targetNodeIds: ReadonlySet<string>
+  targetNodeIds: ReadonlySet<string>,
+  blockingNodeIds: ReadonlySet<string> = new Set()
 ): readonly string[] {
   const successors = new Map<string, string[]>()
   for (const edge of bundle.definition.edges) {
@@ -66,6 +68,8 @@ function reachableNodeIds(
     const nodeId = pending.shift()!
     if (visited.has(nodeId)) continue
     visited.add(nodeId)
+    // A later executable Task owns its downstream Review; an earlier Task cannot skip over it.
+    if (blockingNodeIds.has(nodeId) && nodeId !== sourceNodeId) continue
     if (targetNodeIds.has(nodeId)) reachable.push(nodeId)
     pending.push(...(successors.get(nodeId) ?? []))
   }

@@ -105,6 +105,33 @@ describe('automatic Review submission', () => {
       findings: [expect.objectContaining({ summary: 'Empty input has no validation message.' })]
     })
   })
+
+  it('normalizes localized structured finding categories to internal IDs', () => {
+    expect(
+      automaticReviewSubmission(
+        preparedReview(),
+        validatedReview({
+          status: 'changes_requested',
+          summary: '需要修改。',
+          findings: [
+            {
+              severity: 'blocker',
+              category: '输入校验与计数',
+              summary: '空白输入不应增加猜测次数。'
+            },
+            {
+              severity: 'high',
+              category: '安全与依赖',
+              summary: '不得加载远程脚本。'
+            }
+          ]
+        })
+      )
+    ).toMatchObject({
+      status: 'changes_requested',
+      findings: [{ category: 'validation' }, { category: 'security' }]
+    })
+  })
 })
 
 function preparedReview(): PreparedAttempt {
