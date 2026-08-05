@@ -41,6 +41,45 @@ Git remains the authority for shared workflow state.
 - **Bilingual desktop UI** — Switch between English and Simplified Chinese from the application
   header.
 
+## Project positioning: a domain implementation of Graph Engineering
+
+Architecturally, MAM is a **Git-backed graph workflow orchestration platform**. The workflow graph
+is the execution model, the Scheduler Kernel is the graph scheduler, Git events and Run Bundles are
+the replayable authority, and structured Agent Executors perform the concrete work.
+
+```text
+Workflow Graph
+      ↓
+Workflow Compiler
+      ↓
+Scheduler Kernel
+      ↓
+Task / Attempt / Artifact
+      ↓
+Pi RPC (current) / Codex CLI and Grok CLI (later)
+      ↓
+Git State + Review + Merge Queue
+```
+
+This has the key properties of Graph Engineering: nodes and edges describe dependencies, the
+Scheduler computes executable nodes from the graph, and conditions, parallel branches, joins,
+approvals, reviews, Artifact transforms, and bounded rework are execution semantics on that graph.
+Each node's result can become an Artifact input for downstream nodes.
+
+MAM is not a graph database, GraphQL service, or general-purpose graph-data infrastructure. It is
+also more than a lightweight DAG task queue: it adds role configuration, Agent invocation, Attempt
+history, review, Git branches/worktrees, merge queues, and recovery on top of graph execution.
+
+| Layer | MAM implementation |
+| --- | --- |
+| Graph model | Workflow, Node, Edge, Condition, Parallel, Join |
+| Graph compilation | Workflow Compiler, execution plan, bounded-loop validation |
+| Graph scheduling | Scheduler Kernel, dependency calculation, state transitions, authoritative writes |
+| Execution backends | Pi RPC; structured Codex CLI and Grok CLI adapters (later activation) |
+| State persistence | `mam-state` Git branch, append-only events, deterministic replay |
+| Result propagation | Artifacts, Reviews, Approvals, Git Merge |
+| Operator surfaces | Visual Workflow Editor, Attempt Timeline, Live Activity, Merge Queue |
+
 ## Sidebar features
 
 | Feature | What it does |

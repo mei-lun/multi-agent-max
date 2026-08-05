@@ -21,6 +21,38 @@ MAM 不是新的 Agent Runtime，也不是远程机器管理器。它负责协�
 - **恢复与诊断**：从 Git 重建 projection，在重试间保留 Attempt 历史，核对未知副作用，并导出具有关联关系且不包含明文密钥的诊断信息。
 - **中英文桌面界面**：可在应用顶部随时切换简体中文和英文。
 
+## 项目定位：Graph Engineering 的一种领域实现
+
+从架构上看，MAM 是一个 **Git-backed graph workflow orchestration platform**：以工作流图作为执行模型，以 Scheduler Kernel 作为图调度器，以 Git 事件和 Run Bundle 作为可重放的权威状态，再把具体任务交给结构化 Agent Executor。
+
+```text
+Workflow Graph
+      ↓
+Workflow Compiler
+      ↓
+Scheduler Kernel
+      ↓
+Task / Attempt / Artifact
+      ↓
+Pi RPC（当前）/ Codex CLI、Grok CLI（后续）
+      ↓
+Git State + Review + Merge Queue
+```
+
+它体现了 Graph Engineering 的关键特征：节点和边描述依赖关系，Scheduler 根据图计算可执行节点；条件、并行、join、审批、审核、Artifact 转换和有界返工都属于图上的执行语义；每个节点的执行结果又会成为后续节点的 Artifact 输入。
+
+MAM 不是图数据库、GraphQL 服务或通用图数据基础设施，也不是只执行 DAG 的轻量任务队列。它是在图执行之上叠加了角色配置、Agent 调用、Attempt 历史、审核、Git 分支/worktree、合并队列和恢复机制的领域型工作流引擎。
+
+| 层次 | MAM 中的实现 |
+| --- | --- |
+| 图模型 | Workflow、Node、Edge、Condition、Parallel、Join |
+| 图编译 | Workflow Compiler、执行计划、循环边界校验 |
+| 图调度 | Scheduler Kernel、依赖计算、状态转换、权威写入 |
+| 执行后端 | Pi RPC；Codex CLI 和 Grok CLI 的结构化 Adapter（后续启用） |
+| 状态持久化 | `mam-state` Git 分支、append-only events、确定性 replay |
+| 结果传播 | Artifact、Review、Approval、Git Merge |
+| 操作界面 | Visual Workflow Editor、Attempt Timeline、Live Activity、Merge Queue |
+
 ## 侧边栏功能
 
 | 功能 | 说明 |
