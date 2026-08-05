@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { ArtifactFormatSchema } from './domain/artifact'
 import { MamEntityIdSchema } from './domain/primitives'
+import { MamDesignBrainstormPresentationSchema } from './design-brainstorm'
 
 const DesignArtifactSpecSchema = z
   .object({
@@ -232,6 +233,29 @@ export const MamDesignProposalSpecSchema = z
   })
   .strict()
 
+export const MamDesignReviewSchema = z
+  .object({
+    readiness: z.enum(['needs_clarification', 'needs_revision', 'ready']).default('ready'),
+    questions: z.array(z.string().trim().min(1).max(4_000)).max(5).default([]),
+    findings: z
+      .array(
+        z
+          .object({
+            severity: z.enum(['warning', 'suggestion']),
+            status: z.enum(['unresolved', 'addressed']),
+            title: z.string().trim().min(1).max(200),
+            detail: z.string().trim().min(1).max(4_000),
+            recommendation: z.string().trim().min(1).max(4_000)
+          })
+          .strict()
+      )
+      .max(20)
+      .default([]),
+    assumptions: z.array(z.string().trim().min(1).max(4_000)).max(20).default([])
+  })
+  .strict()
+  .default({ readiness: 'ready', questions: [], findings: [], assumptions: [] })
+
 export const MamDesignModelResponseSchema = z
   .object({
     message: z
@@ -240,9 +264,12 @@ export const MamDesignModelResponseSchema = z
       .min(1)
       .max(20_000)
       .default('A complete proposal is ready to review.'),
+    brainstorm: MamDesignBrainstormPresentationSchema,
+    review: MamDesignReviewSchema,
     proposal: MamDesignProposalSpecSchema
   })
   .strict()
 
 export type MamDesignProposalSpec = z.infer<typeof MamDesignProposalSpecSchema>
+export type MamDesignReview = z.infer<typeof MamDesignReviewSchema>
 export type MamDesignModelResponse = z.infer<typeof MamDesignModelResponseSchema>

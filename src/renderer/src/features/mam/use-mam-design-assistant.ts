@@ -4,6 +4,7 @@ import {
   type MamDesignDraft,
   type MamDesignUpdateProposalInput
 } from '../../../../shared/mam/design-assistant'
+import type { MamDesignBrainstormDecision } from '../../../../shared/mam/design-brainstorm'
 import { getMamRendererApi } from '../../renderer-api'
 
 export type MamDesignAssistantState = Readonly<{
@@ -14,7 +15,11 @@ export type MamDesignAssistantState = Readonly<{
   applying: boolean
   error?: string
   selectModel(modelProfileId: string): Promise<void>
-  sendMessage(message: string, modelProfileId: string): Promise<void>
+  sendMessage(
+    message: string,
+    modelProfileId: string,
+    decision?: MamDesignBrainstormDecision
+  ): Promise<void>
   cancelMessage(): Promise<void>
   reset(modelProfileId?: string, workflowId?: string): Promise<void>
   createTemplate(modelProfileId: string): Promise<void>
@@ -65,7 +70,7 @@ export function useMamDesignAssistant(onApplied: () => void): MamDesignAssistant
     [acceptDraft]
   )
   const sendMessage = useCallback(
-    async (message: string, modelProfileId: string) => {
+    async (message: string, modelProfileId: string, decision?: MamDesignBrainstormDecision) => {
       setSending(true)
       setError(undefined)
       const id = `design-request.${crypto.randomUUID().replaceAll('-', '')}`
@@ -93,7 +98,8 @@ export function useMamDesignAssistant(onApplied: () => void): MamDesignAssistant
           await getMamRendererApi().sendDesignMessage({
             requestId: id,
             modelProfileId,
-            message
+            message,
+            ...(decision ? { decision } : {})
           })
         )
       } catch (cause) {

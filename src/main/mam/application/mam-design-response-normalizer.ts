@@ -9,12 +9,37 @@ export function parseMamDesignModelResponse(responseText: string): MamDesignMode
 }
 
 function normalizeResponseEnvelope(value: unknown): unknown {
-  if (!isRecord(value) || 'proposal' in value) return value
+  if (!isRecord(value)) return value
+  if ('proposal' in value) {
+    return 'brainstorm' in value ? value : { ...value, brainstorm: legacyBrainstorm() }
+  }
   if (!('roles' in value) || !('workflow' in value)) return value
   const message =
     typeof value.message === 'string' ? value.message : 'A complete proposal is ready to review.'
   const { roles, workflow } = value
-  return { message, proposal: { roles, workflow } }
+  return {
+    message,
+    brainstorm: legacyBrainstorm(),
+    review: defaultReview(),
+    proposal: { roles, workflow }
+  }
+}
+
+function defaultReview(): Record<string, unknown> {
+  return { readiness: 'ready', questions: [], findings: [], assumptions: [] }
+}
+
+function legacyBrainstorm(): Record<string, unknown> {
+  return {
+    question: {
+      id: 'clarify-success',
+      prompt: 'What outcome would make this Workflow successful for you?',
+      whyItMatters: 'The answer determines the acceptance criteria for the final Workflow.',
+      options: []
+    },
+    approaches: [],
+    sections: []
+  }
 }
 
 function extractJsonObject(value: string): string {

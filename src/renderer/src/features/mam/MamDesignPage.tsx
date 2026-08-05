@@ -139,10 +139,13 @@ export function MamDesignPage({
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1.25fr)_minmax(20rem,0.75fr)]">
         <MamDesignConversation
           messages={draft.messages}
+          {...(draft.brainstorm ? { brainstorm: draft.brainstorm } : {})}
+          {...(draft.review ? { review: draft.review } : {})}
           sending={design.sending}
           disabled={draft.status === 'applied'}
           {...(design.error ? { error: design.error } : {})}
           onSend={(message) => design.sendMessage(message, activeModelId)}
+          onDecision={(message, decision) => design.sendMessage(message, activeModelId, decision)}
           onCancel={design.cancelMessage}
         />
         <MamDesignProposalPanel

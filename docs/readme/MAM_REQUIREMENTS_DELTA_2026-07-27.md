@@ -1,7 +1,7 @@
 # Multi-Agent Max 需求差异与追踪表
 
-**版本**：1.1
-**日期**：2026-08-04
+**版本**：1.2
+**日期**：2026-08-05
 **状态**：Accepted  
 **唯一产品基线**：[`docs/final-reuse-integration-plan.md`](../final-reuse-integration-plan.md) 2.1
 
@@ -34,7 +34,7 @@
 | DEC-013 | 审核必需内容进入 Git；大型诊断日志可以只保存在本机，但必须记录 hash 和 availability。                                                                                                                                             |
 | DEC-014 | 首期正式支持 macOS；Linux 和 Windows deferred。                                                                                                                                                                                   |
 | DEC-015 | 没有旧版本数据，不实现迁移兼容层。                                                                                                                                                                                                |
-| DEC-016 | Design Assistant 直接使用已有 Model Profile；未加密对话草稿只保存在本机；人工确认可创建全新的 Role Profile 和 Workflow Definition，或为所选现有 Workflow 创建同一 ID 的下一版本；每个可执行节点固定一个 Role；不启动 Run、不创建 Task，既有 Run 保持固定原版本。 |
+| DEC-016 | Design Assistant 直接使用已有 Model Profile；未加密多轮对话草稿只保存在本机；助手依次完成单问题澄清、二至三个方案比较、用户选定方案和至少三个设计部分的逐项确认，并指出工作流缺陷、记录假设、持续改进完整替换草稿；模型不得伪造用户选择或确认，已确认部分变化时自动失效，任一门禁或缺陷未解决时不可确认；不自动读取项目文件、文档或 Git 历史，不启动外部 Visual Companion；人工确认可创建全新的 Role Profile 和 Workflow Definition，或为所选现有 Workflow 创建同一 ID 的下一版本；每个可执行节点固定一个 Role；不启动 Run、不创建 Task，既有 Run 保持固定原版本。 |
 
 ## 3. 旧功能需求映射
 

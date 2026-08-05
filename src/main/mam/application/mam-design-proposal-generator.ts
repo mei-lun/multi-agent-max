@@ -66,7 +66,7 @@ function repairMessages(
   createdAt: string
 ): MamDesignMessage[] {
   const issues = JSON.stringify(failure.issues.slice(0, 10)).slice(0, 6_000)
-  const repairPrompt = `Repair the complete proposal. Validation errors: ${issues}. ${failure.message} Return one complete JSON object with message and proposal.`
+  const repairPrompt = `Repair the complete proposal. Validation errors: ${issues}. ${failure.message} Return one complete JSON object with message, brainstorm, review, and proposal.`
   return appendMessages(
     messages,
     message('assistant', responseText.slice(0, 20_000), 'invalid', createdAt),

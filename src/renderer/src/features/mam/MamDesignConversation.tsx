@@ -1,23 +1,36 @@
 import { Loader2, MessageSquareText, Send, Square } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import type { MamDesignMessage } from '../../../../shared/mam/design-assistant'
+import type { MamDesignReview } from '../../../../shared/mam/design-proposal'
+import type {
+  MamDesignBrainstormDecision,
+  MamDesignBrainstormState
+} from '../../../../shared/mam/design-brainstorm'
 import { Button } from '../../components/ui/button'
 import { Textarea } from '../../components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../components/ui/tooltip'
+import { MamDesignConversationReview } from './MamDesignConversationReview'
+import { MamDesignBrainstormPanel } from './MamDesignBrainstormPanel'
 
 export function MamDesignConversation({
   messages,
+  brainstorm,
+  review,
   sending,
   disabled,
   error,
   onSend,
+  onDecision,
   onCancel
 }: Readonly<{
   messages: readonly MamDesignMessage[]
+  brainstorm?: MamDesignBrainstormState
+  review?: MamDesignReview
   sending: boolean
   disabled: boolean
   error?: string
   onSend(message: string): Promise<void>
+  onDecision(message: string, decision: MamDesignBrainstormDecision): Promise<void>
   onCancel(): Promise<void>
 }>): React.JSX.Element {
   const [message, setMessage] = useState('')
@@ -72,6 +85,15 @@ export function MamDesignConversation({
                 </p>
               </article>
             ))}
+            {brainstorm && (
+              <MamDesignBrainstormPanel
+                brainstorm={brainstorm}
+                pending={sending}
+                onAnswer={onSend}
+                onDecision={onDecision}
+              />
+            )}
+            {review && <MamDesignConversationReview review={review} />}
             {sending && (
               <div className="flex items-center gap-2 border-l-2 border-border py-2 pl-3 text-xs text-muted-foreground">
                 <Loader2 className="size-3.5 animate-spin" /> Building the next draft…

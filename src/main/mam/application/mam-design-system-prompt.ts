@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { MamDesignBrainstormState } from '../../../shared/mam/design-brainstorm'
 import type {
   MamDesignProposal,
   MamDesignRecovery,
@@ -6,7 +7,8 @@ import type {
 } from '../../../shared/mam/design-assistant'
 import {
   MamDesignModelResponseSchema,
-  type MamDesignProposalSpec
+  type MamDesignProposalSpec,
+  type MamDesignReview
 } from '../../../shared/mam/design-proposal'
 import type { ProfileCatalog } from '../profiles/profile-catalog'
 import {
@@ -19,6 +21,8 @@ export function buildMamDesignSystemPrompt(input: {
   selectedModelProfileId: string
   standardTemplate: MamDesignProposalSpec
   currentProposal?: MamDesignProposal
+  currentBrainstorm?: MamDesignBrainstormState
+  currentReview?: MamDesignReview
   recovery?: MamDesignRecovery
   workflowRevision?: MamDesignWorkflowRevision
 }): string {
@@ -53,8 +57,22 @@ export function buildMamDesignSystemPrompt(input: {
     input.workflowRevision
       ? `Optimize Workflow ${input.workflowRevision.workflowId} version ${input.workflowRevision.baseVersion} as version ${input.workflowRevision.nextVersion}.`
       : 'Design only brand-new Role Profiles and one brand-new Workflow Definition.',
-    'Every response must include a complete replacement proposal. Do not omit proposal while asking questions.',
-    'If details are incomplete, make conservative assumptions in the proposal and state them in message.',
+    'Collaborate with the user over multiple turns. Diagnose the current Workflow, ask focused questions when needed, and improve the full draft after every answer.',
+    'Follow the brainstorming sequence: clarify one business decision at a time, compare 2-3 approaches, then present stable Design sections for explicit user approval.',
+    'brainstorm.question is either absent or exactly one focused question. Prefer 2-4 concise options when they help, while still allowing a free-form answer.',
+    'During clarification, brainstorm.approaches and brainstorm.sections may be empty. Never ask multiple questions in message or review.questions.',
+    'Once clarification is sufficient, return 2-3 meaningfully different brainstorm.approaches, mark exactly one recommended, and wait for currentBrainstorm.selectedApproachId.',
+    'After an approach is selected, preserve its stable ID and return 3-5 stable brainstorm.sections covering Roles and ownership, Workflow and handoffs, and review/failure/validation behavior.',
+    'Preserve the exact ID, title, and summary of every approved section. If a necessary change invalidates an approved section, change its content so the application revokes approval.',
+    'The application, not the model, owns approach selection and section approval. Never claim that the user selected or approved something unless currentBrainstorm records it.',
+    'Every response must include a complete replacement proposal. This includes responses that ask questions; a proposal produced during clarification is provisional and must not be described as ready.',
+    'Use review.readiness=needs_clarification when brainstorm.question is present, and make only reversible conservative assumptions in the provisional proposal.',
+    'Use review.readiness=needs_revision when no user answer is needed but a known Workflow defect remains unresolved.',
+    'Keep review.questions empty; brainstorm.question is the only user-facing question for the turn.',
+    'Use review.readiness=ready only when no finding is unresolved and the complete proposal is safe to confirm.',
+    'List material assumptions in review.assumptions. Do not hide assumptions only in message.',
+    'Inspect the current proposal or baseline for missing stages, unclear ownership, unsafe handoffs, unreachable outcomes, inadequate review, unbounded loops, delivery gaps, and unnecessary complexity.',
+    'Record material defects and improvements in review.findings. Mark a finding addressed when the returned replacement proposal fixes it; leave it unresolved only when a business answer is required or no safe correction is available.',
     '',
     'Safety and product rules:',
     '- The proposal only defines Roles and a Workflow. Never create or imply a Run, Assignment, Task, Attempt, approval decision, merge, or completion.',
@@ -69,7 +87,7 @@ export function buildMamDesignSystemPrompt(input: {
     '- Generate all internal Artifact IDs, versions, formats, schemas, filenames, and Review payload contracts yourself so each Role can consume its upstream results.',
     '- When the Workflow includes Review, prefer a reviewer Role distinct from the Role that produced the reviewed work. The user must not create that reviewer manually.',
     '- Never ask the user for internal Artifact references, JSON schemas, filenames, Review JSON, or other implementation handoff details.',
-    '- Ask the user a question only when a missing business decision would materially change the final result. Otherwise make a conservative assumption and continue.',
+    '- Ask only for business intent, constraints, acceptance criteria, risk tolerance, or human decision points that the user can meaningfully choose. Otherwise make a conservative assumption and continue.',
     input.workflowRevision
       ? '- Preserve the current Workflow as the baseline, apply the requested improvements, and return the whole replacement proposal, never a patch. The application preserves the target Workflow ID and assigns the next version.'
       : '- Begin from the standard template below and return the whole replacement proposal, never a patch.',
@@ -80,7 +98,7 @@ export function buildMamDesignSystemPrompt(input: {
     '- Set maxTraversals only on a real loop edge that goes from a later node back to an earlier node. Never use maxTraversals on a normal forward or conditional branch.',
     '- Every workflow must have exactly one base entry, all nodes must reach a finish node, and every Artifact input must be produced upstream or supplied initially.',
     '',
-    'Return exactly one JSON object with message and proposal. Do not use Markdown fences or surrounding prose.',
+    'Return exactly one JSON object with message, brainstorm, review, and proposal. Do not use Markdown fences or surrounding prose.',
     `Response JSON Schema:\n${JSON.stringify(z.toJSONSchema(MamDesignModelResponseSchema, { target: 'draft-7' }))}`,
     `Eligible catalog:\n${JSON.stringify(catalog)}`,
     input.workflowRevision
@@ -88,6 +106,12 @@ export function buildMamDesignSystemPrompt(input: {
       : '',
     `Canonical standard template:\n${JSON.stringify(input.standardTemplate)}`,
     currentSource(input.currentProposal),
+    input.currentBrainstorm
+      ? `Current authoritative brainstorming state:\n${JSON.stringify(input.currentBrainstorm)}`
+      : 'There is no current brainstorming state.',
+    input.currentReview
+      ? `Current collaborative review state:\n${JSON.stringify(input.currentReview)}`
+      : '',
     input.recovery
       ? `Repair context from the last failed draft:\n${JSON.stringify(input.recovery)}`
       : ''

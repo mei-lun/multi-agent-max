@@ -2,7 +2,11 @@ import { z } from 'zod'
 import { IsoTimestampSchema, MamEntityIdSchema, Sha256Schema } from './domain/primitives'
 import { RoleProfileSchema } from './domain/role'
 import { WorkflowDefinitionSchema } from './domain/workflow'
-import { MamDesignProposalSpecSchema } from './design-proposal'
+import { MamDesignProposalSpecSchema, MamDesignReviewSchema } from './design-proposal'
+import {
+  MamDesignBrainstormDecisionSchema,
+  MamDesignBrainstormStateSchema
+} from './design-brainstorm'
 
 export const MamDesignMessageSchema = z
   .object({
@@ -59,6 +63,8 @@ export const MamDesignDraftSchema = z
     workflowRevision: MamDesignWorkflowRevisionSchema.optional(),
     messages: z.array(MamDesignMessageSchema).max(200),
     proposal: MamDesignProposalSchema.optional(),
+    brainstorm: MamDesignBrainstormStateSchema.optional(),
+    review: MamDesignReviewSchema.optional(),
     recovery: MamDesignRecoverySchema.optional(),
     status: z.enum(['draft', 'applied']),
     appliedAt: IsoTimestampSchema.optional(),
@@ -71,7 +77,8 @@ export const MamDesignSendMessageInputSchema = z
   .object({
     requestId: MamEntityIdSchema,
     modelProfileId: MamEntityIdSchema,
-    message: z.string().trim().min(1).max(20_000)
+    message: z.string().trim().min(1).max(20_000),
+    decision: MamDesignBrainstormDecisionSchema.optional()
   })
   .strict()
 

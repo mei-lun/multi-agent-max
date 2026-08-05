@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { MamDesignDraft } from '../../../shared/mam/design-assistant'
 import { ProfileCatalog } from '../profiles/profile-catalog'
 import { MamDesignAssistantService } from './mam-design-assistant-service'
 import { MamDesignDraftStore } from './mam-design-draft-store'
@@ -20,13 +21,9 @@ describe('MAM Design Assistant service', () => {
   it('uses an existing Model Profile and creates definitions without starting a Run', async () => {
     const { service } = createServiceFixture()
 
-    const draft = await service.sendMessage({
-      requestId: 'design-request.test',
-      modelProfileId: 'model.designer',
-      message: 'Create a writing workflow.'
-    })
+    const draft = await completeBrainstorm(service, 'test')
 
-    expect(draft.messages).toHaveLength(2)
+    expect(draft.messages).toHaveLength(10)
     expect(draft.proposal?.issues).toEqual([])
     expect(draft.proposal?.roles).toMatchObject([
       {
@@ -46,13 +43,185 @@ describe('MAM Design Assistant service', () => {
     expect(service.getDraft().status).toBe('applied')
   })
 
-  it('optimizes an existing Workflow as a new version without changing its history', async () => {
-    const { profiles, service } = createServiceFixture()
-    const initial = await service.sendMessage({
-      requestId: 'design-request.initial',
+  it('keeps a provisional proposal editable while clarification and findings are open', async () => {
+    const provisional = {
+      ...modelResponse(),
+      message: 'I need one business decision before this Workflow is ready.',
+      brainstorm: {
+        question: {
+          id: 'publication-approval',
+          prompt: 'Should publication require a final human decision?',
+          whyItMatters: 'This determines the final approval gate.',
+          options: []
+        },
+        approaches: [],
+        sections: []
+      },
+      review: {
+        readiness: 'ready',
+        questions: [],
+        findings: [
+          {
+            severity: 'warning',
+            status: 'unresolved',
+            title: 'Publication authority is unclear',
+            detail: 'The current draft does not identify who can approve publication.',
+            recommendation: 'Confirm whether a human approval gate is required.'
+          }
+        ],
+        assumptions: ['Drafting may continue before publication authority is confirmed.']
+      }
+    }
+    const ready = {
+      ...modelResponse(),
+      message: 'The human publication decision is now explicit.',
+      review: {
+        readiness: 'ready',
+        questions: [],
+        findings: [
+          {
+            severity: 'warning',
+            status: 'addressed',
+            title: 'Publication authority is explicit',
+            detail: 'The user confirmed the intended publication policy.',
+            recommendation: 'Keep the confirmed policy in the Workflow instructions.'
+          }
+        ],
+        assumptions: []
+      }
+    }
+    const { service } = createServiceFixture([provisional, ready])
+
+    const first = await service.sendMessage({
+      requestId: 'design-request.clarify',
+      modelProfileId: 'model.designer',
+      message: 'Create a publication workflow.'
+    })
+
+    expect(first.proposal?.issues).toEqual([])
+    expect(first.review).toMatchObject({
+      readiness: 'needs_revision',
+      questions: []
+    })
+    expect(first.brainstorm?.phase).toBe('clarifying')
+    expect(() => service.applyProposal({ proposalHash: first.proposal!.hash })).toThrow(
+      'Continue the Design conversation'
+    )
+
+    const second = await service.sendMessage({
+      requestId: 'design-request.answer',
+      modelProfileId: 'model.designer',
+      message: 'Yes, require a final human decision.'
+    })
+
+    expect(second.messages).toHaveLength(4)
+    expect(second.review).toMatchObject({
+      readiness: 'ready',
+      questions: [],
+      findings: [{ status: 'addressed' }]
+    })
+    expect(second.brainstorm?.phase).toBe('comparing_approaches')
+    expect(() => service.applyProposal({ proposalHash: second.proposal!.hash })).toThrow(
+      'Complete the approach selection'
+    )
+  })
+
+  it('requires approach selection and unchanged section approvals before confirmation', async () => {
+    const approaches = [
+      {
+        id: 'balanced',
+        title: 'Balanced review',
+        summary: 'Separate writing and review ownership.',
+        benefits: ['Independent review'],
+        tradeoffs: ['One additional stage'],
+        recommended: true
+      },
+      {
+        id: 'fast',
+        title: 'Fast path',
+        summary: 'Use final human approval without independent review.',
+        benefits: ['Lower latency'],
+        tradeoffs: ['Less independent validation'],
+        recommended: false
+      }
+    ]
+    const sections = [
+      {
+        id: 'ownership',
+        title: 'Roles and ownership',
+        summary: 'Writer and reviewer are separate.'
+      },
+      { id: 'flow', title: 'Workflow and handoffs', summary: 'Review happens before completion.' },
+      {
+        id: 'quality',
+        title: 'Quality and recovery',
+        summary: 'Rejected work returns for revision.'
+      }
+    ]
+    const comparison = { ...modelResponse(), brainstorm: { approaches, sections: [] } }
+    const design = { ...modelResponse(), brainstorm: { approaches, sections } }
+    const { service } = createServiceFixture([comparison, design, design, design, design])
+
+    const compared = await service.sendMessage({
+      requestId: 'design-request.compare',
       modelProfileId: 'model.designer',
       message: 'Create a writing workflow.'
     })
+
+    expect(compared.brainstorm?.phase).toBe('comparing_approaches')
+    expect(() => service.applyProposal({ proposalHash: compared.proposal!.hash })).toThrow(
+      'Complete the approach selection'
+    )
+
+    const selected = await service.sendMessage({
+      requestId: 'design-request.select',
+      modelProfileId: 'model.designer',
+      message: 'I choose Balanced review.',
+      decision: { type: 'select_approach', approachId: 'balanced' }
+    })
+    expect(selected.brainstorm).toMatchObject({
+      phase: 'reviewing_design',
+      selectedApproachId: 'balanced'
+    })
+
+    const firstApproval = await service.sendMessage({
+      requestId: 'design-request.approve-ownership',
+      modelProfileId: 'model.designer',
+      message: 'I approve Roles and ownership.',
+      decision: { type: 'approve_section', sectionId: 'ownership' }
+    })
+    expect(firstApproval.brainstorm).toMatchObject({
+      phase: 'reviewing_design',
+      approvedSectionIds: ['ownership']
+    })
+
+    const secondApproval = await service.sendMessage({
+      requestId: 'design-request.approve-flow',
+      modelProfileId: 'model.designer',
+      message: 'I approve Workflow and handoffs.',
+      decision: { type: 'approve_section', sectionId: 'flow' }
+    })
+    expect(secondApproval.brainstorm).toMatchObject({
+      phase: 'reviewing_design',
+      approvedSectionIds: ['ownership', 'flow']
+    })
+
+    const ready = await service.sendMessage({
+      requestId: 'design-request.approve-quality',
+      modelProfileId: 'model.designer',
+      message: 'I approve Quality and recovery.',
+      decision: { type: 'approve_section', sectionId: 'quality' }
+    })
+    expect(ready.brainstorm).toMatchObject({
+      phase: 'ready',
+      approvedSectionIds: ['ownership', 'flow', 'quality']
+    })
+    expect(service.applyProposal({ proposalHash: ready.proposal!.hash }).workflows).toHaveLength(1)
+  })
+
+  it('optimizes an existing Workflow as a new version without changing its history', async () => {
+    const { profiles, service } = createServiceFixture()
+    const initial = await completeBrainstorm(service, 'initial')
     service.applyProposal({ proposalHash: initial.proposal!.hash })
 
     const revision = service.reset({
@@ -91,11 +260,7 @@ describe('MAM Design Assistant service', () => {
 
   it('blocks a Workflow revision when another version is saved first', async () => {
     const { profiles, service } = createServiceFixture()
-    const initial = await service.sendMessage({
-      requestId: 'design-request.stale-initial',
-      modelProfileId: 'model.designer',
-      message: 'Create a writing workflow.'
-    })
+    const initial = await completeBrainstorm(service, 'stale-initial')
     service.applyProposal({ proposalHash: initial.proposal!.hash })
     const revision = service.reset({ workflowId: 'workflow.article' })
     const current = profiles.workflows.getActive('workflow.article')!
@@ -117,11 +282,7 @@ describe('MAM Design Assistant service', () => {
 
   it('keeps the proposal recoverable when confirmation fails after a catalog change', async () => {
     const { profiles, service } = createServiceFixture()
-    const draft = await service.sendMessage({
-      requestId: 'design-request.recovery',
-      modelProfileId: 'model.designer',
-      message: 'Create a writing workflow.'
-    })
+    const draft = await completeBrainstorm(service, 'recovery')
 
     profiles.roles.save(draft.proposal!.roles[0]!)
 
@@ -161,7 +322,71 @@ describe('MAM Design Assistant service', () => {
   })
 })
 
-function createServiceFixture(): {
+async function completeBrainstorm(
+  service: MamDesignAssistantService,
+  requestPrefix: string
+): Promise<MamDesignDraft> {
+  await service.sendMessage({
+    requestId: `design-request.${requestPrefix}`,
+    modelProfileId: 'model.designer',
+    message: 'Create a writing workflow.'
+  })
+  await service.sendMessage({
+    requestId: `design-request.${requestPrefix}.select`,
+    modelProfileId: 'model.designer',
+    message: 'I choose Balanced review.',
+    decision: { type: 'select_approach', approachId: 'balanced' }
+  })
+  for (const sectionId of ['ownership', 'flow', 'quality']) {
+    const draft = await service.sendMessage({
+      requestId: `design-request.${requestPrefix}.${sectionId}`,
+      modelProfileId: 'model.designer',
+      message: `I approve ${sectionId}.`,
+      decision: { type: 'approve_section', sectionId }
+    })
+    if (sectionId === 'quality') return draft
+  }
+  throw new Error('Brainstorming did not reach its final section')
+}
+
+function completeBrainstormResponses(): unknown[] {
+  const design = {
+    ...modelResponse(),
+    brainstorm: { approaches: brainstormApproaches(), sections: brainstormSections() }
+  }
+  return [modelResponse(), design, design, design, design]
+}
+
+function brainstormApproaches() {
+  return [
+    {
+      id: 'balanced',
+      title: 'Balanced review',
+      summary: 'Separate writing and review ownership.',
+      benefits: ['Independent review'],
+      tradeoffs: ['One additional stage'],
+      recommended: true
+    },
+    {
+      id: 'fast',
+      title: 'Fast path',
+      summary: 'Use final human approval without independent review.',
+      benefits: ['Lower latency'],
+      tradeoffs: ['Less independent validation'],
+      recommended: false
+    }
+  ]
+}
+
+function brainstormSections() {
+  return [
+    { id: 'ownership', title: 'Roles and ownership', summary: 'Writer and reviewer are separate.' },
+    { id: 'flow', title: 'Workflow and handoffs', summary: 'Review happens before completion.' },
+    { id: 'quality', title: 'Quality and recovery', summary: 'Rejected work returns for revision.' }
+  ]
+}
+
+function createServiceFixture(responses: unknown[] = completeBrainstormResponses()): {
   drafts: MamDesignDraftStore
   profiles: ProfileCatalog
   service: MamDesignAssistantService
@@ -170,15 +395,15 @@ function createServiceFixture(): {
   temporaryDirectories.push(root)
   const profiles = new ProfileCatalog(join(root, 'catalog'))
   seedExecutionProfiles(profiles)
-  const gateway = new MamDesignModelGateway(
-    async () =>
-      new Response(
-        JSON.stringify({
-          choices: [{ message: { content: JSON.stringify(modelResponse()) } }]
-        }),
-        { status: 200, headers: { 'content-type': 'application/json' } }
-      )
-  )
+  let responseIndex = 0
+  const gateway = new MamDesignModelGateway(async () => {
+    const response = responses[Math.min(responseIndex, responses.length - 1)]
+    responseIndex += 1
+    return new Response(
+      JSON.stringify({ choices: [{ message: { content: JSON.stringify(response) } }] }),
+      { status: 200, headers: { 'content-type': 'application/json' } }
+    )
+  })
   const drafts = new MamDesignDraftStore(join(root, 'design-draft.json'), now)
   const service = new MamDesignAssistantService(
     new MamUiQueryService(profiles, undefined, now),
@@ -224,6 +449,7 @@ function seedExecutionProfiles(profiles: ProfileCatalog): void {
 function modelResponse() {
   return {
     message: 'The proposal is ready for confirmation.',
+    brainstorm: { approaches: brainstormApproaches(), sections: [] },
     proposal: {
       roles: [
         {

@@ -192,6 +192,23 @@ describe('MAM Design Model gateway', () => {
     expect(serialized).not.toContain('"$schema"')
     expect(serialized).not.toContain('"default"')
   })
+
+  it('requires the structured brainstorming envelope in generated responses', () => {
+    const schema = designResponseJsonSchema()
+
+    expect(schema).toMatchObject({
+      properties: {
+        brainstorm: {
+          properties: {
+            question: { type: 'object' },
+            approaches: { type: 'array', maxItems: 3 },
+            sections: { type: 'array', maxItems: 8 }
+          }
+        }
+      },
+      required: expect.arrayContaining(['brainstorm'])
+    })
+  })
 })
 
 function provider(protocol: ProviderProtocol): ProviderProfile {

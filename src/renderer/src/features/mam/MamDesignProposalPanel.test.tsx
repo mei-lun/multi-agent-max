@@ -87,4 +87,53 @@ describe('MamDesignProposalPanel', () => {
     expect(markup).toContain('This revision reuses existing Role Profiles.')
     expect(markup).toContain('Confirm new version')
   })
+
+  it('does not offer confirmation while the Design review needs user input', () => {
+    const markup = renderToStaticMarkup(
+      <MamDesignProposalPanel
+        draft={{
+          schemaVersion: '1.0.0',
+          id: 'design.clarification',
+          selectedModelProfileId: 'model.designer',
+          messages: [],
+          proposal: {
+            hash: 'b'.repeat(64),
+            roles: [],
+            workflow: {
+              schemaVersion: '1.0.0',
+              id: 'workflow.clarification',
+              name: 'Clarification',
+              version: 1,
+              nodes: [{ id: 'finish', type: 'finish', inputs: [] }],
+              edges: [],
+              maxTransitions: 10,
+              maxRunCostUsd: 5,
+              maxRunDurationSeconds: 600
+            },
+            issues: [],
+            createdAt: '2026-08-05T00:00:00Z'
+          },
+          review: {
+            readiness: 'needs_clarification',
+            questions: ['Who approves release?'],
+            findings: [],
+            assumptions: []
+          },
+          status: 'draft',
+          createdAt: '2026-08-05T00:00:00Z',
+          updatedAt: '2026-08-05T00:00:00Z'
+        }}
+        snapshot={mamUiSnapshotFixture()}
+        pending={false}
+        onUpdateRole={async () => undefined}
+        onEditWorkflow={() => undefined}
+        onApply={async () => undefined}
+        onCreateTemplate={async () => undefined}
+        onRetry={async () => undefined}
+      />
+    )
+
+    expect(markup).toContain('Waiting for your answers')
+    expect(markup).toContain('disabled=""')
+  })
 })

@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import type { MamUiSnapshot } from '../../../shared/mam/ui-projection'
 import {
   MamDesignApplyProposalInputSchema,
@@ -9,9 +8,7 @@ import {
   MamDesignSelectModelInputSchema,
   MamDesignSendMessageInputSchema,
   MamDesignUpdateProposalInputSchema,
-  type MamDesignDraft,
-  type MamDesignMessage,
-  type MamDesignWorkflowRevision
+  type MamDesignDraft
 } from '../../../shared/mam/design-assistant'
 import type { ProfileCatalog } from '../profiles/profile-catalog'
 import type { MamUiQueryService } from './mam-ui-query-service'
@@ -39,11 +36,20 @@ import {
   buildMamDesignProposal,
   buildMamDesignStandardTemplate
 } from './mam-design-assistant-proposal-builder'
+import {
+  applyMamDesignBrainstormDecision,
+  appendMamDesignMessages,
+  createMamDesignMessage,
+  invalidateMamDesignBrainstorm,
+  mergeMamDesignBrainstorm,
+  normalizeMamDesignReview
+} from './mam-design-conversation-state'
 import { MamDesignProposalGenerator } from './mam-design-proposal-generator'
 import { refreshMamDesignProposal } from './mam-design-proposal-refresh'
 import { createMamDesignProposal } from './mam-design-proposal-validation'
+import { applyMamDesignProposal } from './mam-design-proposal-application'
 import { buildMamDesignSystemPrompt } from './mam-design-system-prompt'
-import { writeMamDesignProposal } from './mam-design-proposal-writer'
+import { createMamDesignWorkflowRevision } from './mam-design-workflow-revision'
 
 const MAX_GATEWAY_MESSAGES = 80
 
@@ -86,7 +92,7 @@ export class MamDesignAssistantService {
     if (!parsed.workflowId) return this.drafts.reset(parsed.modelProfileId)
     const workflow = this.profiles.workflows.getActive(parsed.workflowId)
     if (!workflow) fail('design_workflow_not_found', `Workflow is not active: ${parsed.workflowId}`)
-    const revision = this.workflowRevision(workflow.id, workflow.version)
+    const revision = createMamDesignWorkflowRevision(this.profiles, workflow.id, workflow.version)
     const proposal = createMamDesignProposal({
       roles: [],
       workflow: { ...workflow, version: revision.nextVersion },
@@ -117,7 +123,7 @@ export class MamDesignAssistantService {
       now: this.now,
       ...(draft.workflowRevision ? { workflowRevision: draft.workflowRevision } : {})
     })
-    const { recovery: _recovery, ...rest } = draft
+    const { brainstorm: _brainstorm, recovery: _recovery, review: _review, ...rest } = draft
     return this.drafts.save({
       ...rest,
       selectedModelProfileId: parsed.modelProfileId,
@@ -135,10 +141,15 @@ export class MamDesignAssistantService {
       modelProfileId: parsed.modelProfileId
     })
     const draft = this.requireEditableDraft()
+    const brainstorm = applyMamDesignBrainstormDecision(draft.brainstorm, parsed.decision)
     const pendingDraft = this.drafts.save({
       ...draft,
+      ...(brainstorm ? { brainstorm } : {}),
       selectedModelProfileId: parsed.modelProfileId,
-      messages: appendMessages(draft.messages, this.message('user', parsed.message)),
+      messages: appendMamDesignMessages(
+        draft.messages,
+        createMamDesignMessage('user', parsed.message, this.now())
+      ),
       updatedAt: this.now()
     })
     return this.generateForDraft(pendingDraft, parsed.requestId, parsed.modelProfileId)
@@ -174,12 +185,14 @@ export class MamDesignAssistantService {
       now: this.now,
       ...(draft.workflowRevision ? { workflowRevision: draft.workflowRevision } : {})
     })
-    const { recovery: _recovery, ...rest } = draft
+    const brainstorm = invalidateMamDesignBrainstorm(draft.brainstorm)
+    const { recovery: _recovery, review: _review, ...rest } = draft
     const recovery = hasBlockingDesignIssues(proposal.issues)
       ? createMamDesignIssueRecovery(proposal.issues, this.now())
       : undefined
     return this.drafts.save({
       ...rest,
+      ...(brainstorm ? { brainstorm } : {}),
       proposal,
       ...(recovery ? { recovery } : {}),
       updatedAt: this.now()
@@ -188,25 +201,14 @@ export class MamDesignAssistantService {
 
   applyProposal(input: unknown): MamUiSnapshot {
     const parsed = MamDesignApplyProposalInputSchema.parse(input)
-    const draft = this.requireEditableDraft()
-    if (!draft.proposal || draft.proposal.hash !== parsed.proposalHash) {
-      fail('design_proposal_stale', 'Confirm the current Design proposal revision')
-    }
-    if (hasBlockingDesignIssues(draft.proposal.issues)) {
-      fail('design_proposal_invalid', 'Resolve proposal errors before creating definitions')
-    }
-    try {
-      writeMamDesignProposal(draft.proposal, this.profiles, draft.workflowRevision)
-    } catch (cause) {
-      this.drafts.save({
-        ...draft,
-        recovery: createMamDesignRecovery(cause, this.now()),
-        updatedAt: this.now()
-      })
-      throw cause
-    }
-    this.drafts.save({ ...draft, status: 'applied', appliedAt: this.now(), updatedAt: this.now() })
-    return this.query.getSnapshot()
+    return applyMamDesignProposal({
+      draft: this.requireEditableDraft(),
+      proposalHash: parsed.proposalHash,
+      profiles: this.profiles,
+      drafts: this.drafts,
+      query: this.query,
+      now: this.now
+    })
   }
 
   private async generateForDraft(
@@ -232,6 +234,8 @@ export class MamDesignAssistantService {
           selectedModelProfileId: modelProfileId,
           standardTemplate: template,
           ...(draft.proposal ? { currentProposal: draft.proposal } : {}),
+          ...(draft.brainstorm ? { currentBrainstorm: draft.brainstorm } : {}),
+          ...(draft.review ? { currentReview: draft.review } : {}),
           ...(draft.recovery ? { recovery: draft.recovery } : {}),
           ...(draft.workflowRevision ? { workflowRevision: draft.workflowRevision } : {})
         }),
@@ -250,10 +254,17 @@ export class MamDesignAssistantService {
           ...(draft.workflowRevision ? { workflowRevision: draft.workflowRevision } : {})
         })
       )
-      const { recovery: _recovery, ...rest } = draft
+      const review = normalizeMamDesignReview(response.review)
+      const brainstorm = mergeMamDesignBrainstorm(response.brainstorm, draft.brainstorm, review)
+      const { brainstorm: _brainstorm, recovery: _recovery, ...rest } = draft
       return this.drafts.save({
         ...rest,
-        messages: appendMessages(draft.messages, this.message('assistant', response.message)),
+        messages: appendMamDesignMessages(
+          draft.messages,
+          createMamDesignMessage('assistant', response.message, this.now())
+        ),
+        brainstorm,
+        review,
         proposal,
         updatedAt: this.now()
       })
@@ -288,29 +299,6 @@ export class MamDesignAssistantService {
       fail('design_draft_applied', 'Start a new Design before continuing')
     return draft
   }
-
-  private workflowRevision(workflowId: string, baseVersion: number): MamDesignWorkflowRevision {
-    const latestVersion = this.profiles.workflows
-      .listVersions(workflowId)
-      .reduce((latest, workflow) => Math.max(latest, workflow.version), baseVersion)
-    return { workflowId, baseVersion, nextVersion: latestVersion + 1 }
-  }
-
-  private message(role: MamDesignMessage['role'], content: string): MamDesignMessage {
-    return {
-      id: `design-message.${randomUUID().replaceAll('-', '')}`,
-      role,
-      content,
-      createdAt: this.now()
-    }
-  }
-}
-
-function appendMessages(
-  messages: readonly MamDesignMessage[],
-  ...next: readonly MamDesignMessage[]
-): MamDesignMessage[] {
-  return [...messages, ...next].slice(-200)
 }
 
 function fail(code: string, message: string): never {

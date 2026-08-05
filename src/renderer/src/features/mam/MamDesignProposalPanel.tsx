@@ -46,12 +46,21 @@ export function MamDesignProposalPanel({
       <header className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-border bg-card px-4 py-3">
         <div>
           <h2 className="text-sm font-semibold">Proposal</h2>
-          {proposal && <ProposalState proposal={proposal} status={draft.status} />}
+          {proposal && (
+            <ProposalState
+              proposal={proposal}
+              status={draft.status}
+              {...(draft.brainstorm ? { brainstorm: draft.brainstorm } : {})}
+              {...(draft.review ? { review: draft.review } : {})}
+            />
+          )}
         </div>
         {proposal && draft.status === 'draft' && (
           <ApplyProposalDialog
             proposal={proposal}
             revision={draft.workflowRevision}
+            {...(draft.brainstorm ? { brainstorm: draft.brainstorm } : {})}
+            {...(draft.review ? { review: draft.review } : {})}
             pending={pending}
             onApply={onApply}
           />
@@ -206,11 +215,33 @@ export function MamDesignProposalPanel({
 
 function ProposalState({
   proposal,
-  status
-}: Readonly<{ proposal: MamDesignProposal; status: MamDesignDraft['status'] }>): React.JSX.Element {
+  status,
+  brainstorm,
+  review
+}: Readonly<{
+  proposal: MamDesignProposal
+  status: MamDesignDraft['status']
+  brainstorm?: MamDesignDraft['brainstorm']
+  review?: MamDesignDraft['review']
+}>): React.JSX.Element {
   const errors = proposal.issues.filter((issue) => issue.severity === 'error').length
   if (status === 'applied') {
     return <p className="mt-0.5 text-[11px] text-muted-foreground">Created from this draft</p>
+  }
+  if (brainstorm && brainstorm.phase !== 'ready') {
+    const labels = {
+      clarifying: 'Waiting for your answer',
+      comparing_approaches: 'Waiting for an approach',
+      reviewing_design: 'Waiting for section approval',
+      ready: 'Brainstorming complete'
+    } as const
+    return <p className="mt-0.5 text-[11px] text-muted-foreground">{labels[brainstorm.phase]}</p>
+  }
+  if (review?.readiness === 'needs_clarification') {
+    return <p className="mt-0.5 text-[11px] text-muted-foreground">Waiting for your answers</p>
+  }
+  if (review?.readiness === 'needs_revision') {
+    return <p className="mt-0.5 text-[11px] text-muted-foreground">Workflow review is open</p>
   }
   return (
     <p className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">
@@ -255,17 +286,24 @@ function ProposalIssues({
 function ApplyProposalDialog({
   proposal,
   revision,
+  brainstorm,
+  review,
   pending,
   onApply
 }: Readonly<{
   proposal: MamDesignProposal
   revision?: MamDesignDraft['workflowRevision']
+  brainstorm?: MamDesignDraft['brainstorm']
+  review?: MamDesignDraft['review']
   pending: boolean
   onApply(): Promise<void>
 }>): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [error, setError] = useState<string>()
-  const blocked = proposal.issues.some((issue) => issue.severity === 'error')
+  const blocked =
+    proposal.issues.some((issue) => issue.severity === 'error') ||
+    Boolean(brainstorm && brainstorm.phase !== 'ready') ||
+    Boolean(review && review.readiness !== 'ready')
   const apply = async (): Promise<void> => {
     setError(undefined)
     try {
