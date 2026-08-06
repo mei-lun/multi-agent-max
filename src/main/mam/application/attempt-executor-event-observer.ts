@@ -2,25 +2,32 @@ import type { ExecutorEvent } from '../../../shared/mam/executor-events'
 import type { PreparedAttemptRunnerInput } from './mam-attempt-background-runner'
 import { recordAttemptRunnerEvent } from './attempt-runner-diagnostics'
 
-const MESSAGE_FLUSH_INTERVAL_MS = 120
+const MESSAGE_IDLE_FLUSH_MS = 5_000
+const MESSAGE_MAX_BATCH_MS = 30_000
 
 export class AttemptExecutorEventObserver {
   private liveEventCount = 0
   private pendingText = ''
   private pendingEvent: ExecutorEvent | undefined
-  private flushTimer: ReturnType<typeof setTimeout> | undefined
+  private idleFlushTimer: ReturnType<typeof setTimeout> | undefined
+  private maxBatchTimer: ReturnType<typeof setTimeout> | undefined
 
   constructor(private readonly input: PreparedAttemptRunnerInput) {}
 
   observe = (event: ExecutorEvent): void => {
     this.liveEventCount += 1
-    const text = event.type === 'agent_message' ? eventText(event.payload) : undefined
+    const streamingUpdate =
+      event.type === 'agent_message' && event.sourceEventType === 'message_update'
+    const text = streamingUpdate ? eventText(event.payload) : undefined
     if (text) {
       this.pendingText += text
       this.pendingEvent = event
-      this.flushTimer ??= setTimeout(() => this.flush(), MESSAGE_FLUSH_INTERVAL_MS)
+      if (this.idleFlushTimer) clearTimeout(this.idleFlushTimer)
+      this.idleFlushTimer = setTimeout(() => this.flush(), MESSAGE_IDLE_FLUSH_MS)
+      this.maxBatchTimer ??= setTimeout(() => this.flush(), MESSAGE_MAX_BATCH_MS)
       return
     }
+    if (streamingUpdate) return
     this.flush()
     this.record(event)
   }
@@ -32,8 +39,10 @@ export class AttemptExecutorEventObserver {
   }
 
   flush(): void {
-    if (this.flushTimer) clearTimeout(this.flushTimer)
-    this.flushTimer = undefined
+    if (this.idleFlushTimer) clearTimeout(this.idleFlushTimer)
+    if (this.maxBatchTimer) clearTimeout(this.maxBatchTimer)
+    this.idleFlushTimer = undefined
+    this.maxBatchTimer = undefined
     if (!this.pendingEvent || !this.pendingText) return
     this.record({
       ...this.pendingEvent,
@@ -50,7 +59,23 @@ export class AttemptExecutorEventObserver {
 }
 
 function eventText(payload: Readonly<Record<string, unknown>>): string | undefined {
-  return nestedString(payload, ['textDelta', 'delta', 'text'])
+  const update = nestedRecord(payload, 'assistantMessageEvent')
+  if (update?.type !== 'text_delta') return undefined
+  return nestedString(update, ['textDelta', 'delta', 'text'])
+}
+
+function nestedRecord(value: unknown, key: string, depth = 0): Record<string, unknown> | undefined {
+  if (depth > 5 || !value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const record = value as Record<string, unknown>
+  const candidate = record[key]
+  if (candidate && typeof candidate === 'object' && !Array.isArray(candidate)) {
+    return candidate as Record<string, unknown>
+  }
+  for (const child of Object.values(record)) {
+    const found = nestedRecord(child, key, depth + 1)
+    if (found) return found
+  }
+  return undefined
 }
 
 function nestedString(value: unknown, keys: readonly string[], depth = 0): string | undefined {

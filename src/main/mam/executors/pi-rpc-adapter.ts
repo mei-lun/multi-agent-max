@@ -250,6 +250,7 @@ function workspacePrompt(prompt: string, canWriteWorkspace: boolean): string {
     : [
         'This Role has no workspace write access.',
         'For a document, report, or other textual output, return the complete deliverable directly as your final response.',
+        'Be concise: cover every required contract before adding optional detail, and do not repeat the Task description.',
         'Do not claim that unavailable tools prevented completion and do not describe commands as chat text.'
       ]
   return [prompt, '', ...completionInstruction].join('\n')

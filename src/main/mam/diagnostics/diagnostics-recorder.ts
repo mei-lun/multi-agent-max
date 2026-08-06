@@ -1,6 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 
+const MAX_RETAINED_EVENTS = 3_000
+
 export type DiagnosticEvent = Readonly<{
   at: string
   workflowRunId: string
@@ -24,11 +26,16 @@ export class DiagnosticsRecorder {
   private readonly events: DiagnosticEvent[]
 
   constructor(private readonly storagePath?: string) {
-    this.events = storagePath ? loadEvents(storagePath) : []
+    const loaded = storagePath ? loadEvents(storagePath) : []
+    this.events = loaded.slice(-MAX_RETAINED_EVENTS)
+    if (loaded.length > this.events.length) this.persist()
   }
 
   record(event: DiagnosticEvent): void {
     this.events.push(structuredClone(redactEvent(event)))
+    if (this.events.length > MAX_RETAINED_EVENTS) {
+      this.events.splice(0, this.events.length - MAX_RETAINED_EVENTS)
+    }
     this.persist()
   }
 

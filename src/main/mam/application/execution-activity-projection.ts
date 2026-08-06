@@ -14,29 +14,44 @@ export function projectExecutionActivities(
       attempt.roleInstanceId ? [[attempt.roleInstanceId, attempt] as const] : []
     )
   )
-  return events
-    .map((event, index) => ({ event, index }))
-    .filter(({ event }) => event.workflowRunId === workflowRunId)
-    .slice(-MAX_RUN_ACTIVITIES)
-    .flatMap(({ event, index }) => {
-      const presentation = activityPresentation(event)
-      if (!presentation) return []
-      const attempt = attemptByRole.get(event.roleInstanceId)
-      return [
-        {
-          id: `activity.${index}`,
-          at: event.at,
-          nodeId: event.nodeId,
-          roleInstanceId: event.roleInstanceId,
-          executorInvocationId: event.executorInvocationId,
-          ...((event.taskId ?? attempt?.taskId) ? { taskId: event.taskId ?? attempt!.taskId } : {}),
-          ...((event.attemptId ?? attempt?.id)
-            ? { attemptId: event.attemptId ?? attempt!.id }
-            : {}),
-          ...presentation
+  const activities: MamUiExecutionActivity[] = []
+  let mergeableMessageIndex: number | undefined
+  events.forEach((event, index) => {
+    if (event.workflowRunId !== workflowRunId) return
+    const presentation = activityPresentation(event)
+    if (!presentation) {
+      if (!isUnpresentedStreamingUpdate(event)) mergeableMessageIndex = undefined
+      return
+    }
+    const attempt = attemptByRole.get(event.roleInstanceId)
+    const activity: MamUiExecutionActivity = {
+      id: `activity.${index}`,
+      at: event.at,
+      nodeId: event.nodeId,
+      roleInstanceId: event.roleInstanceId,
+      executorInvocationId: event.executorInvocationId,
+      ...((event.taskId ?? attempt?.taskId) ? { taskId: event.taskId ?? attempt!.taskId } : {}),
+      ...((event.attemptId ?? attempt?.id) ? { attemptId: event.attemptId ?? attempt!.id } : {}),
+      ...presentation
+    }
+    if (activity.category === 'message') {
+      const previous =
+        mergeableMessageIndex === undefined ? undefined : activities[mergeableMessageIndex]
+      if (previous && sameMessageContext(previous, activity)) {
+        activities[mergeableMessageIndex!] = {
+          ...previous,
+          detail: limit(`${previous.detail ?? ''}${activity.detail ?? ''}`)
         }
-      ]
-    })
+        return
+      }
+      activities.push(activity)
+      mergeableMessageIndex = activities.length - 1
+      return
+    }
+    activities.push(activity)
+    mergeableMessageIndex = undefined
+  })
+  return activities.slice(-MAX_RUN_ACTIVITIES)
 }
 
 type ActivityPresentation = Pick<
@@ -66,6 +81,9 @@ function executorPresentation(event: Record<string, unknown>): ActivityPresentat
   const payload = recordValue(event.payload) ?? {}
   const detail = extractDetail(payload)
   if (type === 'agent_message') {
+    if (sourceEventType?.startsWith('message_update') && !isTextMessagePayload(payload)) {
+      return undefined
+    }
     return detail ? present('message', 'Agent message', detail, sourceEventType) : undefined
   }
   if (type === 'usage_updated') {
@@ -94,6 +112,40 @@ function executorPresentation(event: Record<string, unknown>): ActivityPresentat
   )
 }
 
+function isTextMessagePayload(payload: Record<string, unknown>): boolean {
+  if (typeof payload.textDelta === 'string') return true
+  const update = findRecord(payload, 'assistantMessageEvent')
+  return update?.type === 'text_delta'
+}
+
+function findRecord(value: unknown, key: string, depth = 0): Record<string, unknown> | undefined {
+  if (depth > 5 || !value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const record = value as Record<string, unknown>
+  const candidate = recordValue(record[key])
+  if (candidate) return candidate
+  for (const child of Object.values(record)) {
+    const found = findRecord(child, key, depth + 1)
+    if (found) return found
+  }
+  return undefined
+}
+
+function isUnpresentedStreamingUpdate(event: DiagnosticEvent): boolean {
+  const executorEvent = recordValue(event.payload.event)
+  return (
+    stringValue(executorEvent?.type) === 'agent_message' &&
+    stringValue(executorEvent?.sourceEventType)?.startsWith('message_update') === true
+  )
+}
+
+function sameMessageContext(left: MamUiExecutionActivity, right: MamUiExecutionActivity): boolean {
+  return (
+    left.nodeId === right.nodeId &&
+    left.attemptId === right.attemptId &&
+    left.executorInvocationId === right.executorInvocationId
+  )
+}
+
 function commandEvent(sourceEventType: string | undefined): boolean {
   return !sourceEventType || /(?:start|started)$/.test(sourceEventType)
 }
@@ -113,9 +165,9 @@ function present(
 }
 
 function extractDetail(payload: Record<string, unknown>): string | undefined {
+  const delta = findUntrimmedString(payload, ['textDelta', 'delta'])
+  if (delta) return limit(delta)
   const direct = findString(payload, [
-    'textDelta',
-    'delta',
     'text',
     'message',
     'output',
@@ -125,6 +177,25 @@ function extractDetail(payload: Record<string, unknown>): string | undefined {
     'name'
   ])
   return direct ? limit(direct) : undefined
+}
+
+function findUntrimmedString(
+  value: unknown,
+  keys: readonly string[],
+  depth = 0
+): string | undefined {
+  if (depth > 5 || !value || typeof value !== 'object') return undefined
+  const record = recordValue(value)
+  if (!record) return undefined
+  for (const key of keys) {
+    const candidate = record[key]
+    if (typeof candidate === 'string' && candidate.trim()) return candidate
+  }
+  for (const child of Object.values(record)) {
+    const candidate = findUntrimmedString(child, keys, depth + 1)
+    if (candidate !== undefined) return candidate
+  }
+  return undefined
 }
 
 function findString(value: unknown, keys: readonly string[], depth = 0): string | undefined {

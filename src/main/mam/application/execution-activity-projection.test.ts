@@ -17,7 +17,23 @@ describe('execution activity projection', () => {
         event: {
           type: 'agent_message',
           sourceEventType: 'message_update.batched',
-          payload: { textDelta: 'Inspecting the workspace.' }
+          payload: { textDelta: 'Inspecting ' }
+        }
+      }),
+      diagnostic('run.live', 'executor', {
+        event: {
+          type: 'agent_message',
+          sourceEventType: 'message_update',
+          payload: {
+            assistantMessageEvent: { type: 'thinking_delta', delta: 'private reasoning' }
+          }
+        }
+      }),
+      diagnostic('run.live', 'executor', {
+        event: {
+          type: 'agent_message',
+          sourceEventType: 'message_update.batched',
+          payload: { textDelta: 'the workspace.' }
         }
       }),
       diagnostic('run.live', 'executor', {

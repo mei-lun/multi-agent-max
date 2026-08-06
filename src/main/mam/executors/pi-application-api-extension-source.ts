@@ -52,7 +52,7 @@ export default function (pi) {
     pi.registerTool({
       name: 'mam_confirm_understanding',
       label: 'Confirm understanding',
-      description: 'Submit your understanding after the user answers. This waits for confirmation or returns clarification feedback; do not execute until confirmed is true.',
+      description: 'Use only after mam_ask_user succeeded for this interaction and returned user answers. Submit your understanding, then wait for confirmation or clarification feedback; do not execute until confirmed is true.',
       parameters: Type.Object({ interactionId: Type.String(), summary: Type.String() }),
       async execute(_id, params, signal) {
         return toolResult(await execute('human.submit_understanding', params, signal))
