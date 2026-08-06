@@ -12,6 +12,18 @@ completion semantics.
 All UI work must follow `docs/STYLEGUIDE.md`. Reuse documented tokens and shadcn primitives
 before adding new visual values or components.
 
+## Version Records
+
+- Read `docs/versions/README.md` and the version file matching `package.json` before changing the
+  project.
+- Every intentional feature, optimization, bug fix, refactor, documentation change, or
+  configuration change must update that version file in the same change set.
+- Keep the version file's feature inventory accurate and append a dated change entry that records
+  behavior, implementation scope, state or migration impact, verification, and known limits.
+- When `package.json` receives a new version, create the matching `docs/versions/<version>.md`,
+  carry forward the still-supported feature baseline, and update `docs/versions/README.md`.
+- Do not declare work complete when its version record is missing or stale.
+
 ## Code Quality
 
 - Add concise comments only for non-obvious reasons.

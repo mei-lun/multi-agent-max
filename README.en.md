@@ -35,6 +35,18 @@ Git remains the authority for shared workflow state.
 - **Review and integration** — Review decisions attach to exact attempts and commits. The merge
   queue uses stable ordering, reruns validation in an integration worktree, and records conflict
   resolution lineage.
+- **Automatic progression and review rework** — After a run starts, ordinary, dynamic, and Agent
+  review Tasks whose dependencies and fixed roles are resolved start Attempts automatically. When
+  a `review_gate` returns `changes_requested`, MAM follows the workflow-defined review target and
+  bounded rework semantics, returns the findings to the producing role, creates a new Attempt with
+  `previousAttemptId`, and automatically submits the replacement for review again.
+- **Human review gates** — `human_review_gate` stops an upstream artifact. The user only enters
+  feedback and chooses approve, request changes, or block. Change requests return to the fixed
+  producing role, which reworks the artifact and submits it for review again within a bounded limit.
+- **Role communication and attention queue** — Every role Task has native human clarification.
+  Roles can ask up to five questions at once, provide 2–3 options and a recommendation for
+  decisions, and continue clarifying until the user confirms the understanding. Reviews, role
+  questions, and rework conversations share one deterministic **Needs Attention** queue.
 - **Recovery and diagnostics** — Rebuild projections from Git, preserve attempt history across
   retries, reconcile unknown side effects, and export correlated diagnostics without persisting
   plaintext secrets.
@@ -91,7 +103,8 @@ history, review, Git branches/worktrees, merge queues, and recovery on top of gr
 | **Runs** | Inspect each Workflow Run, its tasks, Attempt timeline, structured results, Git diffs, recovery actions, approval gates, and integration progress. Historical Attempts remain available. |
 | **Live Activity** | Observe every node, role message, tool call, command, usage update, and state change for a selected run. Filter active or attention-required nodes and export the complete activity record. |
 | **My Role** | Select locally participating roles, see tasks fixed to the selected role by their workflow, start Attempts, and manage automatic local participation by role and run. |
-| **Reviews** | Review submitted work against an exact Attempt, result, validation evidence, and Git diff; approve or request changes; and resolve aggregated multi-reviewer disagreements. |
+| **Needs Attention** | Handle role questions, rework conversations, and human review in one queue sorted by scope, blocked task count, waiting time, and stable ID. Each item opens in a separate dialog for multi-turn communication. |
+| **Reviews** | Review submitted work against an exact Attempt, result, validation evidence, and Git diff; approve, request changes, or block; and resolve aggregated multi-reviewer disagreements. |
 | **Merge Queue** | Track immutable reviewed revisions, execute deterministic integration order, rerun validation, and inspect queued, active, failed, conflicting, and historical entries. |
 | **Resources** | Import and manage versioned Skills, MCP Server Profiles, and Knowledge Base Profiles, including the role allowlists that reference them. |
 | **Settings** | Configure Provider, Model, and advanced Executor Profiles together with machine-local executable, secret, MCP, Skill, knowledge, and Git path bindings; export diagnostics when needed. |
@@ -176,9 +189,16 @@ pnpm start
    to shared Git state.
 4. Create Role Profiles under **Roles**. Then use **Design Assistant** or **Workflows** to create a
    versioned workflow whose executable nodes each have one fixed role.
-5. Start a run from **Workflows**, then monitor work in **Runs**, **Live Activity**, and **My Role**.
-6. Resolve review or approval gates when requested. Reviewed code enters **Merge Queue** only when
-   the workflow contains a Git merge stage and its validation evidence is current.
+5. Start a run from **Workflows**. Fixed-role nodes execute automatically when their dependencies
+   are satisfied. When an Agent review requests changes, MAM automatically starts a new Attempt for
+   the workflow-defined producing role and sends the replacement through review again. Monitor the
+   process in **Runs**, **Live Activity**, and **My Role**.
+6. Human action is required only for explicit approval or human-review gates, role clarification,
+   unresolved reviewer disagreement, `blocked`, `reconciliation`, missing resources, or preflight
+   failure. Handle those items in **Needs Attention**. For a human change request, enter the problem
+   points only; after confirming its understanding, the fixed upstream role performs the rework.
+   Reviewed code enters **Merge Queue** only when the workflow contains a Git merge stage and its
+   validation evidence is current.
 
 For a repository with no commits, MAM can create the first empty commit when the first attempt is
 started, provided the worktree is clean. If staged, modified, or untracked files exist, create the
@@ -198,6 +218,54 @@ provider-key  -> MAM_SECRET_PROVIDER_KEY
 The conversion uppercases the ID, replaces punctuation with underscores, and prefixes
 `MAM_SECRET_`. Effective configuration snapshots record only references and content hashes, never
 the secret value.
+
+## Automatic review, human gates, and role communication
+
+`review_gate` is an Agent review node executed by its fixed reviewer role. Its ordinary path does
+not require the user to advance or reassign anything:
+
+```text
+Fixed producing role runs automatically
+                 ↓
+Fixed reviewer role reviews automatically
+          ┌──────┴──────────────┐
+       approve            request changes
+          ↓                       ↓
+workflow downstream      new producing-role Attempt
+                                  ↓
+                         automatic review again
+```
+
+Each replacement records `previousAttemptId` and remains bounded by `maxRevisionAttempts` or the
+return edge's `maxTraversals`. Only an explicit `approval_gate` or `human_review_gate`, role
+clarification, unresolved multi-reviewer disagreement, `blocked`, `reconciliation`, missing
+resources, or preflight failure pauses this automatic path.
+
+Human review is an explicit workflow gate, not a decision delegated to the role:
+
+```text
+Upstream role submits artifact
+            ↓
+     Human review gate
+       ┌────┼────────┐
+    approve  changes  block
+       ↓        ↓
+   downstream  fixed upstream role
+                    ↓
+          clarify and confirm understanding
+                    ↓
+              new Attempt rework
+                    ↓
+              back to human review
+```
+
+When a role faces uncertainty that could materially change the result, it pauses the current Task
+and dependent downstream work, while independent parallel branches continue. The user can answer
+questions in batches, choose recommendations, provide free-text facts, or request clarification
+of the role's understanding. Execution cannot start or resume until the user explicitly confirms.
+
+See the [Human Review and Role Clarification Product Design](docs/readme/HUMAN_REVIEW_AND_CLARIFICATION_DESIGN.md)
+for the state model, events, authority rules, and acceptance scenarios.
 
 ## Development commands
 
@@ -293,6 +361,11 @@ or model.
   authority
 - [Requirements delta and traceability](docs/readme/MAM_REQUIREMENTS_DELTA_2026-07-27.md) — stable
   requirement IDs and superseded semantics
+- [0.1.0 version feature record](docs/versions/0.1.0.md) — current capabilities, optimization
+  history, limits, and verification baseline
+- [Version record policy](docs/versions/README.md) — mandatory record format and update process for
+  every subsequent change
+- [Human Review and Role Clarification Product Design](docs/readme/HUMAN_REVIEW_AND_CLARIFICATION_DESIGN.md) — review gates, the unified attention queue, and multi-turn communication
 - [Migration status](docs/MIGRATION_STATUS.md) — implemented path and deferred executor work
 - [Current-project reuse matrix](docs/MAM_CURRENT_PROJECT_REUSE_MATRIX.md) — source migration
   decisions
@@ -302,8 +375,10 @@ When documents conflict, the final product and reuse plan takes precedence.
 
 ## Contributing
 
-Keep changes aligned with [`AGENTS.md`](AGENTS.md) and the product authority above. Before opening a
-pull request, run:
+Keep changes aligned with [`AGENTS.md`](AGENTS.md) and the product authority above. Every feature,
+optimization, fix, refactor, documentation update, or configuration change must update the version
+record matching `package.json` in the same change set; the current record is
+[`docs/versions/0.1.0.md`](docs/versions/0.1.0.md). Before opening a pull request, run:
 
 ```bash
 pnpm verify
