@@ -13,6 +13,7 @@ import {
 } from './scheduler-command-authority'
 import { materializeDynamicTaskPlan } from '../application/dynamic-task-plan-service'
 import { createReviewTasks } from '../review/review-fan-out-service'
+import { createHumanAttentionEvent, isHumanAttentionCommand } from './human-attention-event-factory'
 
 export { SchedulerCommandRejectedError }
 export type { SchedulerKernelContext, SchedulerTaskContext }
@@ -54,6 +55,9 @@ export class SchedulerKernel {
       workflowRunId: command.workflowRunId,
       schedulerId: context.schedulerId,
       parentRevision: context.revision ?? EMPTY_SCHEDULER_REVISION
+    }
+    if (isHumanAttentionCommand(command)) {
+      return createHumanAttentionEvent(command, context, base)
     }
     switch (command.type) {
       case 'create_workflow_run':

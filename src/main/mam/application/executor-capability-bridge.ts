@@ -5,6 +5,7 @@ import {
   type GatewayRequestContext
 } from '../gateways/attempt-gateway-authority'
 import type { AttemptResourceApplicationApi } from './attempt-resource-application-service'
+import type { AttemptHumanAttentionApplicationApi } from './attempt-human-attention-application-service'
 
 const ExecutorMcpRequestSchema = z.discriminatedUnion('operation', [
   z
@@ -56,7 +57,9 @@ export const ExecutorCapabilityBridgeRequestSchema = z.discriminatedUnion('metho
         documentRef: z.string().min(1).max(4000)
       }).strict()
     })
-    .strict()
+    .strict(),
+  z.object({ method: z.literal('human.request_input'), request: z.unknown() }).strict(),
+  z.object({ method: z.literal('human.submit_understanding'), request: z.unknown() }).strict()
 ])
 
 export type ExecutorCapabilityBridgeRequest = z.infer<typeof ExecutorCapabilityBridgeRequestSchema>
@@ -65,7 +68,8 @@ export class ExecutorCapabilityBridge {
   private readonly context: GatewayRequestContext
 
   constructor(
-    private readonly applicationApi: AttemptResourceApplicationApi,
+    private readonly applicationApi: AttemptResourceApplicationApi &
+      Partial<AttemptHumanAttentionApplicationApi>,
     context: GatewayRequestContext
   ) {
     this.context = GatewayRequestContextSchema.parse(context)
@@ -83,6 +87,15 @@ export class ExecutorCapabilityBridge {
         ...request.request,
         operation: 'search'
       })
+    }
+    if (request.method === 'human.request_input') {
+      if (!this.applicationApi.requestHumanInput) throw new Error('human_attention_unavailable')
+      return this.applicationApi.requestHumanInput(request.request)
+    }
+    if (request.method === 'human.submit_understanding') {
+      if (!this.applicationApi.submitHumanUnderstanding)
+        throw new Error('human_attention_unavailable')
+      return this.applicationApi.submitHumanUnderstanding(request.request)
     }
     return this.applicationApi.readKnowledge({
       ...authorityFields,

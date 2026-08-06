@@ -8,6 +8,10 @@ import type {
   MamReassignTaskInput,
   MamRecoverAttemptInput,
   MamResolveApprovalGateInput,
+  MamAnswerHumanQuestionsInput,
+  MamConfirmHumanUnderstandingInput,
+  MamReviseHumanUnderstandingInput,
+  MamResolveHumanReviewInput,
   MamResolveReviewDisagreementInput,
   MamRestartWorkflowRunInput,
   MamSaveLocalSettingsInput,
@@ -49,6 +53,10 @@ export type MamSnapshotState = Readonly<{
   submitReview(input: MamSubmitReviewInput): Promise<void>
   resolveReviewDisagreement(input: MamResolveReviewDisagreementInput): Promise<void>
   resolveApprovalGate(input: MamResolveApprovalGateInput): Promise<void>
+  answerHumanQuestions(input: MamAnswerHumanQuestionsInput): Promise<void>
+  confirmHumanUnderstanding(input: MamConfirmHumanUnderstandingInput): Promise<void>
+  reviseHumanUnderstanding(input: MamReviseHumanUnderstandingInput): Promise<void>
+  resolveHumanReview(input: MamResolveHumanReviewInput): Promise<void>
   selectAttempt(input: MamSelectAttemptInput): Promise<void>
   saveProfile(input: MamSaveProfileInput): Promise<void>
   saveLocalSettings(input: MamSaveLocalSettingsInput): Promise<void>

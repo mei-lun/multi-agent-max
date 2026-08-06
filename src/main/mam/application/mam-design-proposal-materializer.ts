@@ -178,6 +178,16 @@ function materializeNode(
   if (node.type === 'approval_gate') {
     return { id: node.key, type: node.type, prompt: node.prompt, options: node.options }
   }
+  if (node.type === 'human_review_gate') {
+    return {
+      id: node.key,
+      type: node.type,
+      inputs: node.inputArtifactKeys.map((key) => artifactRef(key, artifactTypes)),
+      instructions: node.instructions,
+      revisionTargetNodeId: node.revisionTargetNodeKey,
+      maxRevisionAttempts: node.maxRevisionAttempts
+    }
+  }
   if (node.type === 'condition') {
     return { id: node.key, type: node.type, expression: node.expression, branches: node.branches }
   }

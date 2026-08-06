@@ -20,6 +20,7 @@ import {
   assertTaskResultReuseAuthority
 } from './workflow-progress-reuse-command-authority'
 import type { SchedulerKernelContext, SchedulerTaskContext } from './scheduler-kernel-context'
+import { assertHumanAttentionAuthority } from './human-attention-command-authority'
 
 export type {
   AttemptBinding,
@@ -88,6 +89,31 @@ export function assertSchedulerCommandAuthority(
   }
 
   const task = requireTask(command, context)
+  if (command.type === 'resolve_human_review') {
+    assertUser(command)
+    const gate = context.humanReviewGates?.get(command.gateNodeId)
+    if (!gate || gate.revisionTargetTaskId !== command.taskId) {
+      reject('human_review_not_found', 'Human review is not ready for this Task')
+    }
+    if (gate.status !== 'pending') reject('human_review_closed', 'Human review is already closed')
+    if (JSON.stringify(gate.subject) !== JSON.stringify(command.subject)) {
+      reject('stale_human_review', 'Human review does not target the latest immutable subject')
+    }
+    if (command.status !== 'approved' && !command.feedback?.trim()) {
+      reject('human_review_feedback_required', 'Changes and blocks require feedback')
+    }
+    return
+  }
+  if (
+    command.type === 'request_human_input' ||
+    command.type === 'answer_human_questions' ||
+    command.type === 'submit_human_understanding' ||
+    command.type === 'confirm_human_understanding' ||
+    command.type === 'revise_human_understanding'
+  ) {
+    assertHumanAttentionAuthority({ command, task, assertUser, assertExecutor, reject })
+    return
+  }
   if (command.type === 'assign_task' || command.type === 'reassign_task') {
     assertTaskAssignmentAuthority({ command, task, reject })
     return

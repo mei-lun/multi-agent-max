@@ -46,6 +46,12 @@ export function resolveSystemPrompt(reference: string, projectDirectory: string)
   }
 }
 
+export function withHumanInteractionPolicy(systemPrompt: string): string {
+  return `${systemPrompt}\n\n${HUMAN_INTERACTION_POLICY}`
+}
+
+const HUMAN_INTERACTION_POLICY = `Human clarification is a native Task capability. Do not guess when missing or conflicting information would materially change the result. First inspect the Task, Artifacts, code, knowledge, and project rules. If uncertainty remains, call the provided MAM human-input tool before changing the affected work. Ask at most five independent questions in one batch. Every decision question must have 2-3 materially different options, one recommended option, and a concise recommendation reason; factual questions use free text. After receiving answers, ask another batch if needed. Otherwise submit a final understanding summary and wait for explicit user confirmation before continuing. If the summary returns unconfirmed with feedback, incorporate that feedback, ask another batch if needed, and submit a corrected summary. Never invent an answer or continue because of a timeout.`
+
 function requirePrompt(value: string): string {
   const prompt = value.trim()
   if (!prompt) {

@@ -13,6 +13,8 @@ import { MamLocalSettingsSchema } from './local-settings'
 import { ArtifactRefSchema } from './domain/artifact'
 import { MamModelConnectionProtocolSchema } from './model-catalog'
 import { MamExportWorkflowPackageInputSchema } from './workflow-package'
+import { HumanAnswerSchema } from './domain/human-attention'
+import { ReviewSubjectSchema } from './domain/review'
 
 export const MamSaveModelConnectionInputSchema = z
   .object({
@@ -135,6 +137,49 @@ export const MamResolveApprovalGateInputSchema = z
   })
   .strict()
 
+export const MamAnswerHumanQuestionsInputSchema = z
+  .object({
+    workflowRunId: MamEntityIdSchema,
+    taskId: MamEntityIdSchema,
+    interactionId: MamEntityIdSchema,
+    batchId: MamEntityIdSchema,
+    answers: z.array(HumanAnswerSchema).min(1).max(5)
+  })
+  .strict()
+
+export const MamConfirmHumanUnderstandingInputSchema = z
+  .object({
+    workflowRunId: MamEntityIdSchema,
+    taskId: MamEntityIdSchema,
+    interactionId: MamEntityIdSchema
+  })
+  .strict()
+
+export const MamReviseHumanUnderstandingInputSchema = z
+  .object({
+    workflowRunId: MamEntityIdSchema,
+    taskId: MamEntityIdSchema,
+    interactionId: MamEntityIdSchema,
+    feedback: z.string().trim().min(1).max(20_000)
+  })
+  .strict()
+
+export const MamResolveHumanReviewInputSchema = z
+  .object({
+    workflowRunId: MamEntityIdSchema,
+    taskId: MamEntityIdSchema,
+    gateNodeId: MamEntityIdSchema,
+    subject: ReviewSubjectSchema,
+    status: z.enum(['approved', 'changes_requested', 'blocked']),
+    feedback: z.string().trim().max(20_000).optional()
+  })
+  .strict()
+  .superRefine((input, context) => {
+    if (input.status !== 'approved' && !input.feedback) {
+      context.addIssue({ code: 'custom', path: ['feedback'], message: 'feedback is required' })
+    }
+  })
+
 export const MamSelectAttemptInputSchema = z
   .object({
     workflowRunId: MamEntityIdSchema,
@@ -169,6 +214,14 @@ export type MamResolveReviewDisagreementInput = z.infer<
   typeof MamResolveReviewDisagreementInputSchema
 >
 export type MamResolveApprovalGateInput = z.infer<typeof MamResolveApprovalGateInputSchema>
+export type MamAnswerHumanQuestionsInput = z.infer<typeof MamAnswerHumanQuestionsInputSchema>
+export type MamConfirmHumanUnderstandingInput = z.infer<
+  typeof MamConfirmHumanUnderstandingInputSchema
+>
+export type MamReviseHumanUnderstandingInput = z.infer<
+  typeof MamReviseHumanUnderstandingInputSchema
+>
+export type MamResolveHumanReviewInput = z.infer<typeof MamResolveHumanReviewInputSchema>
 export type MamSelectAttemptInput = z.infer<typeof MamSelectAttemptInputSchema>
 export type MamSaveProfileInput = z.infer<typeof MamSaveProfileInputSchema>
 export type MamSaveLocalSettingsInput = z.infer<typeof MamSaveLocalSettingsInputSchema>

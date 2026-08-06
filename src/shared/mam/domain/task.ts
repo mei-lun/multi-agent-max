@@ -58,6 +58,7 @@ export const AttemptSchema = z
     status: z.enum([
       'created',
       'running',
+      'waiting_for_human_input',
       'validating_output',
       'submitted',
       'changes_requested',

@@ -28,6 +28,7 @@ import { useMamPackageActions } from './use-mam-package-actions'
 import { useMamDeletionActions } from './use-mam-deletion-actions'
 import { mamApplicationErrorMessage } from './mam-application-error-message'
 import type { MamSnapshotState } from './mam-snapshot-state'
+import { useMamHumanAttentionActions } from './use-mam-human-attention-actions'
 
 export function useMamSnapshot(): MamSnapshotState {
   const [snapshot, setSnapshot] = useState<MamUiSnapshot>()
@@ -204,6 +205,7 @@ export function useMamSnapshot(): MamSnapshotState {
       applyAuthoritativeChange(() => getMamRendererApi().resolveApprovalGate(input)),
     [applyAuthoritativeChange]
   )
+  const humanAttentionActions = useMamHumanAttentionActions(applyAuthoritativeChange)
   const selectAttempt = useCallback(
     (input: MamSelectAttemptInput) =>
       applyAuthoritativeChange(() => getMamRendererApi().selectAttempt(input)),
@@ -276,6 +278,7 @@ export function useMamSnapshot(): MamSnapshotState {
     submitReview,
     resolveReviewDisagreement,
     resolveApprovalGate,
+    ...humanAttentionActions,
     selectAttempt,
     saveProfile,
     saveLocalSettings,

@@ -17,7 +17,7 @@ import {
   EnvironmentAttemptSecretValueProvider,
   type AttemptSecretValueProvider
 } from './local-attempt-secrets'
-import { resolveSystemPrompt } from './system-prompt-resolver'
+import { resolveSystemPrompt, withHumanInteractionPolicy } from './system-prompt-resolver'
 import { launchPreparedAttempt } from './mam-attempt-background-launcher'
 import {
   attemptExecutionPrompt,
@@ -196,7 +196,9 @@ export class MamAttemptExecutionService {
       this.secretValues
     )
     const materialized = await this.resources.materialize(resolved)
-    const systemPrompt = resolveSystemPrompt(role.systemPromptRef, repository.projectDirectory)
+    const systemPrompt = withHumanInteractionPolicy(
+      resolveSystemPrompt(role.systemPromptRef, repository.projectDirectory)
+    )
     const worktree = task.mergeConflictTask
       ? conflictAttemptWorktree(
           this.conflictWorktrees().prepare({

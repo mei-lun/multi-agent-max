@@ -25,6 +25,10 @@ import {
   MAM_UI_SNAPSHOT_CHANGED_CHANNEL,
   MAM_RESOLVE_REVIEW_DISAGREEMENT_CHANNEL,
   MAM_RESOLVE_APPROVAL_GATE_CHANNEL,
+  MAM_ANSWER_HUMAN_QUESTIONS_CHANNEL,
+  MAM_CONFIRM_HUMAN_UNDERSTANDING_CHANNEL,
+  MAM_REVISE_HUMAN_UNDERSTANDING_CHANNEL,
+  MAM_RESOLVE_HUMAN_REVIEW_CHANNEL,
   MAM_SAVE_WORKFLOW_CHANNEL,
   MAM_SAVE_LOCAL_SETTINGS_CHANNEL,
   MAM_SAVE_MODEL_CONNECTION_CHANNEL,
@@ -85,6 +89,18 @@ const api: MamRendererApi = Object.freeze({
   },
   async resolveApprovalGate(input) {
     return ipcRenderer.invoke(MAM_RESOLVE_APPROVAL_GATE_CHANNEL, input)
+  },
+  async answerHumanQuestions(input) {
+    return ipcRenderer.invoke(MAM_ANSWER_HUMAN_QUESTIONS_CHANNEL, input)
+  },
+  async confirmHumanUnderstanding(input) {
+    return ipcRenderer.invoke(MAM_CONFIRM_HUMAN_UNDERSTANDING_CHANNEL, input)
+  },
+  async reviseHumanUnderstanding(input) {
+    return ipcRenderer.invoke(MAM_REVISE_HUMAN_UNDERSTANDING_CHANNEL, input)
+  },
+  async resolveHumanReview(input) {
+    return ipcRenderer.invoke(MAM_RESOLVE_HUMAN_REVIEW_CHANNEL, input)
   },
   async selectAttempt(input) {
     return ipcRenderer.invoke(MAM_SELECT_ATTEMPT_CHANNEL, input)

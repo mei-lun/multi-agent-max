@@ -263,6 +263,7 @@ Workflow Definition 是带版本的执行图。每个可执行角色节点引用
 | `dynamic_tasks`      | 根据结构化任务计划创建多个固定角色 Task          |
 | `review_gate`        | 生成绑定节点固定审核角色的一个或多个 Review Task |
 | `approval_gate`      | 等待用户人工决定                                 |
+| `human_review_gate`  | 人工审阅不可变产物、沟通返工要求并决定是否放行   |
 | `condition`          | 根据结构化输出选择路径                           |
 | `parallel`           | 启动多个可并行分支                               |
 | `join`               | 等待指定分支汇合                                 |
@@ -272,6 +273,8 @@ Workflow Definition 是带版本的执行图。每个可执行角色节点引用
 | `finish`             | 完成 Workflow Run                                |
 
 工作流允许显式返工和循环，但每条回退路径必须配置最大次数或总转换次数。无边界循环在保存时被拒绝。
+
+`human_review_gate` 不绑定 Role。编辑器默认把受审 Artifact 的固定上游角色节点写入 `revisionTargetNodeId`；若输入来自多个生产节点则必须显式选择，不能由运行时猜测。用户选择 `changes_requested` 时意见必填，门禁先创建与原 Task 和最新不可变 Review Subject 绑定的返工沟通，原角色只能读取上下文并提问；用户确认“要求已沟通清楚”后，Scheduler 才为原 Task 创建带 lineage 的新 Attempt。`approved` 才解锁下游，达到 `maxRevisionAttempts` 后进入 blocked。
 
 ### 4.5 工作流角色与 Scheduler Kernel 必须分离
 
@@ -438,6 +441,8 @@ created
   -> waiting_role_activation
   -> ready
   -> running
+  -> waiting_for_human_input
+  -> resuming
   -> validating_output
   -> submitted
   -> in_review
@@ -446,6 +451,16 @@ created
 ```
 
 不是所有节点都会经历全部状态。系统节点通常从 `ready` 直接进入 `running` 和 `passed`。
+
+### 7.1.1 角色原生人机澄清
+
+每个角色 Task 都具有不可移除的 `clarify_if_needed` 能力。角色应先从 Task、Artifact、代码、知识库和项目规范中查明事实；缺少会实质改变结果的信息、要求冲突、多种方案会产生明显差异或涉及不可逆影响时，必须调用统一 Application API 提交问题批次，不得猜测。默认只暂停当前 Task 及其依赖下游，无依赖并行分支继续；影响整个 Run 的问题必须显式声明 run scope。
+
+一批最多包含五个相互独立的问题。决策问题提供二至三个方案、取舍、唯一推荐方案和理由，并允许自定义答案；纯事实问题使用自由文本，不为满足数量而伪造方案。用户可以逐项选择或采用全部推荐后批量提交。角色收到答案后可以提出下一批问题，也可以提交最终理解摘要；一旦开启沟通，只有用户确认摘要后才能恢复 Attempt，超时不能自动回答或自动继续。
+
+用户认为理解摘要仍不准确时，可以填写补充意见要求继续澄清；角色收到补充意见后继续提问或重新提交摘要，Task 保持暂停。详细交互、状态与验收场景见 [`HUMAN_REVIEW_AND_CLARIFICATION_DESIGN.md`](./readme/HUMAN_REVIEW_AND_CLARIFICATION_DESIGN.md)。
+
+沟通是 `Workflow Run -> Node Run -> Task -> Attempt` 下的权威记录，不建立独立 Session 产品。一个逻辑 Attempt 可以由多个 Executor Invocation segment 组成；它们共享固定 Role、Effective Config Snapshot、worktree 和消息记录。Adapter 内部 continuation/session handle 不是产品权威对象，进程无法原地继续时以新 segment 注入完整记录，不得换 Executor、Provider 或 Model。
 
 ### 7.2 Attempt 规则
 
@@ -535,6 +550,12 @@ interface AttemptResult {
 - 多 Reviewer 的数量、最小提交数、聚合策略和冲突处理由节点配置。
 - 被审核对象产生新版本后，旧 Review 自动失效。
 - 审核分歧按工作流配置进入更多 Review、人工审批或 blocked，不由模型伪造用户决定。
+
+### 7.5 统一待我处理队列
+
+人工审核、角色问题批次、返工沟通和 Run 级阻塞问题统一投影为 Human Attention Item。列表先显示类型、角色、Workflow/Task、问题摘要、影响范围、阻塞节点数和等待时间，点击后在独立 Dialog 内完成多轮沟通。权威排序依次为 Run 级影响、被阻塞节点数降序、创建时间升序和稳定 ID；模型只能说明阻塞原因，不能决定自身优先级。
+
+问题、方案、推荐、回答、理解摘要、补充意见、用户确认和时间均以 append-only Git 事件保存。未提交的本地表单草稿不是权威状态。对话框关闭不会解决事项；只有用户确认沟通完成、完成审核决定或显式阻塞/取消后，事项才离开待处理队列。
 
 ## 8. Git 状态同步设计
 
@@ -797,6 +818,7 @@ Local Knowledge Binding
 | My Role          | 选择本机参与角色，查看工作流固定给该角色的任务；启动前显示重复执行 warning，不提供 Task 角色选择或改派                |
 | Task             | 查看输入、结构化执行事件、Artifact、Git diff、提交、Attempt 时间线和返工记录；默认打开最新 Attempt，历史 Attempt 只读 |
 | Reviews          | 提交结构化审核结果，处理多 Reviewer 分歧                                                                              |
+| 待我处理         | 按确定性优先级集中处理人工审核、角色问题批次、返工沟通和 Run 级阻塞问题；在独立 Dialog 中批量回答并确认恢复           |
 | Merge Queue      | 调度者角色查看顺序、冲突、验证和 merge lineage                                                                        |
 | Resources        | 管理 Skill Registry、MCP Server Profile 和 Knowledge Base Profile                                                     |
 | Settings         | 管理 Executor、Provider/Endpoint、Model Profile、本机 secret/local bindings、Git 和默认目录                           |
@@ -1000,6 +1022,8 @@ attempts.selectForTask / attempts.getTimeline
 artifacts.submit / artifacts.get / artifacts.listByAttempt
 reviews.submit / reviews.resolveDisagreement
 approvals.resolve
+humanAttention.list / humanAttention.submitQuestionBatch / humanAttention.answerBatch
+humanAttention.submitUnderstanding / humanAttention.confirm / humanAttention.block
 mergeQueue.list / mergeQueue.executeNext / mergeQueue.retry
 diagnostics.list / diagnostics.export
 ```

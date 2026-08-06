@@ -6,6 +6,7 @@ import { mergeNodeRun } from './merge-node-projection'
 import { projectWorkflowRoute, type WorkflowRouteProjection } from './workflow-route-projection'
 import { isPassedTaskStatus, projectedRunStatus } from './workflow-projection-state'
 import { passedNodeIds, taskContextDefinition } from './workflow-task-context'
+import { latestSubmittedReviewSubject } from './review-route-projection'
 
 export { taskContextDefinition } from './workflow-task-context'
 
@@ -86,8 +87,32 @@ function projectNodeRun(
   const node = bundle.definition.nodes.find((candidate) => candidate.id === original.nodeId)!
   if (node.type === 'review_gate') return reviewNodeRun(original, node.id, projection)
   if (node.type === 'approval_gate') return { ...original, status: 'waiting_for_approval' }
+  if (node.type === 'human_review_gate') {
+    return humanReviewNodeRun(original, node.id, node.revisionTargetNodeId, bundle, projection)
+  }
   if (node.type === 'git_merge') return mergeNodeRun(original, node.id, projection, bundle)
   return { ...original, status: 'ready' }
+}
+
+function humanReviewNodeRun(
+  original: NodeRun,
+  gateNodeId: string,
+  revisionTargetNodeId: string,
+  bundle: WorkflowRunBundle,
+  projection: WorkflowRunProjection
+): NodeRun {
+  const task = bundle.taskCatalog.find((candidate) => candidate.nodeId === revisionTargetNodeId)
+  const subject = task ? latestSubmittedReviewSubject(projection, task.id) : undefined
+  if (!subject) return { ...original, status: 'waiting_dependencies' }
+  const decision = Object.values(projection.humanReviewDecisions).find(
+    (candidate) =>
+      candidate.gateNodeId === gateNodeId &&
+      JSON.stringify(candidate.subject) === JSON.stringify(subject)
+  )
+  if (!decision) return { ...original, status: 'waiting_for_human_input' }
+  if (decision.status === 'approved') return { ...original, status: 'passed' }
+  if (decision.status === 'changes_requested') return { ...original, status: 'changes_requested' }
+  return { ...original, status: 'blocked' }
 }
 
 function reviewNodeRun(
@@ -159,6 +184,7 @@ function taskNodeRun(
     waiting_role_assignment: 'waiting_role_assignment',
     ready: 'ready',
     running: 'running',
+    waiting_for_human_input: 'waiting_for_human_input',
     submitted: 'passed',
     in_review: 'in_review',
     changes_requested: 'changes_requested',

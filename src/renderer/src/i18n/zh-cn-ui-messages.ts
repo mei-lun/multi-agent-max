@@ -5,6 +5,7 @@ import { ZH_CN_REVIEW_MESSAGES } from './zh-cn-review-messages'
 import { ZH_CN_RUN_MESSAGES } from './zh-cn-run-messages'
 import { ZH_CN_WORKFLOW_MESSAGES } from './zh-cn-workflow-messages'
 import { ZH_CN_LIVE_ACTIVITY_MESSAGES } from './zh-cn-live-activity-messages'
+import { ZH_CN_HUMAN_ATTENTION_MESSAGES } from './zh-cn-human-attention-messages'
 
 export const ZH_CN_UI_MESSAGES: Readonly<Record<string, string>> = {
   Overview: '概览',
@@ -293,6 +294,7 @@ export const ZH_CN_UI_MESSAGES: Readonly<Record<string, string>> = {
   ...ZH_CN_PROFILE_MESSAGES,
   ...ZH_CN_RECOVERY_MESSAGES,
   ...ZH_CN_LIVE_ACTIVITY_MESSAGES,
+  ...ZH_CN_HUMAN_ATTENTION_MESSAGES,
   ...ZH_CN_REVIEW_MESSAGES,
   ...ZH_CN_RUN_MESSAGES,
   ...ZH_CN_WORKFLOW_MESSAGES

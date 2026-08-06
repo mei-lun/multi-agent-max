@@ -106,10 +106,7 @@ export function nextMamLocalCollaborationAction(
       `${remoteAssignment.title} is fixed to a Role that is not active on this machine.`
     )
   }
-  if (
-    run.tasks.some((task) => task.status === 'approved') ||
-    hasMissingPromotionReadiness(run)
-  ) {
+  if (run.tasks.some((task) => task.status === 'approved') || hasMissingPromotionReadiness(run)) {
     return { kind: 'merge', input: { workflowRunId: run.run.id } }
   }
   return wait(

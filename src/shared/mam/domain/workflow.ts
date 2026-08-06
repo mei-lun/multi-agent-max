@@ -6,6 +6,8 @@ import {
   MamSchemaVersionSchema,
   Sha256Schema
 } from './primitives'
+import { validateHumanReviewWorkflow } from './human-review-workflow-validation'
+import { containsWorkflowCycle } from './workflow-cycle-detection'
 
 const roleSelection = {
   recommendedRoleProfileIds: z.array(MamEntityIdSchema).length(1),
@@ -52,6 +54,17 @@ const approvalGateNode = z
     type: z.literal('approval_gate'),
     prompt: z.string().min(1),
     options: z.array(z.string().min(1)).min(1)
+  })
+  .strict()
+
+const humanReviewGateNode = z
+  .object({
+    id: MamEntityIdSchema,
+    type: z.literal('human_review_gate'),
+    inputs: z.array(ArtifactRefSchema).min(1),
+    instructions: z.string().min(1).max(20_000),
+    revisionTargetNodeId: MamEntityIdSchema,
+    maxRevisionAttempts: z.number().int().positive().max(20)
   })
   .strict()
 
@@ -127,6 +140,7 @@ export const WorkflowNodeSchema = z.discriminatedUnion('type', [
   dynamicTasksNode,
   reviewGateNode,
   approvalGateNode,
+  humanReviewGateNode,
   conditionNode,
   parallelNode,
   joinNode,
@@ -172,6 +186,8 @@ export const NodeRunSchema = z
       'waiting_dependencies',
       'waiting_role_assignment',
       'waiting_for_approval',
+      'waiting_for_human_input',
+      'resuming',
       'ready',
       'running',
       'validating_output',
@@ -228,8 +244,15 @@ function validateWorkflowGraph(
       type: string
       recommendedRoleProfileIds?: string[]
       allowedRoleProfileIds?: string[]
+      revisionTargetNodeId?: string | undefined
+      maxRevisionAttempts?: number | undefined
     }[]
-    edges: { from: string; to: string; maxTraversals?: number | undefined }[]
+    edges: {
+      from: string
+      to: string
+      when?: string | undefined
+      maxTraversals?: number | undefined
+    }[]
   },
   context: z.RefinementCtx
 ): void {
@@ -264,6 +287,7 @@ function validateWorkflowGraph(
       message: 'workflow requires a finish node'
     })
   }
+  validateHumanReviewWorkflow(definition, context)
   const unboundedEdges = definition.edges.filter((edge) => {
     if (!nodeIds.has(edge.from) || !nodeIds.has(edge.to)) {
       context.addIssue({
@@ -275,35 +299,13 @@ function validateWorkflowGraph(
     }
     return edge.maxTraversals === undefined
   })
-  if (containsCycle(nodeIds, unboundedEdges)) {
+  if (containsWorkflowCycle(nodeIds, unboundedEdges)) {
     context.addIssue({
       code: 'custom',
       path: ['edges'],
       message: 'workflow contains an unbounded cycle; every cycle requires maxTraversals'
     })
   }
-}
-
-function containsCycle(nodeIds: Set<string>, edges: { from: string; to: string }[]): boolean {
-  const adjacency = new Map([...nodeIds].map((id) => [id, [] as string[]]))
-  const indegree = new Map([...nodeIds].map((id) => [id, 0]))
-  for (const edge of edges) {
-    adjacency.get(edge.from)?.push(edge.to)
-    indegree.set(edge.to, (indegree.get(edge.to) ?? 0) + 1)
-  }
-  const ready = [...indegree].filter(([, count]) => count === 0).map(([id]) => id)
-  let visited = 0
-  for (let cursor = 0; cursor < ready.length; cursor += 1) {
-    const id = ready[cursor]
-    if (!id) continue
-    visited += 1
-    for (const next of adjacency.get(id) ?? []) {
-      const remaining = (indegree.get(next) ?? 0) - 1
-      indegree.set(next, remaining)
-      if (remaining === 0) ready.push(next)
-    }
-  }
-  return visited !== nodeIds.size
 }
 
 export type WorkflowNode = z.infer<typeof WorkflowNodeSchema>

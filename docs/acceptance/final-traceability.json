@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0.0",
-  "generatedAt": "2026-08-04T15:45:16.456Z",
+  "generatedAt": "2026-08-05T20:26:47.376Z",
   "status": "passed",
   "scope": {
     "executorKinds": [
@@ -132,6 +132,38 @@
       "evidence": [
         "docs/acceptance/final-command-logs/core.log",
         "docs/acceptance/final-command-logs/desktop-seeded.log"
+      ]
+    },
+    {
+      "id": "MAM2-HUMAN-001",
+      "criterion": "current-authority-acceptance",
+      "paths": [
+        "src/shared/mam/domain/human-attention.test.ts",
+        "src/main/mam/state-store/human-attention-event-application.test.ts",
+        "src/renderer/src/features/mam/MamHumanAttentionDialog.tsx"
+      ],
+      "commands": [
+        "core"
+      ],
+      "status": "passed",
+      "evidence": [
+        "docs/acceptance/final-command-logs/core.log"
+      ]
+    },
+    {
+      "id": "MAM2-HUMAN-002",
+      "criterion": "current-authority-acceptance",
+      "paths": [
+        "src/shared/mam/domain/domain-contracts.test.ts",
+        "src/main/mam/scheduler/kernel.test.ts",
+        "src/renderer/src/features/mam/MamHumanReviewDialog.tsx"
+      ],
+      "commands": [
+        "core"
+      ],
+      "status": "passed",
+      "evidence": [
+        "docs/acceptance/final-command-logs/core.log"
       ]
     },
     {

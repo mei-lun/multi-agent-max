@@ -61,6 +61,17 @@ const DesignApprovalGateNodeSchema = z
   })
   .strict()
 
+const DesignHumanReviewGateNodeSchema = z
+  .object({
+    key: MamEntityIdSchema,
+    type: z.literal('human_review_gate'),
+    inputArtifactKeys: z.array(MamEntityIdSchema).min(1),
+    instructions: z.string().trim().min(1).max(20_000),
+    revisionTargetNodeKey: MamEntityIdSchema,
+    maxRevisionAttempts: z.number().int().positive().max(20)
+  })
+  .strict()
+
 const DesignConditionNodeSchema = z
   .object({
     key: MamEntityIdSchema,
@@ -128,6 +139,7 @@ export const MamDesignWorkflowNodeSpecSchema = z.discriminatedUnion('type', [
   DesignDynamicTasksNodeSchema,
   DesignReviewGateNodeSchema,
   DesignApprovalGateNodeSchema,
+  DesignHumanReviewGateNodeSchema,
   DesignConditionNodeSchema,
   DesignParallelNodeSchema,
   DesignJoinNodeSchema,

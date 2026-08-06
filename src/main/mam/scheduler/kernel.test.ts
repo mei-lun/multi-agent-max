@@ -99,6 +99,53 @@ describe('SchedulerKernel', () => {
       kernel.execute(startCommand(), taskContext('running', ['attempt.1'], true))
     ).toThrow(expect.objectContaining({ code: 'duplicate_attempt_start' }))
   })
+
+  it('binds human review to the immutable latest subject and enforces the revision limit', () => {
+    const kernel = new SchedulerKernel()
+    const context = taskContext('submitted', ['attempt.1'])
+    const subject = {
+      taskId: 'task.1',
+      attemptId: 'attempt.1',
+      resultHash: hash,
+      artifactHashes: [hash],
+      submittedCommit: 'abcdef1'
+    }
+    const event = kernel.execute(
+      {
+        schemaVersion: '1.0.0',
+        commandId: 'command.human-review',
+        issuedAt: '2026-07-27T10:10:00Z',
+        workflowRunId: 'run.1',
+        taskId: 'task.1',
+        actor: { kind: 'user', userId: 'user.owner' },
+        type: 'resolve_human_review',
+        gateNodeId: 'gate.human',
+        subject,
+        status: 'changes_requested',
+        feedback: 'Preserve the existing API contract.'
+      },
+      {
+        ...context,
+        humanReviewGates: new Map([
+          [
+            'gate.human',
+            {
+              status: 'pending',
+              subject,
+              revisionTargetNodeId: 'node.implementation',
+              revisionTargetTaskId: 'task.1',
+              attemptCount: 2,
+              maxRevisionAttempts: 2
+            }
+          ]
+        ])
+      }
+    ).events[0]
+    expect(event).toMatchObject({
+      type: 'human_review_resolved',
+      decision: { subject, status: 'blocked', feedback: 'Preserve the existing API contract.' }
+    })
+  })
 })
 
 function cancelRunCommand() {

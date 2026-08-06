@@ -64,7 +64,9 @@ describe('PiRpcAdapter', () => {
     expect(execution.invocation.launchOptions.args).toContain('--no-extensions')
     expect(execution.invocation.launchOptions.args).not.toContain('--extension')
     expect(execution.invocation.launchOptions.args).toContain('--tools')
-    expect(execution.invocation.launchOptions.args).toContain('read,bash,edit,write,grep,find,ls')
+    expect(execution.invocation.launchOptions.args).toContain(
+      'read,bash,edit,write,grep,find,ls,mam_ask_user,mam_confirm_understanding'
+    )
     expect(execution.invocation.agentDirectory).not.toBe(execution.invocation.sessionDirectory)
     expect(execution.stderr).toContain('[REDACTED]')
     expect(execution.stderr).not.toContain('mam-canary-secret')
@@ -113,7 +115,9 @@ describe('PiRpcAdapter', () => {
       expect.objectContaining({ type: 'agent_message', sourceEventType: 'message_update' })
     )
     expect(execution.invocation.launchOptions.args).toContain('--tools')
-    expect(execution.invocation.launchOptions.args).toContain('read,grep,find,ls')
+    expect(execution.invocation.launchOptions.args).toContain(
+      'read,grep,find,ls,mam_ask_user,mam_confirm_understanding'
+    )
   })
 
   it('exposes steer and abort only for an active invocation', async () => {

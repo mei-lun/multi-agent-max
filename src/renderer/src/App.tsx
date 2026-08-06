@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   Loader2,
   MessagesSquare,
+  MessageCircleQuestion,
   Network,
   PackageOpen,
   RadioTower,
@@ -37,6 +38,7 @@ import { MamRunsPage } from './features/mam/MamRunsPage'
 import { MamLiveActivityPage } from './features/mam/MamLiveActivityPage'
 import { MamSettingsPage } from './features/mam/MamSettingsPage'
 import { MamWorkflowsPage } from './features/mam/MamWorkflowsPage'
+import { MamHumanAttentionPage } from './features/mam/MamHumanAttentionPage'
 import { useMamSnapshot } from './features/mam/use-mam-snapshot'
 import { useMamLocalCollaboration } from './features/mam/use-mam-local-collaboration'
 import { cn } from './lib/class-name'
@@ -49,6 +51,7 @@ type Page =
   | 'workflows'
   | 'runs'
   | 'live-activity'
+  | 'attention'
   | 'my-role'
   | 'reviews'
   | 'merge-queue'
@@ -68,6 +71,16 @@ export function App(): React.JSX.Element {
     state.snapshot?.runs
       .flatMap((run) => run.mergeQueueEntries)
       .filter((entry) => entry.status === 'conflict' || entry.status === 'failed').length ?? 0
+  const humanAttentionCount =
+    state.snapshot?.runs.reduce(
+      (count, run) =>
+        count +
+        run.humanAttentionItems.filter(
+          (item) => item.status !== 'resolved' && item.status !== 'blocked'
+        ).length +
+        run.humanReviewGates.filter((gate) => gate.status === 'pending').length,
+      0
+    ) ?? 0
   return (
     <div className="flex h-dvh flex-col bg-background text-foreground">
       <LocalizedUiText />
@@ -157,6 +170,13 @@ export function App(): React.JSX.Element {
             onClick={() => setPage('live-activity')}
           />
           <NavigationButton
+            current={page === 'attention'}
+            icon={MessageCircleQuestion}
+            label="Needs Attention"
+            count={humanAttentionCount}
+            onClick={() => setPage('attention')}
+          />
+          <NavigationButton
             current={page === 'my-role'}
             icon={UserRoundCheck}
             label="My Role"
@@ -232,6 +252,10 @@ export function App(): React.JSX.Element {
                 onSubmitReview={state.submitReview}
                 onResolveReviewDisagreement={state.resolveReviewDisagreement}
                 onResolveApprovalGate={state.resolveApprovalGate}
+                onAnswerHumanQuestions={state.answerHumanQuestions}
+                onConfirmHumanUnderstanding={state.confirmHumanUnderstanding}
+                onReviseHumanUnderstanding={state.reviseHumanUnderstanding}
+                onResolveHumanReview={state.resolveHumanReview}
                 onSelectAttempt={state.selectAttempt}
                 onGetAttemptDiff={state.getAttemptDiff}
                 onSaveProfile={state.saveProfile}
@@ -306,6 +330,10 @@ function ActivePage({
   onSubmitReview,
   onResolveReviewDisagreement,
   onResolveApprovalGate,
+  onAnswerHumanQuestions,
+  onConfirmHumanUnderstanding,
+  onReviseHumanUnderstanding,
+  onResolveHumanReview,
   onSelectAttempt,
   onGetAttemptDiff,
   onSaveProfile,
@@ -347,6 +375,10 @@ function ActivePage({
   onSubmitReview: ReturnType<typeof useMamSnapshot>['submitReview']
   onResolveReviewDisagreement: ReturnType<typeof useMamSnapshot>['resolveReviewDisagreement']
   onResolveApprovalGate: ReturnType<typeof useMamSnapshot>['resolveApprovalGate']
+  onAnswerHumanQuestions: ReturnType<typeof useMamSnapshot>['answerHumanQuestions']
+  onConfirmHumanUnderstanding: ReturnType<typeof useMamSnapshot>['confirmHumanUnderstanding']
+  onReviseHumanUnderstanding: ReturnType<typeof useMamSnapshot>['reviseHumanUnderstanding']
+  onResolveHumanReview: ReturnType<typeof useMamSnapshot>['resolveHumanReview']
   onSelectAttempt: ReturnType<typeof useMamSnapshot>['selectAttempt']
   onGetAttemptDiff: ReturnType<typeof useMamSnapshot>['getAttemptDiff']
   onSaveProfile: ReturnType<typeof useMamSnapshot>['saveProfile']
@@ -436,6 +468,18 @@ function ActivePage({
       <MamLiveActivityPage
         snapshot={snapshot}
         onExportExecutionActivity={onExportExecutionActivity}
+      />
+    )
+  }
+  if (page === 'attention') {
+    return (
+      <MamHumanAttentionPage
+        snapshot={snapshot}
+        pending={pending}
+        onAnswer={onAnswerHumanQuestions}
+        onConfirm={onConfirmHumanUnderstanding}
+        onRevise={onReviseHumanUnderstanding}
+        onResolveReview={onResolveHumanReview}
       />
     )
   }

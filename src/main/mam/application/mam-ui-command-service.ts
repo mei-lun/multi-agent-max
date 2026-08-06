@@ -35,6 +35,10 @@ import {
   deactivateRoleProfile,
   deactivateWorkflow as deactivateWorkflowProfile
 } from './profile-deactivation-command'
+import { MamHumanAttentionUiCommands } from './mam-human-attention-ui-commands'
+import { makeMamUiCommandError, MamUiCommandServiceError } from './mam-ui-command-error'
+
+export { MamUiCommandServiceError } from './mam-ui-command-error'
 
 export type MamUiCommandServiceOptions = Readonly<{
   userId: string
@@ -44,17 +48,7 @@ export type MamUiCommandServiceOptions = Readonly<{
   onStateChanged?: () => void
 }>
 
-export class MamUiCommandServiceError extends Error {
-  constructor(
-    readonly code: string,
-    message: string
-  ) {
-    super(message)
-    this.name = 'MamUiCommandServiceError'
-  }
-}
-
-export class MamUiCommandService {
+export class MamUiCommandService extends MamHumanAttentionUiCommands {
   private readonly userId: string
   private readonly schedulerId: string
   private readonly now: () => string
@@ -72,6 +66,7 @@ export class MamUiCommandService {
     private readonly localSecrets?: MamLocalSecretWriter,
     private readonly modelCatalog = new MamProviderModelCatalogService()
   ) {
+    super()
     this.userId = MamEntityIdSchema.parse(options.userId)
     this.schedulerId = MamEntityIdSchema.parse(options.schedulerId)
     this.now = options.now ?? (() => new Date().toISOString())
@@ -144,12 +139,11 @@ export class MamUiCommandService {
   saveWorkflow(input: unknown): MamUiSnapshot {
     const parsed = MamSaveWorkflowInputSchema.parse(input)
     compileWorkflow(parsed.definition)
-    if (!this.profiles) {
+    if (!this.profiles)
       throw new MamUiCommandServiceError(
         'profile_catalog_unavailable',
         'The Workflow Profile catalog is unavailable'
       )
-    }
     this.profiles.workflows.save(parsed.definition)
     return this.query.getSnapshot()
   }
@@ -229,12 +223,11 @@ export class MamUiCommandService {
 
   saveLocalSettings(input: unknown): MamUiSnapshot {
     const parsed = MamSaveLocalSettingsInputSchema.parse(input)
-    if (!this.localSettings) {
+    if (!this.localSettings)
       throw new MamUiCommandServiceError(
         'local_settings_unavailable',
         'The local Settings store is unavailable'
       )
-    }
     this.localSettings.save(parsed.settings)
     return this.query.getSnapshot()
   }
@@ -254,32 +247,36 @@ export class MamUiCommandService {
   }
 
   deleteRoleProfile(input: unknown): MamUiSnapshot {
-    deactivateRoleProfile(input, this.requireProfiles(), makeCommandError)
+    deactivateRoleProfile(input, this.requireProfiles(), makeMamUiCommandError)
     return this.query.getSnapshot()
   }
 
   deleteWorkflow(input: unknown): MamUiSnapshot {
-    deactivateWorkflowProfile(input, this.requireProfiles(), makeCommandError)
+    deactivateWorkflowProfile(input, this.requireProfiles(), makeMamUiCommandError)
     return this.query.getSnapshot()
   }
 
   exportWorkflowPackage(input: unknown, destinationPath: string): string {
-    return writeWorkflowPackage(input, destinationPath, this.requireProfiles(), makeCommandError)
+    return writeWorkflowPackage(
+      input,
+      destinationPath,
+      this.requireProfiles(),
+      makeMamUiCommandError
+    )
   }
 
   importWorkflowPackage(sourcePath: string): MamUiSnapshot {
-    readWorkflowPackage(sourcePath, this.requireProfiles(), makeCommandError)
+    readWorkflowPackage(sourcePath, this.requireProfiles(), makeMamUiCommandError)
     return this.query.getSnapshot()
   }
 
   async importSkill(sourcePath: string): Promise<MamUiSnapshot> {
     const profiles = this.requireProfiles()
-    if (!this.localSettings) {
+    if (!this.localSettings)
       throw new MamUiCommandServiceError(
         'local_settings_unavailable',
         'The local Settings store is unavailable'
       )
-    }
     await importSkillProfile({
       sourcePath,
       profiles,
@@ -290,37 +287,42 @@ export class MamUiCommandService {
   }
 
   private requireCommands(): CommandPublisher {
-    if (!this.commands) {
+    if (!this.commands)
       throw new MamUiCommandServiceError(
         'project_not_attached',
         'Choose a Git project before changing workflow state'
       )
-    }
     return this.commands
   }
 
   private requireRepository(): GitStateRepository {
-    if (!this.repository) {
+    if (!this.repository)
       throw new MamUiCommandServiceError('project_not_attached', 'Choose a Git project first')
-    }
     return this.repository
   }
 
   private requireProfiles(): MamUiWritableProfiles {
-    if (!this.profiles) {
+    if (!this.profiles)
       throw new MamUiCommandServiceError(
         'profile_catalog_unavailable',
         'The Profile catalog is unavailable'
       )
-    }
     return this.profiles
+  }
+
+  protected humanAttentionCommandContext() {
+    return {
+      commands: this.requireCommands(),
+      schedulerId: this.schedulerId,
+      userId: this.userId,
+      nextCommandId: () => this.nextId('command'),
+      now: this.now,
+      onStateChanged: this.onStateChanged,
+      getSnapshot: () => this.query.getSnapshot()
+    }
   }
 
   private nextId(kind: 'command' | 'attempt'): string {
     return MamEntityIdSchema.parse(this.createId(kind))
   }
-}
-
-function makeCommandError(code: string, message: string): MamUiCommandServiceError {
-  return new MamUiCommandServiceError(code, message)
 }

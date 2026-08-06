@@ -18,6 +18,7 @@ import type { GitCommandConflictStore } from './git-command-conflict-store'
 import { projectWorkflowRun, taskContextDefinition } from '../application/workflow-run-projection'
 import { reviewDisagreementGateId } from '../application/review-disagreement-resolution'
 import { createMergeQueueEntry } from '../application/merge-queue-service'
+import { latestSubmittedReviewSubject } from '../application/review-route-projection'
 
 export type GitCommandExecutionInput = Readonly<{
   command: SchedulerCommand
@@ -229,11 +230,44 @@ export class GitCommandRetryCoordinator {
             })
         ])
       : undefined
+    const humanReviewGates = bundle
+      ? new Map(
+          bundle.definition.nodes
+            .filter((node) => node.type === 'human_review_gate')
+            .flatMap((node) => {
+              const task = bundle.taskCatalog.find(
+                (candidate) => candidate.nodeId === node.revisionTargetNodeId
+              )
+              const subject = task ? latestSubmittedReviewSubject(projection, task.id) : undefined
+              if (!task || !subject) return []
+              const resolved = Object.values(projection.humanReviewDecisions).some(
+                (decision) =>
+                  decision.gateNodeId === node.id &&
+                  JSON.stringify(decision.subject) === JSON.stringify(subject)
+              )
+              if (!resolved && nodeStatuses.get(node.id) !== 'waiting_for_human_input') return []
+              return [
+                [
+                  node.id,
+                  {
+                    status: resolved ? ('resolved' as const) : ('pending' as const),
+                    subject,
+                    revisionTargetNodeId: node.revisionTargetNodeId,
+                    revisionTargetTaskId: task.id,
+                    attemptCount: projection.tasks[task.id]?.knownAttemptIds.length ?? 0,
+                    maxRevisionAttempts: node.maxRevisionAttempts
+                  }
+                ] as const
+              ]
+            })
+        )
+      : undefined
     const baseContext = schedulerContextFromProjection(projection, {
       schedulerId: input.schedulerId,
       ...('taskId' in input.command ? { taskId: input.command.taskId } : {}),
       ...(input.validArtifactHashes ? { validArtifactHashes: input.validArtifactHashes } : {}),
       ...(approvalGates ? { approvalGates } : {}),
+      ...(humanReviewGates ? { humanReviewGates } : {}),
       ...(taskDefinition ? { taskDefinition } : {}),
       ...(bundle ? { runBundle: bundle } : {})
     })

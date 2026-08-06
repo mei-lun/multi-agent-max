@@ -24,6 +24,10 @@ import type {
   ReusedNodeCompletions,
   ReusedTaskResultSource
 } from './workflow-progress-reuse-projection'
+import type {
+  HumanAttentionItem,
+  HumanReviewDecision
+} from '../../../shared/mam/domain/human-attention'
 
 export { emptyWorkflowRunProjection } from './empty-workflow-run-projection'
 
@@ -125,6 +129,8 @@ export type WorkflowRunProjection = Readonly<{
       }>
     >
   >
+  humanAttentionItems: Readonly<Record<string, HumanAttentionItem>>
+  humanReviewDecisions: Readonly<Record<string, HumanReviewDecision>>
   mergeQueueEntries: Readonly<Record<string, MergeQueueEntry>>
   mergeConflictTasks: Readonly<Record<string, MergeConflictTaskDefinition>>
   mergeConflictResolutions: Readonly<Record<string, MergeConflictResolution>>
@@ -162,6 +168,7 @@ export function schedulerContextFromProjection(
     taskId?: string
     validArtifactHashes?: ReadonlySet<string>
     approvalGates?: SchedulerKernelContext['approvalGates']
+    humanReviewGates?: SchedulerKernelContext['humanReviewGates']
     taskDefinition?: Readonly<{
       initialStatus: 'waiting_dependencies' | 'waiting_role_assignment'
       allowedRoleProfileIds: readonly string[]
@@ -185,6 +192,7 @@ export function schedulerContextFromProjection(
           projection.attempts,
           projection.reviews,
           projection.reviewValidity,
+          projection.humanAttentionItems,
           input.taskDefinition
         )
       : undefined
@@ -196,6 +204,7 @@ export function schedulerContextFromProjection(
     ),
     ...(task ? { task } : {}),
     ...(input.approvalGates ? { approvalGates: input.approvalGates } : {}),
+    ...(input.humanReviewGates ? { humanReviewGates: input.humanReviewGates } : {}),
     validArtifactHashes: input.validArtifactHashes ?? new Set(),
     processedCommandIds: new Set(projection.commandIds),
     mergeQueueEntries: new Map(Object.entries(projection.mergeQueueEntries)),
@@ -228,6 +237,7 @@ function toTaskContext(
   attempts: WorkflowRunProjection['attempts'],
   reviews: WorkflowRunProjection['reviews'],
   reviewValidity: WorkflowRunProjection['reviewValidity'],
+  humanAttentionItems: WorkflowRunProjection['humanAttentionItems'],
   definition?: Readonly<{
     initialStatus: 'waiting_dependencies' | 'waiting_role_assignment'
     allowedRoleProfileIds: readonly string[]
@@ -240,6 +250,9 @@ function toTaskContext(
   }>
 ): SchedulerTaskContext {
   const attemptContext = projectTaskAttemptCommandContext(task, attempts)
+  const openHumanAttention = Object.values(humanAttentionItems).find(
+    (item) => item.taskId === taskId && item.status !== 'resolved' && item.status !== 'blocked'
+  )
   const reviewDecisions = new Map(
     (task?.reviewIds ?? []).flatMap((reviewId) => {
       const review = reviews[reviewId]
@@ -276,6 +289,7 @@ function toTaskContext(
     ...(definition?.mergeCandidate ? { mergeCandidate: definition.mergeCandidate } : {}),
     ...(definition?.mergeResolutionCandidate
       ? { mergeResolutionCandidate: definition.mergeResolutionCandidate }
-      : {})
+      : {}),
+    ...(openHumanAttention ? { openHumanAttention } : {})
   }
 }

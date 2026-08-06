@@ -23,11 +23,16 @@ import {
   applyNodeCompletionReuse,
   applyTaskResultReuse
 } from './workflow-progress-reuse-event-application'
+import {
+  applyHumanAttentionProjectionEvent,
+  isHumanAttentionEvent
+} from './human-attention-event-application'
 
 export function applyEvent(
   projection: WorkflowRunProjection,
   event: SchedulerEvent
 ): WorkflowRunProjection {
+  if (isHumanAttentionEvent(event)) return applyHumanAttentionProjectionEvent(projection, event)
   const tasks = { ...projection.tasks }
   const attempts = { ...projection.attempts }
   const dynamicTaskPlans = { ...projection.dynamicTaskPlans }

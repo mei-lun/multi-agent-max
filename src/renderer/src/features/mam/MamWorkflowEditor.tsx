@@ -90,7 +90,52 @@ export function MamWorkflowEditor({
       return
     }
     const edge: WorkflowEdge = { from: connection.source, to: connection.target }
-    setDefinition((current) => ({ ...current, edges: [...current.edges, edge] }))
+    const target = definition.nodes.find((node) => node.id === connection.target)
+    const revisionTargetNodeId =
+      target?.type === 'human_review_gate'
+        ? nearestUpstreamRoleTaskId(definition, connection.source)
+        : undefined
+    const returnEdge: WorkflowEdge | undefined =
+      target?.type === 'human_review_gate' && revisionTargetNodeId
+        ? {
+            from: target.id,
+            to: revisionTargetNodeId,
+            when: 'changes_requested',
+            maxTraversals: target.maxRevisionAttempts
+          }
+        : undefined
+    setDefinition((current) => ({
+      ...current,
+      nodes: current.nodes.map((node) =>
+        node.id === target?.id && node.type === 'human_review_gate' && revisionTargetNodeId
+          ? { ...node, revisionTargetNodeId }
+          : node
+      ),
+      edges: [
+        ...current.edges.filter(
+          (candidate) =>
+            !returnEdge ||
+            candidate.from !== returnEdge.from ||
+            candidate.when !== 'changes_requested'
+        ),
+        edge,
+        ...(returnEdge &&
+        !current.edges.some(
+          (candidate) => candidate.from === returnEdge.from && candidate.to === returnEdge.to
+        )
+          ? [returnEdge]
+          : [])
+      ]
+    }))
+    if (target?.type === 'human_review_gate' && revisionTargetNodeId) {
+      setNodes((current) =>
+        current.map((node) =>
+          node.id === target.id
+            ? { ...node, data: { node: { ...target, revisionTargetNodeId } } }
+            : node
+        )
+      )
+    }
     setEdges((current) =>
       addEdge(
         {
@@ -99,7 +144,28 @@ export function MamWorkflowEditor({
           type: 'smoothstep',
           data: { edge }
         },
-        current
+        returnEdge &&
+          !current.some(
+            (candidate) =>
+              candidate.data?.edge.from === returnEdge.from &&
+              candidate.data.edge.to === returnEdge.to
+          )
+          ? addEdge(
+              {
+                source: returnEdge.from,
+                target: returnEdge.to,
+                id: `${returnEdge.from}:${returnEdge.to}:revision`,
+                type: 'smoothstep',
+                label: returnEdge.when,
+                data: { edge: returnEdge }
+              },
+              current.filter(
+                (candidate) =>
+                  candidate.data?.edge.from !== returnEdge.from ||
+                  candidate.data.edge.when !== 'changes_requested'
+              )
+            )
+          : current
       )
     )
     setEditorError(undefined)
@@ -285,4 +351,25 @@ export function MamWorkflowEditor({
       </div>
     </section>
   )
+}
+
+function nearestUpstreamRoleTaskId(
+  definition: WorkflowDefinition,
+  startingNodeId: string
+): string | undefined {
+  const nodesById = new Map(definition.nodes.map((node) => [node.id, node]))
+  const pending = [startingNodeId]
+  const visited = new Set<string>()
+  while (pending.length > 0) {
+    const nodeId = pending.shift()!
+    if (visited.has(nodeId)) continue
+    visited.add(nodeId)
+    if (nodesById.get(nodeId)?.type === 'role_task') return nodeId
+    pending.push(
+      ...definition.edges
+        .filter((candidate) => candidate.to === nodeId)
+        .map((candidate) => candidate.from)
+    )
+  }
+  return undefined
 }

@@ -24,6 +24,41 @@ function toolResult(value) {
 }
 
 export default function (pi) {
+  if (enabled.has('mam_ask_user')) {
+    pi.registerTool({
+      name: 'mam_ask_user',
+      label: 'Ask the user',
+      description: 'Pause this Task and ask up to five independent questions. Decision questions require 2-3 options, one recommendation, and a reason. This call waits for the user batch answer.',
+      parameters: Type.Object({
+        interactionId: Type.String(),
+        scope: Type.Union([Type.Literal('task'), Type.Literal('branch'), Type.Literal('run')]),
+        kind: Type.Union([Type.Literal('role_questions'), Type.Literal('revision_consultation')]),
+        batchId: Type.String(),
+        title: Type.String(),
+        summary: Type.String(),
+        questions: Type.Array(Type.Unknown(), { minItems: 1, maxItems: 5 })
+      }),
+      async execute(_id, params, signal) {
+        return toolResult(await execute('human.request_input', {
+          interactionId: params.interactionId,
+          scope: params.scope,
+          kind: params.kind,
+          batch: { id: params.batchId, title: params.title, summary: params.summary, questions: params.questions }
+        }, signal))
+      }
+    })
+  }
+  if (enabled.has('mam_confirm_understanding')) {
+    pi.registerTool({
+      name: 'mam_confirm_understanding',
+      label: 'Confirm understanding',
+      description: 'Submit your understanding after the user answers. This waits for confirmation or returns clarification feedback; do not execute until confirmed is true.',
+      parameters: Type.Object({ interactionId: Type.String(), summary: Type.String() }),
+      async execute(_id, params, signal) {
+        return toolResult(await execute('human.submit_understanding', params, signal))
+      }
+    })
+  }
   if (enabled.has('mam_mcp')) {
     pi.registerTool({
       name: 'mam_mcp',

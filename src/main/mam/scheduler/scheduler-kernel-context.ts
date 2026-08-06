@@ -1,5 +1,6 @@
 import type { MergeConflictResolution } from '../../../shared/mam/domain/merge-conflict-task'
 import type { MergeQueueEntry } from '../../../shared/mam/domain/merge-queue'
+import type { HumanAttentionItem } from '../../../shared/mam/domain/human-attention'
 import type { ReviewDecision, ReviewSubject } from '../../../shared/mam/domain/review'
 import type { WorkflowRunBundle } from '../../../shared/mam/domain/run-bundle'
 
@@ -17,6 +18,7 @@ export type SchedulerTaskContext = Readonly<{
     | 'waiting_role_assignment'
     | 'ready'
     | 'running'
+    | 'waiting_for_human_input'
     | 'submitted'
     | 'in_review'
     | 'changes_requested'
@@ -42,6 +44,7 @@ export type SchedulerTaskContext = Readonly<{
   reviewPanelId?: string
   mergeCandidate?: MergeQueueEntry
   mergeResolutionCandidate?: MergeConflictResolution
+  openHumanAttention?: HumanAttentionItem
 }>
 
 export type SchedulerKernelContext = Readonly<{
@@ -61,5 +64,16 @@ export type SchedulerKernelContext = Readonly<{
   runBundle?: WorkflowRunBundle
   existingTaskIds?: ReadonlySet<string>
   mergeQueueEntries: ReadonlyMap<string, MergeQueueEntry>
+  humanReviewGates?: ReadonlyMap<
+    string,
+    Readonly<{
+      status: 'pending' | 'resolved'
+      subject: ReviewSubject
+      revisionTargetNodeId: string
+      revisionTargetTaskId: string
+      attemptCount: number
+      maxRevisionAttempts: number
+    }>
+  >
   revision?: string
 }>

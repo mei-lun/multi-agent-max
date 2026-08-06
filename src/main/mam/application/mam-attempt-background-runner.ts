@@ -12,10 +12,7 @@ import { advanceReadyReviewPanel } from './review-panel-advancement'
 import { finalizeMergeConflictAttempt } from './merge-conflict-attempt-finalizer'
 import { advanceDynamicTaskPlan } from './dynamic-task-advancement'
 import { advanceDeterministicNodes } from './deterministic-node-advancement'
-import { AttemptResourceApplicationService } from './attempt-resource-application-service'
-import { ExecutorCapabilityBridge } from './executor-capability-bridge'
-import { McpSdkConnector } from '../gateways/mcp-sdk-connector'
-import { FileKnowledgeConnector } from '../gateways/file-knowledge-connector'
+import { createAttemptCapabilityBridge } from './attempt-capability-bridge'
 import { recordAttemptInterruption } from './attempt-interruption-recovery'
 import { materializeDirectAttemptResult } from './direct-attempt-result'
 import { collectPreparedAttemptResult } from './prepared-attempt-result-collector'
@@ -54,19 +51,15 @@ export async function runPreparedAttempt(input: PreparedAttemptRunnerInput): Pro
   let executorCompleted = false
   try {
     const authority = attemptGatewayAuthority(prepared)
-    const resourceApplication = new AttemptResourceApplicationService(
-      prepared.resolvedConfig,
+    const capability = createAttemptCapabilityBridge({
+      prepared,
+      repository: input.repository,
+      diagnostics: input.diagnostics,
+      schedulerId: input.schedulerId,
       authority,
-      new McpSdkConnector((connectionRef) =>
-        prepared.mcpConnections.find((connection) => connection.connectionRef === connectionRef)
-      ),
-      new FileKnowledgeConnector(input.repository.projectDirectory),
-      input.diagnostics
-    )
-    const capabilityBridge = new ExecutorCapabilityBridge(
-      resourceApplication,
-      gatewayRequestContext(authority)
-    )
+      createId: input.createId,
+      now: input.now
+    })
     const execution = await input.executor
       .execute({
         profile: prepared.profile,
@@ -79,10 +72,10 @@ export async function runPreparedAttempt(input: PreparedAttemptRunnerInput): Pro
         prompt: prepared.prompt,
         credentialValues: prepared.credentialValues,
         authority: attemptAuthority(prepared, input.now()),
-        capabilityBridge,
+        capabilityBridge: capability.bridge,
         onEvent: eventObserver.observe
       })
-      .finally(() => resourceApplication.dispose())
+      .finally(capability.dispose)
     executorCompleted = true
     eventObserver.recordReturned(execution.events)
     const collected = execution.result
@@ -289,9 +282,4 @@ function attemptGatewayAuthority(prepared: PreparedAttempt) {
     executorInvocationId: prepared.executorInvocationId,
     effectiveConfigHash: prepared.snapshot.contentHash
   }
-}
-
-function gatewayRequestContext(authority: ReturnType<typeof attemptGatewayAuthority>) {
-  const { nodeRunId: _, ...context } = authority
-  return context
 }

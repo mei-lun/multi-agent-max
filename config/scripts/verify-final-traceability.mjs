@@ -134,6 +134,24 @@ function coverage() {
       ['src/renderer/src/App.tsx', 'src/renderer/src/features/mam/MamRunsPage.test.tsx'],
       [...core, 'desktop-seeded']
     ),
+    row(
+      'MAM2-HUMAN-001',
+      [
+        'src/shared/mam/domain/human-attention.test.ts',
+        'src/main/mam/state-store/human-attention-event-application.test.ts',
+        'src/renderer/src/features/mam/MamHumanAttentionDialog.tsx'
+      ],
+      core
+    ),
+    row(
+      'MAM2-HUMAN-002',
+      [
+        'src/shared/mam/domain/domain-contracts.test.ts',
+        'src/main/mam/scheduler/kernel.test.ts',
+        'src/renderer/src/features/mam/MamHumanReviewDialog.tsx'
+      ],
+      core
+    ),
     row('MAM2-STATE-001', ['src/main/mam/state-store/git-state-repository.real-git.test.ts'], core),
     row('MAM2-STATE-002', ['src/main/mam/state-store/git-state-repository.real-git.test.ts'], core),
     row('MAM2-STATE-003', ['src/main/mam/state-store/git-state-repository.real-git.test.ts'], core),

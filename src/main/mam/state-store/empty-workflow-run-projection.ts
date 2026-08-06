@@ -19,6 +19,8 @@ export function emptyWorkflowRunProjection(workflowRunId: string): WorkflowRunPr
     reviewPanels: {},
     reviewTasks: {},
     reviewValidity: {},
+    humanAttentionItems: {},
+    humanReviewDecisions: {},
     mergeQueueEntries: {},
     mergeConflictTasks: {},
     mergeConflictResolutions: {},

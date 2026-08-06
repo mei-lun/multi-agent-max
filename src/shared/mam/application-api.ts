@@ -9,6 +9,10 @@ import type {
   MamRestartWorkflowRunInput,
   MamResolveReviewDisagreementInput,
   MamResolveApprovalGateInput,
+  MamAnswerHumanQuestionsInput,
+  MamConfirmHumanUnderstandingInput,
+  MamReviseHumanUnderstandingInput,
+  MamResolveHumanReviewInput,
   MamSaveLocalSettingsInput,
   MamSaveModelConnectionInput,
   MamDeleteRoleProfileInput,
@@ -51,6 +55,10 @@ export const MAM_RESTART_WORKFLOW_RUN_CHANNEL = 'mam:restart-workflow-run'
 export const MAM_SUBMIT_REVIEW_CHANNEL = 'mam:submit-review'
 export const MAM_RESOLVE_REVIEW_DISAGREEMENT_CHANNEL = 'mam:resolve-review-disagreement'
 export const MAM_RESOLVE_APPROVAL_GATE_CHANNEL = 'mam:resolve-approval-gate'
+export const MAM_ANSWER_HUMAN_QUESTIONS_CHANNEL = 'mam:answer-human-questions'
+export const MAM_CONFIRM_HUMAN_UNDERSTANDING_CHANNEL = 'mam:confirm-human-understanding'
+export const MAM_REVISE_HUMAN_UNDERSTANDING_CHANNEL = 'mam:revise-human-understanding'
+export const MAM_RESOLVE_HUMAN_REVIEW_CHANNEL = 'mam:resolve-human-review'
 export const MAM_SELECT_ATTEMPT_CHANNEL = 'mam:select-attempt'
 export const MAM_SAVE_PROFILE_CHANNEL = 'mam:save-profile'
 export const MAM_SAVE_LOCAL_SETTINGS_CHANNEL = 'mam:save-local-settings'
@@ -89,6 +97,10 @@ export type MamRendererApi = Readonly<{
   submitReview(input: MamSubmitReviewInput): Promise<MamUiSnapshot>
   resolveReviewDisagreement(input: MamResolveReviewDisagreementInput): Promise<MamUiSnapshot>
   resolveApprovalGate(input: MamResolveApprovalGateInput): Promise<MamUiSnapshot>
+  answerHumanQuestions(input: MamAnswerHumanQuestionsInput): Promise<MamUiSnapshot>
+  confirmHumanUnderstanding(input: MamConfirmHumanUnderstandingInput): Promise<MamUiSnapshot>
+  reviseHumanUnderstanding(input: MamReviseHumanUnderstandingInput): Promise<MamUiSnapshot>
+  resolveHumanReview(input: MamResolveHumanReviewInput): Promise<MamUiSnapshot>
   selectAttempt(input: MamSelectAttemptInput): Promise<MamUiSnapshot>
   saveProfile(input: MamSaveProfileInput): Promise<MamUiSnapshot>
   saveLocalSettings(input: MamSaveLocalSettingsInput): Promise<MamUiSnapshot>

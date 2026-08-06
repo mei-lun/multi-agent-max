@@ -23,6 +23,10 @@ import {
   MAM_EXECUTE_NEXT_MERGE_CHANNEL,
   MAM_RESOLVE_REVIEW_DISAGREEMENT_CHANNEL,
   MAM_RESOLVE_APPROVAL_GATE_CHANNEL,
+  MAM_ANSWER_HUMAN_QUESTIONS_CHANNEL,
+  MAM_CONFIRM_HUMAN_UNDERSTANDING_CHANNEL,
+  MAM_REVISE_HUMAN_UNDERSTANDING_CHANNEL,
+  MAM_RESOLVE_HUMAN_REVIEW_CHANNEL,
   MAM_SAVE_WORKFLOW_CHANNEL,
   MAM_SAVE_LOCAL_SETTINGS_CHANNEL,
   MAM_SAVE_MODEL_CONNECTION_CHANNEL,
@@ -45,6 +49,7 @@ import {
   MAM_CREATE_DESIGN_TEMPLATE_CHANNEL,
   MAM_RETRY_DESIGN_GENERATION_CHANNEL
 } from '../../shared/mam/application-api'
+import { assertTrustedRenderer } from './trusted-renderer-ipc'
 
 export function registerMamIpc(
   window: BrowserWindow,
@@ -181,6 +186,22 @@ export function registerMamIpc(
     assertTrustedRenderer(event, window)
     return commands.resolveApprovalGate(input)
   })
+  handle(MAM_ANSWER_HUMAN_QUESTIONS_CHANNEL, (event, input: unknown) => {
+    assertTrustedRenderer(event, window)
+    return commands.answerHumanQuestions(input)
+  })
+  handle(MAM_CONFIRM_HUMAN_UNDERSTANDING_CHANNEL, (event, input: unknown) => {
+    assertTrustedRenderer(event, window)
+    return commands.confirmHumanUnderstanding(input)
+  })
+  handle(MAM_REVISE_HUMAN_UNDERSTANDING_CHANNEL, (event, input: unknown) => {
+    assertTrustedRenderer(event, window)
+    return commands.reviseHumanUnderstanding(input)
+  })
+  handle(MAM_RESOLVE_HUMAN_REVIEW_CHANNEL, (event, input: unknown) => {
+    assertTrustedRenderer(event, window)
+    return commands.resolveHumanReview(input)
+  })
   handle(MAM_SELECT_ATTEMPT_CHANNEL, (event, input: unknown) => {
     assertTrustedRenderer(event, window)
     return commands.selectAttempt(input)
@@ -254,6 +275,10 @@ export function registerMamIpc(
     ipcMain.removeHandler(MAM_SUBMIT_REVIEW_CHANNEL)
     ipcMain.removeHandler(MAM_RESOLVE_REVIEW_DISAGREEMENT_CHANNEL)
     ipcMain.removeHandler(MAM_RESOLVE_APPROVAL_GATE_CHANNEL)
+    ipcMain.removeHandler(MAM_ANSWER_HUMAN_QUESTIONS_CHANNEL)
+    ipcMain.removeHandler(MAM_CONFIRM_HUMAN_UNDERSTANDING_CHANNEL)
+    ipcMain.removeHandler(MAM_REVISE_HUMAN_UNDERSTANDING_CHANNEL)
+    ipcMain.removeHandler(MAM_RESOLVE_HUMAN_REVIEW_CHANNEL)
     ipcMain.removeHandler(MAM_SELECT_ATTEMPT_CHANNEL)
     ipcMain.removeHandler(MAM_SAVE_PROFILE_CHANNEL)
     ipcMain.removeHandler(MAM_SAVE_LOCAL_SETTINGS_CHANNEL)
@@ -266,15 +291,5 @@ export function registerMamIpc(
     ipcMain.removeHandler(MAM_IMPORT_SKILL_CHANNEL)
     ipcMain.removeHandler(MAM_EXPORT_DIAGNOSTICS_CHANNEL)
     ipcMain.removeHandler(MAM_EXPORT_EXECUTION_ACTIVITY_CHANNEL)
-  }
-}
-
-function assertTrustedRenderer(event: IpcMainInvokeEvent, window: BrowserWindow): void {
-  if (window.isDestroyed() || event.sender !== window.webContents) {
-    throw new Error('MAM IPC rejected an untrusted Renderer')
-  }
-  const frame = event.senderFrame
-  if (!frame || frame !== window.webContents.mainFrame) {
-    throw new Error('MAM IPC requires the main Renderer frame')
   }
 }

@@ -24,6 +24,9 @@ export function projectedRunStatus(
   if (nodeRuns.some((node) => node.status === 'waiting_for_approval')) {
     return 'waiting_for_approval'
   }
+  if (nodeRuns.some((node) => node.status === 'waiting_for_human_input')) {
+    return 'awaiting_human_decision'
+  }
   return 'running'
 }
 

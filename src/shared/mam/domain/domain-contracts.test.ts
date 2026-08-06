@@ -94,6 +94,39 @@ describe('MAM domain contracts', () => {
     ).toBe(false)
   })
 
+  it('requires a human review gate to return to one fixed role task through a bounded edge', () => {
+    const workflow = workflowDefinition()
+    const gate = {
+      id: 'human-review',
+      type: 'human_review_gate',
+      inputs: [{ artifactId: 'artifact.output', version: 1, contentHash: hash }],
+      instructions: 'Review the submitted result.',
+      revisionTargetNodeId: 'implementation',
+      maxRevisionAttempts: 3
+    }
+    const definition = {
+      ...workflow,
+      nodes: [workflow.nodes[0]!, gate, workflow.nodes[1]!],
+      edges: [
+        { from: 'implementation', to: 'human-review' },
+        { from: 'human-review', to: 'finish', when: 'approved' },
+        {
+          from: 'human-review',
+          to: 'implementation',
+          when: 'changes_requested',
+          maxTraversals: 3
+        }
+      ]
+    }
+    expect(WorkflowDefinitionSchema.safeParse(definition).success).toBe(true)
+    expect(
+      WorkflowDefinitionSchema.safeParse({
+        ...definition,
+        edges: definition.edges.filter((edge) => edge.when !== 'changes_requested')
+      }).success
+    ).toBe(false)
+  })
+
   it('requires every Artifact version to identify its Task and availability', () => {
     const artifact = {
       schemaVersion: '1.0.0',

@@ -28,6 +28,7 @@ import { KnowledgeBaseProfileSchema, McpServerProfileSchema } from './domain/res
 import { MamSkillDefinitionSchema } from './domain/skill-definition'
 import { MamLocalSettingsSchema } from './local-settings'
 import { NodeRunSchema, WorkflowDefinitionSchema, WorkflowRunSchema } from './domain/workflow'
+import { HumanAttentionItemSchema, HumanReviewDecisionSchema } from './domain/human-attention'
 
 export const MamUiTaskSnapshotSchema = z
   .object({
@@ -42,6 +43,7 @@ export const MamUiTaskSnapshotSchema = z
       'waiting_role_assignment',
       'ready',
       'running',
+      'waiting_for_human_input',
       'submitted',
       'in_review',
       'changes_requested',
@@ -155,6 +157,23 @@ export const MamUiRunSnapshotSchema = z
     tasks: z.array(MamUiTaskSnapshotSchema),
     attempts: z.array(MamUiAttemptSnapshotSchema),
     activities: z.array(MamUiExecutionActivitySchema).default([]),
+    humanAttentionItems: z.array(HumanAttentionItemSchema).default([]),
+    humanReviewDecisions: z.array(HumanReviewDecisionSchema).default([]),
+    humanReviewGates: z
+      .array(
+        z
+          .object({
+            id: MamEntityIdSchema,
+            revisionTargetTaskId: MamEntityIdSchema,
+            instructions: z.string().min(1),
+            subject: ReviewSubjectSchema,
+            createdAt: IsoTimestampSchema,
+            status: z.enum(['pending', 'resolved']),
+            decision: HumanReviewDecisionSchema.optional()
+          })
+          .strict()
+      )
+      .default([]),
     reviews: z.array(ReviewDecisionSchema),
     reviewAggregations: z.array(ReviewAggregationSchema),
     reviewDisagreementResolutions: z.array(ReviewDisagreementResolutionSchema),

@@ -14,6 +14,7 @@ export const workflowNodeTypes: WorkflowNode['type'][] = [
   'dynamic_tasks',
   'review_gate',
   'approval_gate',
+  'human_review_gate',
   'condition',
   'parallel',
   'join',
@@ -128,6 +129,16 @@ export function createWorkflowNode(
   if (type === 'approval_gate') {
     return { id, type, prompt: `Approve ${id}?`, options: ['Approve', 'Reject'] }
   }
+  if (type === 'human_review_gate') {
+    return {
+      id,
+      type,
+      inputs: [placeholderInput],
+      instructions: `Review ${id} and request clear revisions when needed.`,
+      revisionTargetNodeId: 'role-task',
+      maxRevisionAttempts: 3
+    }
+  }
   if (type === 'condition') return { id, type, expression: 'true', branches: {} }
   if (type === 'parallel') return { id, type, branches: ['branch-a', 'branch-b'] }
   if (type === 'join') return { id, type, waitFor: ['branch-a', 'branch-b'] }
@@ -197,6 +208,13 @@ function renameNodeReferences(
       branches: Object.fromEntries(
         Object.entries(renamed.branches).map(([key, id]) => [key, id === previousId ? nextId : id])
       )
+    }
+  }
+  if (renamed.type === 'human_review_gate') {
+    return {
+      ...renamed,
+      revisionTargetNodeId:
+        renamed.revisionTargetNodeId === previousId ? nextId : renamed.revisionTargetNodeId
     }
   }
   return renamed

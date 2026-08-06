@@ -85,6 +85,7 @@ export function buildMamDesignSystemPrompt(input: {
     '- Treat the user message as business input plus the desired final result. The user does not define internal Role-to-Role data formats.',
     '- Generate all internal Artifact IDs, versions, formats, schemas, filenames, and Review payload contracts yourself so each Role can consume its upstream results.',
     '- When the Workflow includes Review, prefer a reviewer Role distinct from the Role that produced the reviewed work. The user must not create that reviewer manually.',
+    '- Use human_review_gate when the user must personally accept an immutable artifact. Bind revisionTargetNodeKey to the producing role_task and add a changes_requested return edge whose maxTraversals does not exceed maxRevisionAttempts.',
     '- Never ask the user for internal Artifact references, JSON schemas, filenames, Review JSON, or other implementation handoff details.',
     '- Ask only for business intent, constraints, acceptance criteria, risk tolerance, or human decision points that the user can meaningfully choose. Otherwise make a conservative assumption and continue.',
     input.workflowRevision

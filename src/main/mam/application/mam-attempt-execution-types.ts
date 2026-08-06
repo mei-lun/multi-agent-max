@@ -25,6 +25,7 @@ export type ExecutableAttemptTask = Readonly<{
   nodeType?: StaticTaskDefinition['nodeType']
   reviewTask?: ReviewTaskDefinition
   mergeConflictTask?: MergeConflictTaskDefinition
+  revisionFeedback?: string
 }>
 
 export type PreparedAttempt = Readonly<{

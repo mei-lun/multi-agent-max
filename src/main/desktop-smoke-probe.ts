@@ -190,7 +190,17 @@ async function runAssignmentProbe(window: BrowserWindow): Promise<string | undef
   const input = JSON.parse(encodedInput) as unknown
   return window.webContents.executeJavaScript(`(async () => {
     const input = ${JSON.stringify(input)};
-    const snapshot = await window.mam.assignTask(input);
+    let snapshot;
+    try {
+      snapshot = await window.mam.assignTask(input);
+    } catch (error) {
+      snapshot = await window.mam.getUiSnapshot();
+      const task = snapshot.runs
+        .find((run) => run.run.id === input.workflowRunId)?.tasks
+        .find((candidate) => candidate.id === input.taskId);
+      if (task?.roleProfileId !== input.roleProfileId ||
+          task?.roleProfileVersion !== input.roleProfileVersion) throw error;
+    }
     return snapshot.runs
       .find((run) => run.run.id === input.workflowRunId)?.tasks
       .find((task) => task.id === input.taskId)?.status;

@@ -29,6 +29,7 @@ import {
 import { projectBinding } from './mam-ui-project-binding'
 import { collectMamUiTaskDefinitions } from './mam-ui-task-definitions'
 import { projectExecutionActivities } from './execution-activity-projection'
+import { latestSubmittedReviewSubject } from './review-route-projection'
 
 type ActiveRegistry<T> = Readonly<{ listActive(): readonly T[] }>
 
@@ -210,6 +211,42 @@ function createRunSnapshot(
       }),
     attempts,
     activities: projectExecutionActivities(bundle.run.id, diagnosticEvents, attempts),
+    humanAttentionItems: Object.values(projection.humanAttentionItems).sort(
+      (left, right) =>
+        attentionScopePriority(left.scope) - attentionScopePriority(right.scope) ||
+        left.createdAt.localeCompare(right.createdAt) ||
+        left.id.localeCompare(right.id)
+    ),
+    humanReviewDecisions: sortCreatedAt(Object.values(projection.humanReviewDecisions)),
+    humanReviewGates: bundle.definition.nodes
+      .filter((node) => node.type === 'human_review_gate')
+      .flatMap((node) => {
+        const task = bundle.taskCatalog.find(
+          (candidate) => candidate.nodeId === node.revisionTargetNodeId
+        )
+        const subject = task ? latestSubmittedReviewSubject(projection, task.id) : undefined
+        if (!task || !subject) return []
+        const decision = Object.values(projection.humanReviewDecisions).find(
+          (candidate) =>
+            candidate.gateNodeId === node.id &&
+            JSON.stringify(candidate.subject) === JSON.stringify(subject)
+        )
+        const nodeRun = application.nodeRuns.find((candidate) => candidate.nodeId === node.id)
+        if (!decision && nodeRun?.status !== 'waiting_for_human_input') return []
+        return [
+          {
+            id: node.id,
+            revisionTargetTaskId: task.id,
+            instructions: node.instructions,
+            subject,
+            createdAt:
+              projection.attempts[subject.attemptId]?.result?.system.createdAt ??
+              application.run.updatedAt,
+            status: decision ? ('resolved' as const) : ('pending' as const),
+            ...(decision ? { decision } : {})
+          }
+        ]
+      }),
     reviews: sortCreatedAt(Object.values(projection.reviews)),
     reviewAggregations: sortCreatedAt(Object.values(projection.reviewAggregations)),
     reviewDisagreementResolutions: Object.values(projection.reviewAggregations).flatMap(
@@ -222,6 +259,12 @@ function createRunSnapshot(
     mergeConflictTasks: sortCreatedAt(Object.values(projection.mergeConflictTasks)),
     mergeConflictResolutions: sortCompletedAt(Object.values(projection.mergeConflictResolutions))
   }
+}
+
+function attentionScopePriority(scope: 'task' | 'branch' | 'run'): number {
+  if (scope === 'run') return 0
+  if (scope === 'branch') return 1
+  return 2
 }
 
 function sortCreatedAt<T extends Readonly<{ id: string; createdAt: string }>>(

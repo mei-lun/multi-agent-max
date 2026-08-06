@@ -35,6 +35,47 @@ export function MamWorkflowSystemNodeFields({
       </div>
     )
   }
+  if (node.type === 'human_review_gate') {
+    return (
+      <div className="space-y-3">
+        <MamWorkflowLabeledField label="Review instructions">
+          <Textarea
+            value={node.instructions}
+            onChange={(event) => onChange({ ...node, instructions: event.target.value })}
+          />
+        </MamWorkflowLabeledField>
+        <MamWorkflowLabeledField
+          label="Revision target node ID"
+          description="Defaults to the role_task that produced the reviewed Artifact."
+        >
+          <Input
+            className="font-mono"
+            value={node.revisionTargetNodeId}
+            onChange={(event) => onChange({ ...node, revisionTargetNodeId: event.target.value })}
+          />
+        </MamWorkflowLabeledField>
+        <MamWorkflowLabeledField label="Maximum revision Attempts">
+          <Input
+            type="number"
+            min={1}
+            max={20}
+            value={node.maxRevisionAttempts}
+            onChange={(event) =>
+              onChange({ ...node, maxRevisionAttempts: Number(event.target.value) })
+            }
+          />
+        </MamWorkflowLabeledField>
+        <MamWorkflowDataContractDetails>
+          <MamWorkflowArtifactRefList
+            label="Artifacts to review"
+            references={node.inputs}
+            minimum={1}
+            onChange={(inputs) => onChange({ ...node, inputs })}
+          />
+        </MamWorkflowDataContractDetails>
+      </div>
+    )
+  }
   if (node.type === 'condition') {
     return (
       <div className="space-y-3">

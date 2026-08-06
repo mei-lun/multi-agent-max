@@ -72,6 +72,8 @@ function workspaceTools(snapshot: EffectiveRoleConfigSnapshot): string[] {
 
 export function piBridgeTools(snapshot: EffectiveRoleConfigSnapshot): string[] {
   return [
+    'mam_ask_user',
+    'mam_confirm_understanding',
     ...(snapshot.mcpBindings.length ? ['mam_mcp'] : []),
     ...(snapshot.knowledgeBaseBindings.length ? ['mam_knowledge_search', 'mam_knowledge_read'] : [])
   ]

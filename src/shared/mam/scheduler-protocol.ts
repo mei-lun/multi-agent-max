@@ -29,6 +29,7 @@ import {
   createTaskResultReuseCommandSchema,
   createTaskResultReuseEventSchema
 } from './task-result-reuse-scheduler-protocol'
+import * as humanAttentionProtocol from './human-attention-scheduler-protocol'
 
 export const EMPTY_SCHEDULER_REVISION =
   '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945'
@@ -64,6 +65,8 @@ const taskCommandEnvelope = { ...commandEnvelope, taskId: MamEntityIdSchema }
 const mergeQueueCommands = createMergeQueueCommandSchemas(commandEnvelope, taskCommandEnvelope)
 const taskAssignmentCommands = createTaskAssignmentCommandSchemas(taskCommandEnvelope)
 const workflowRunLifecycleCommands = createWorkflowRunLifecycleCommandSchemas(commandEnvelope)
+const humanAttentionCommands =
+  humanAttentionProtocol.createHumanAttentionCommandSchemas(taskCommandEnvelope)
 
 const AttemptRecoveryDirectiveSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('start_new_attempt'), newAttemptId: MamEntityIdSchema }).strict(),
@@ -75,6 +78,7 @@ export const SchedulerCommandSchema = z.discriminatedUnion('type', [
   ...taskAssignmentCommands,
   createTaskResultReuseCommandSchema(commandEnvelope),
   createNodeCompletionReuseCommandSchema(commandEnvelope),
+  ...humanAttentionCommands,
   z
     .object({
       ...taskCommandEnvelope,
@@ -202,6 +206,7 @@ export const SchedulerEventSchema = z.discriminatedUnion('type', [
   ...createTaskAssignmentEventSchemas(eventEnvelope),
   createTaskResultReuseEventSchema(eventEnvelope),
   createNodeCompletionReuseEventSchema(eventEnvelope),
+  ...humanAttentionProtocol.createHumanAttentionEventSchemas(eventEnvelope),
   event('execution_announced', {
     taskId: MamEntityIdSchema,
     claimId: MamEntityIdSchema,

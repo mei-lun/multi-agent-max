@@ -17,13 +17,26 @@ export function resolveExecutableTask(
   if (staticTask) {
     const node = bundle.definition.nodes.find((candidate) => candidate.id === staticTask.nodeId)!
     const workspaceMode = node.type === 'role_task' ? node.workspaceMode : 'write'
+    const latestAttemptId = projection.tasks[taskId]?.knownAttemptIds.at(-1)
+    const reviewedAttemptId = latestAttemptId
+      ? projection.attempts[latestAttemptId]?.previousAttemptId
+      : undefined
+    const revisionFeedback = Object.values(projection.humanReviewDecisions)
+      .filter(
+        (decision) =>
+          decision.revisionTargetTaskId === taskId &&
+          decision.status === 'changes_requested' &&
+          decision.subject.attemptId === reviewedAttemptId
+      )
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0]?.feedback
     return {
       ...staticTask,
       workspaceMode,
       baseRef:
         taskStatus === 'changes_requested' && projection.tasks[taskId]?.submittedCommit
           ? projection.tasks[taskId]!.submittedCommit!
-          : 'HEAD'
+          : 'HEAD',
+      ...(revisionFeedback ? { revisionFeedback } : {})
     }
   }
   const dynamicTask = projection.dynamicTasks[taskId]
@@ -96,6 +109,12 @@ export function attemptExecutionPrompt(task: ExecutableAttemptTask, branch: stri
     'Complete each output contract in the workspace. For code changes, MAM captures the Git diff. For file outputs, create a relative file whose name includes the artifact type.',
     'For Markdown outputs, each required section heading must include its configured section identifier.',
     ...(task.reviewTask ? reviewOutputInstructions(task) : []),
+    ...(task.revisionFeedback
+      ? [
+          'Human review requested changes. Before modifying files, clarify any uncertainty with mam_ask_user, then call mam_confirm_understanding with your complete interpretation and wait for explicit confirmation.',
+          `Human review feedback: ${task.revisionFeedback}`
+        ]
+      : []),
     `Output contracts: ${JSON.stringify(task.outputContracts)}`
   ].join('\n')
 }

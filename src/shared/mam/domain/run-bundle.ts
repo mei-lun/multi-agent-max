@@ -17,6 +17,7 @@ export const ExecutionPlanNodeSchema = z
       'dynamic_tasks',
       'review_gate',
       'approval_gate',
+      'human_review_gate',
       'condition',
       'parallel',
       'join',

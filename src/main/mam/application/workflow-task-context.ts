@@ -199,11 +199,27 @@ function settleSystemNodes(
         node.type === 'join' ||
         node.type === 'finish' ||
         (node.type === 'git_merge' && mergeNodeHasCompleted(node.id, projection, bundle)) ||
-        (node.type === 'approval_gate' && Boolean(projection.resolvedApprovalGates[node.id]))
+        (node.type === 'approval_gate' && Boolean(projection.resolvedApprovalGates[node.id])) ||
+        (node.type === 'human_review_gate' && humanReviewPassed(node, bundle, projection))
       if (autoPass) {
         passed.add(node.id)
         changed = true
       }
     }
   }
+}
+
+function humanReviewPassed(
+  node: Extract<WorkflowRunBundle['definition']['nodes'][number], { type: 'human_review_gate' }>,
+  bundle: WorkflowRunBundle,
+  projection: WorkflowRunProjection
+): boolean {
+  const taskId = bundle.taskCatalog.find((task) => task.nodeId === node.revisionTargetNodeId)?.id
+  const latestAttemptId = taskId ? projection.tasks[taskId]?.knownAttemptIds.at(-1) : undefined
+  return Object.values(projection.humanReviewDecisions).some(
+    (decision) =>
+      decision.gateNodeId === node.id &&
+      decision.status === 'approved' &&
+      decision.subject.attemptId === latestAttemptId
+  )
 }
