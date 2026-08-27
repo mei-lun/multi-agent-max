@@ -168,9 +168,18 @@ provide evidence, but only the kernel can advance authoritative task, review, an
 ```bash
 git clone https://github.com/mei-lun/multi-agent-max.git
 cd multi-agent-max
-pnpm install
-pnpm dev
+./config/scripts/bootstrap-mac.sh --dev
 ```
+
+Windows PowerShell:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File config/scripts/bootstrap-windows.ps1 -Dev
+```
+
+The bootstrap command uses Homebrew (macOS) or winget (Windows) when Node.js 22.22+ is missing, installs Corepack when the active Node.js distribution does not include it, pins pnpm 10.24.0, installs the lockfile, and verifies or repairs Electron, esbuild, and SWC native artifacts. Run it from the repository root. Without `--dev`/`-Dev`, it prepares and verifies the environment, then prints `corepack pnpm dev`.
+
+Manual fallback is still supported with Node.js 22.22+ and pnpm 10.24.0. Use `corepack pnpm`, not an unrelated global `pnpm`.
 
 To run the production preview instead:
 
@@ -178,6 +187,8 @@ To run the production preview instead:
 pnpm build
 pnpm start
 ```
+
+If `electron-vite` reports `Electron uninstall`, the Electron distribution is missing or incomplete. Re-run the platform bootstrap command; it performs the targeted Electron repair without deleting `node_modules`.
 
 ## First workflow
 

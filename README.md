@@ -127,9 +127,18 @@ Scheduler Kernel 是不调用模型的确定性程序。Agent 可以提交结果
 ```bash
 git clone https://github.com/mei-lun/multi-agent-max.git
 cd multi-agent-max
-pnpm install
-pnpm dev
+./config/scripts/bootstrap-mac.sh --dev
 ```
+
+Windows PowerShell：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File config/scripts/bootstrap-windows.ps1 -Dev
+```
+
+一键引导会在 Node.js 22.22+ 缺失时使用 Homebrew（macOS）或 winget（Windows），在 Node.js 未附带 Corepack 时补充安装，通过 Corepack 固定 pnpm 10.24.0，安装锁定依赖，并检查或修复 Electron、esbuild 和 SWC 原生文件。请在仓库根目录运行。不带 `--dev`/`-Dev` 时，脚本只准备并验证环境，随后提示运行 `corepack pnpm dev`。
+
+手动安装仍需 Node.js 22.22+ 与 pnpm 10.24.0。请使用 `corepack pnpm`，不要使用其他来源的全局 `pnpm`。
 
 如需启动生产构建预览：
 
@@ -137,6 +146,8 @@ pnpm dev
 pnpm build
 pnpm start
 ```
+
+如果 `electron-vite` 报告 `Electron uninstall`，表示 Electron 分发文件缺失或不完整。重新运行对应平台的一键引导脚本即可定向修复，不需要手动删除 `node_modules`。
 
 ## 创建第一个工作流
 

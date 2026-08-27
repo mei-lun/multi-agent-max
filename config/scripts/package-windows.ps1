@@ -36,8 +36,9 @@ function Invoke-PackageStep {
 
 Push-Location $projectDirectory
 try {
-  Invoke-PackageStep -Command 'pnpm.cmd' -Arguments @('build')
-  Invoke-PackageStep -Command 'pnpm.cmd' -Arguments @(
+  Invoke-PackageStep -Command 'corepack.cmd' -Arguments @('pnpm', 'build')
+  Invoke-PackageStep -Command 'corepack.cmd' -Arguments @(
+    'pnpm',
     'exec',
     'electron-builder',
     '--win',

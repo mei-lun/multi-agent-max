@@ -56,6 +56,6 @@ run_builder_with_retry() {
 }
 
 cd "$PROJECT_DIRECTORY"
-run_step pnpm build
-run_builder_with_retry pnpm exec electron-builder --mac zip "--$ARCHITECTURE" --publish never
-run_step node config/scripts/create-mac-dmg.mjs --arch "$ARCHITECTURE"
+run_step corepack pnpm build
+run_builder_with_retry corepack pnpm exec electron-builder --mac zip "--$ARCHITECTURE" --publish never
+run_step corepack pnpm exec node config/scripts/create-mac-dmg.mjs --arch "$ARCHITECTURE"
