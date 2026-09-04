@@ -28,6 +28,10 @@ import type {
 import type { MamFetchModelCatalogInput, MamModelCatalogResult } from './model-catalog'
 import type { MamExportExecutionActivityInput } from './execution-activity-export'
 import type {
+  CodexResourceCandidate,
+  MamImportCodexResourcesInput
+} from './resource-import'
+import type {
   MamDesignApplyProposalInput,
   MamDesignCancelInput,
   MamDesignCreateTemplateInput,
@@ -69,6 +73,9 @@ export const MAM_DELETE_WORKFLOW_CHANNEL = 'mam:delete-workflow'
 export const MAM_IMPORT_WORKFLOW_PACKAGE_CHANNEL = 'mam:import-workflow-package'
 export const MAM_EXPORT_WORKFLOW_PACKAGE_CHANNEL = 'mam:export-workflow-package'
 export const MAM_IMPORT_SKILL_CHANNEL = 'mam:import-skill'
+export const MAM_LIST_CODEX_RESOURCES_CHANNEL = 'mam:list-codex-resources'
+export const MAM_IMPORT_CODEX_RESOURCES_CHANNEL = 'mam:import-codex-resources'
+export const MAM_CHECK_RESOURCE_HEALTH_CHANNEL = 'mam:check-resource-health'
 export const MAM_EXPORT_DIAGNOSTICS_CHANNEL = 'mam:export-diagnostics'
 export const MAM_EXPORT_EXECUTION_ACTIVITY_CHANNEL = 'mam:export-execution-activity'
 export const MAM_GET_DESIGN_DRAFT_CHANNEL = 'mam:get-design-draft'
@@ -111,6 +118,9 @@ export type MamRendererApi = Readonly<{
   importWorkflowPackage(): Promise<MamUiSnapshot | undefined>
   exportWorkflowPackage(input: MamExportWorkflowPackageInput): Promise<string | undefined>
   importSkill(): Promise<MamUiSnapshot | undefined>
+  listCodexResources(): Promise<readonly CodexResourceCandidate[]>
+  importCodexResources(input: MamImportCodexResourcesInput): Promise<MamUiSnapshot>
+  checkResourceHealth(): Promise<MamUiSnapshot>
   exportDiagnostics(): Promise<string | undefined>
   exportExecutionActivity(input: MamExportExecutionActivityInput): Promise<string | undefined>
   getDesignDraft(): Promise<MamDesignDraft>

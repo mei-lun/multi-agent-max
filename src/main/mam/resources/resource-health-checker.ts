@@ -23,7 +23,7 @@ export type ResourceHealthCheckerOptions = Readonly<{
   profiles: ProfileCatalog
   localSettings: MamLocalSettingsStore
   localSecrets: EncryptedLocalSecretStore
-  projectDirectory: string
+  projectDirectory: string | (() => string)
   store: ResourceHealthStore
   now?: () => string
   probeMcp?: (profile: McpServerProfile, connection: McpLocalConnection) => Promise<McpProbeResult>
@@ -186,7 +186,11 @@ export class ResourceHealthChecker {
       status: status as 'available' | 'degraded'
     }
     try {
-      const connector = new FileKnowledgeConnector(this.options.projectDirectory)
+      const projectDirectory =
+        typeof this.options.projectDirectory === 'function'
+          ? this.options.projectDirectory()
+          : this.options.projectDirectory
+      const connector = new FileKnowledgeConnector(projectDirectory)
       const result = await connector.search(resource, {
         query: '__mam_health_probe__',
         topK: 1,

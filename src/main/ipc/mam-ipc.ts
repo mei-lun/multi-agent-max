@@ -50,6 +50,7 @@ import {
   MAM_RETRY_DESIGN_GENERATION_CHANNEL
 } from '../../shared/mam/application-api'
 import { assertTrustedRenderer } from './trusted-renderer-ipc'
+import { registerMamResourceIpc, type MamResourceOperations } from './mam-resource-ipc'
 
 export function registerMamIpc(
   window: BrowserWindow,
@@ -66,6 +67,7 @@ export function registerMamIpc(
   exportWorkflowPackage: (input: unknown) => Promise<unknown>,
   exportDiagnostics: () => Promise<unknown>,
   exportExecutionActivity: (input: unknown) => Promise<unknown>,
+  resourceOperations: MamResourceOperations,
   runtimeLogger?: DesktopRuntimeLogger
 ): () => void {
   const handle = (
@@ -242,6 +244,7 @@ export function registerMamIpc(
     assertTrustedRenderer(event, window)
     return importSkill()
   })
+  const unregisterResourceIpc = registerMamResourceIpc(handle, window, resourceOperations)
   handle(MAM_EXPORT_DIAGNOSTICS_CHANNEL, (event) => {
     assertTrustedRenderer(event, window)
     return exportDiagnostics()
@@ -289,6 +292,7 @@ export function registerMamIpc(
     ipcMain.removeHandler(MAM_IMPORT_WORKFLOW_PACKAGE_CHANNEL)
     ipcMain.removeHandler(MAM_EXPORT_WORKFLOW_PACKAGE_CHANNEL)
     ipcMain.removeHandler(MAM_IMPORT_SKILL_CHANNEL)
+    unregisterResourceIpc()
     ipcMain.removeHandler(MAM_EXPORT_DIAGNOSTICS_CHANNEL)
     ipcMain.removeHandler(MAM_EXPORT_EXECUTION_ACTIVITY_CHANNEL)
   }

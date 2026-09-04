@@ -30,13 +30,18 @@ import { MamDesignDraftStore } from './mam/application/mam-design-draft-store'
 import { MamDesignAssistantService } from './mam/application/mam-design-assistant-service'
 import { resolveDesignSecret } from './mam/application/design-secret-resolver'
 import { DesktopRuntimeLogger } from './mam/diagnostics/desktop-runtime-logger'
-import { safeFileName } from './mam/diagnostics/safe-file-name'
-import { MamExportExecutionActivityInputSchema } from '../shared/mam/execution-activity-export'
-import { selectExecutionActivityEvents } from './mam/diagnostics/execution-activity-export-selection'
 import {
   exportWorkflowPackageDialog,
   importWorkflowPackageDialog
 } from './mam/application/workflow-package-dialogs'
+import {
+  createDesktopResourceOperations,
+  createDesktopResourceServices
+} from './mam/resources/desktop-resource-services'
+import {
+  exportDiagnosticsDialog,
+  exportExecutionActivityDialog
+} from './mam/diagnostics/desktop-diagnostic-dialogs'
 let unregisterMamIpc: (() => void) | undefined
 configureSmokeUserData()
 function createMainWindow(): void {
@@ -81,6 +86,17 @@ function createMainWindow(): void {
     join(app.getPath('userData'), 'mam', 'diagnostics', 'events.json')
   )
   const initialRepository = configuredStateRepository(localSettings)
+  let activeProjectDirectory =
+    initialRepository?.projectDirectory ??
+    localSettings.get().defaultProjectDirectory ??
+    process.cwd()
+  const resourceServices = createDesktopResourceServices({
+    mamRoot,
+    profiles,
+    localSettings,
+    localSecrets,
+    projectDirectory: () => activeProjectDirectory
+  })
   runtimeLogger.record('main', 'repository_attached', {
     attached: Boolean(initialRepository),
     collaborationMode: initialRepository?.collaborationMode
@@ -95,7 +111,8 @@ function createMainWindow(): void {
       skills: profiles.skills,
       mcpServers: profiles.mcpServers,
       knowledgeBases: profiles.knowledgeBases,
-      localSettings
+      localSettings,
+      resourceHealth: resourceServices.health
     },
     initialRepository,
     undefined,
@@ -180,6 +197,7 @@ function createMainWindow(): void {
         ...stateRepositoryOptions(localSettings),
         gitClient: createGitCommandClient(localSettings.get().gitExecutable)
       })
+      activeProjectDirectory = repository.projectDirectory
       service.setRunSource(repository)
       commands.setRepository(repository)
       workflowRuns.setRepository(repository)
@@ -201,27 +219,9 @@ function createMainWindow(): void {
     },
     importWorkflowPackageDialog(window, commands),
     exportWorkflowPackageDialog(window, commands),
-    async () => {
-      const result = await dialog.showSaveDialog(window, {
-        title: 'Export MAM diagnostics',
-        defaultPath: join(app.getPath('documents'), 'mam-diagnostics.json'),
-        filters: [{ name: 'JSON', extensions: ['json'] }]
-      })
-      if (result.canceled || !result.filePath) return undefined
-      return diagnostics.exportBundle(result.filePath)
-    },
-    async (input) => {
-      const parsed = MamExportExecutionActivityInputSchema.parse(input)
-      const scope = parsed.nodeId ?? parsed.workflowRunId
-      const result = await dialog.showSaveDialog(window, {
-        title: parsed.nodeId ? 'Export node execution activity' : 'Export Run execution activity',
-        defaultPath: join(app.getPath('documents'), `mam-execution-${safeFileName(scope)}.json`),
-        filters: [{ name: 'JSON', extensions: ['json'] }]
-      })
-      if (result.canceled || !result.filePath) return undefined
-      const events = selectExecutionActivityEvents(diagnostics.list(), parsed)
-      return diagnostics.exportBundle(result.filePath, events)
-    },
+    exportDiagnosticsDialog(window, diagnostics),
+    exportExecutionActivityDialog(window, diagnostics),
+    createDesktopResourceOperations(resourceServices, service, notifySnapshotChanged),
     runtimeLogger
   )
   window.webContents.setWindowOpenHandler(({ url }) => {

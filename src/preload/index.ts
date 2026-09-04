@@ -19,6 +19,9 @@ import {
   MAM_CREATE_DESIGN_TEMPLATE_CHANNEL,
   MAM_RETRY_DESIGN_GENERATION_CHANNEL,
   MAM_IMPORT_SKILL_CHANNEL,
+  MAM_LIST_CODEX_RESOURCES_CHANNEL,
+  MAM_IMPORT_CODEX_RESOURCES_CHANNEL,
+  MAM_CHECK_RESOURCE_HEALTH_CHANNEL,
   MAM_RECOVER_ATTEMPT_CHANNEL,
   MAM_START_ATTEMPT_CHANNEL,
   MAM_EXECUTE_NEXT_MERGE_CHANNEL,
@@ -131,6 +134,15 @@ const api: MamRendererApi = Object.freeze({
   },
   async importSkill() {
     return ipcRenderer.invoke(MAM_IMPORT_SKILL_CHANNEL)
+  },
+  async listCodexResources() {
+    return ipcRenderer.invoke(MAM_LIST_CODEX_RESOURCES_CHANNEL)
+  },
+  async importCodexResources(input) {
+    return ipcRenderer.invoke(MAM_IMPORT_CODEX_RESOURCES_CHANNEL, input)
+  },
+  async checkResourceHealth() {
+    return ipcRenderer.invoke(MAM_CHECK_RESOURCE_HEALTH_CHANNEL)
   },
   async exportDiagnostics() {
     return ipcRenderer.invoke(MAM_EXPORT_DIAGNOSTICS_CHANNEL)
