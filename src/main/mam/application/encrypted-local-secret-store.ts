@@ -46,6 +46,14 @@ export class EncryptedLocalSecretStore implements AttemptSecretValueProvider {
     return Object.keys(this.readEntries()).sort((left, right) => left.localeCompare(right))
   }
 
+  captureEncryptedEntries(): Readonly<Record<string, string>> {
+    return this.readEntries()
+  }
+
+  restoreEncryptedEntries(entries: Readonly<Record<string, string>>): void {
+    this.writeEntries(entries)
+  }
+
   private readEntries(): Record<string, string> {
     if (!existsSync(this.path)) return {}
     return { ...SecretFileSchema.parse(JSON.parse(readFileSync(this.path, 'utf8'))).entries }

@@ -20,10 +20,13 @@ export type ResolvedCodexMcp = Readonly<{
   candidate: CodexResourceCandidate
   profile: Omit<McpServerProfile, 'version'>
   connection: McpLocalConnection
-  credentials: Readonly<{
-    environment: Readonly<Record<string, string>>
-    headers: Readonly<Record<string, string>>
-  }>
+  credentials: {
+    environment: Record<string, string>
+    headers: Record<string, string>
+  }
+  missingCredentialTargets: Readonly<
+    Record<string, Readonly<{ kind: 'environment' | 'header'; key: string }>>
+  >
 }>
 
 export function createCodexMcpCandidates(input: {
@@ -55,15 +58,23 @@ function createCandidate(
   const resourceId = normalizeResourceId(name, 'mcp')
   const connectionRef = `${resourceId}.connection`
   const environment = stringRecord(raw.env)
+  const missingCredentialTargets: Record<
+    string,
+    Readonly<{ kind: 'environment' | 'header'; key: string }>
+  > = {}
   const requiredSecretNames = stringArray(raw.env_vars).filter((key) => {
     const value = input.environment[key]
     if (value !== undefined) environment[key] = value
+    else missingCredentialTargets[key] = { kind: 'environment', key }
     return value === undefined
   })
   const headers = stringRecord(raw.http_headers)
   for (const [header, environmentKey] of Object.entries(stringRecord(raw.env_http_headers))) {
     const value = input.environment[environmentKey]
-    if (value === undefined) requiredSecretNames.push(environmentKey)
+    if (value === undefined) {
+      requiredSecretNames.push(environmentKey)
+      missingCredentialTargets[environmentKey] = { kind: 'header', key: header }
+    }
     else headers[header] = value
   }
   const hasCredentials =
@@ -93,7 +104,14 @@ function createCandidate(
     importState: input.importState(profile, connection),
     requiredSecretNames: [...new Set(requiredSecretNames)].sort()
   })
-  return { kind: 'mcp', candidate, profile, connection, credentials: { environment, headers } }
+  return {
+    kind: 'mcp',
+    candidate,
+    profile,
+    connection,
+    credentials: { environment, headers },
+    missingCredentialTargets
+  }
 }
 
 function createConnection(

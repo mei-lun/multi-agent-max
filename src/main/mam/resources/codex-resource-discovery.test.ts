@@ -92,6 +92,13 @@ describe('Codex resource discovery', () => {
         })
       ])
     )
+    const privateMcp = candidates.find((candidate) => candidate.resourceId === 'mcp.private')!
+    const resolved = await new CodexResourceDiscovery({
+      codexHome: root,
+      environment: {}
+    }).resolve(privateMcp.key)
+    expect(resolved?.kind === 'mcp' ? resolved.missingCredentialTargets.MISSING_TOKEN : undefined)
+      .toEqual({ kind: 'environment', key: 'MISSING_TOKEN' })
   })
 })
 
