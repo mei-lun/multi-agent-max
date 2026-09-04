@@ -30,6 +30,7 @@ import { projectBinding } from './mam-ui-project-binding'
 import { collectMamUiTaskDefinitions } from './mam-ui-task-definitions'
 import { projectExecutionActivities } from './execution-activity-projection'
 import { latestSubmittedReviewSubject } from './review-route-projection'
+import type { ResourceHealthResult } from '../../../shared/mam/resource-health'
 
 type ActiveRegistry<T> = Readonly<{ listActive(): readonly T[] }>
 
@@ -43,6 +44,7 @@ export type MamUiProfileSource = Readonly<{
   mcpServers?: ActiveRegistry<McpServerProfile>
   knowledgeBases?: ActiveRegistry<KnowledgeBaseProfile>
   localSettings?: Readonly<{ get(): MamLocalSettings }>
+  resourceHealth?: Readonly<{ listCurrent(): readonly ResourceHealthResult[] }>
 }>
 
 export type MamUiRunSource = Readonly<{
@@ -115,6 +117,7 @@ export class MamUiQueryService {
       skills: this.profiles.skills?.listActive() ?? [],
       mcpServers: this.profiles.mcpServers?.listActive() ?? [],
       knowledgeBases: this.profiles.knowledgeBases?.listActive() ?? [],
+      resourceHealth: this.profiles.resourceHealth?.listCurrent() ?? [],
       workflows: this.profiles.workflows.listActive(),
       localSettings: this.profiles.localSettings?.get() ?? defaultMamLocalSettings(),
       ...projectBinding(this.runs),
