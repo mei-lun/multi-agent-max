@@ -6,6 +6,8 @@ import type { ExecutableAttemptTask } from './mam-attempt-execution-types'
 import type { ConflictResolutionWorktreeManager } from './conflict-resolution-worktree-manager'
 import type { AttemptWorktree } from './attempt-worktree-manager'
 import { automaticReviewArtifactContract } from './automatic-review-contract'
+import type { MamLocalSettings } from '../../../shared/mam/local-settings'
+import type { ResolvedAttemptConfig } from '../profiles/attempt-config-resolver'
 
 export function resolveExecutableTask(
   bundle: WorkflowRunBundle,
@@ -98,6 +100,45 @@ export function resolveAttemptCredentials(
   const value = provider.resolve(binding)
   if (!value) throw new Error(`secret_value_unavailable:${binding.id}`)
   return { [secretRef]: value }
+}
+
+export function resolveAttemptCredentialSet(
+  secretRefs: readonly (string | undefined)[],
+  bindings: readonly LocalSecretBinding[],
+  bindingIdentity: string,
+  provider: AttemptSecretValueProvider
+): Readonly<Record<string, string>> {
+  return Object.assign(
+    {},
+    ...secretRefs.flatMap((secretRef) =>
+      secretRef
+        ? [resolveAttemptCredentials(secretRef, bindings, bindingIdentity, provider)]
+        : []
+    )
+  )
+}
+
+export function resolveExecutionCredentials(input: {
+  resolved: ResolvedAttemptConfig
+  settings: MamLocalSettings
+  provider: AttemptSecretValueProvider
+}): Readonly<{
+  providerCredentials: Readonly<Record<string, string>>
+  mcpCredentials: Readonly<Record<string, string>>
+}> {
+  const resolve = (refs: readonly (string | undefined)[]) =>
+    resolveAttemptCredentialSet(
+      refs,
+      input.settings.secretBindings,
+      input.settings.bindingIdentity,
+      input.provider
+    )
+  return {
+    providerCredentials: resolve([input.resolved.snapshot.execution.providerSecretRef]),
+    mcpCredentials: resolve(
+      input.resolved.mcpResources.map((resource) => resource.profile.credentialRef)
+    )
+  }
 }
 
 export function attemptExecutionPrompt(task: ExecutableAttemptTask, branch: string): string {

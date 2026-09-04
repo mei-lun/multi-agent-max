@@ -14,7 +14,7 @@ import {
 } from '../../../shared/mam/domain/resource-profile'
 import type { McpCapabilityRequest, McpConnector } from './mcp-capability-gateway'
 export type McpConnectionResolver = (
-  connectionRef: string
+  profile: McpServerProfile
 ) => McpLocalConnection | undefined | Promise<McpLocalConnection | undefined>
 
 type McpClientPort = Readonly<{
@@ -27,6 +27,10 @@ type McpClientPort = Readonly<{
     input: { name: string; arguments?: Record<string, string> },
     options: RequestOptions
   ): Promise<unknown>
+  getServerCapabilities(): Readonly<{ tools?: unknown; resources?: unknown; prompts?: unknown }>
+  listTools(options: RequestOptions): Promise<{ tools: unknown[] }>
+  listResources(options: RequestOptions): Promise<{ resources: unknown[] }>
+  listPrompts(options: RequestOptions): Promise<{ prompts: unknown[] }>
   close(): Promise<void>
 }>
 
@@ -73,6 +77,28 @@ export class McpSdkConnector implements McpConnector {
     )
   }
 
+  async probe(profile: McpServerProfile): Promise<{
+    connected: true
+    tools: number
+    resources: number
+    prompts: number
+  }> {
+    const client = await this.clientFor(profile)
+    const options = { timeout: this.timeoutMs, maxTotalTimeout: this.timeoutMs }
+    const capabilities = client.getServerCapabilities()
+    const [tools, resources, prompts] = await Promise.all([
+      capabilities.tools ? client.listTools(options) : { tools: [] },
+      capabilities.resources ? client.listResources(options) : { resources: [] },
+      capabilities.prompts ? client.listPrompts(options) : { prompts: [] }
+    ])
+    return {
+      connected: true,
+      tools: tools.tools.length,
+      resources: resources.resources.length,
+      prompts: prompts.prompts.length
+    }
+  }
+
   async dispose(): Promise<void> {
     const clients = [...this.clients.values()]
     this.clients.clear()
@@ -98,7 +124,7 @@ export class McpSdkConnector implements McpConnector {
   }
 
   private async connect(profile: McpServerProfile): Promise<McpClientPort> {
-    const resolved = await this.resolveConnection(profile.connectionRef)
+    const resolved = await this.resolveConnection(profile)
     if (!resolved) {
       fail('mcp_connection_unavailable', `MCP connection ${profile.connectionRef} is unavailable`)
     }
@@ -138,6 +164,10 @@ async function connectSdkClient(
     callTool: (input, options) => client.callTool(input, undefined, options),
     readResource: (input, options) => client.readResource(input, options),
     getPrompt: (input, options) => client.getPrompt(input, options),
+    getServerCapabilities: () => client.getServerCapabilities() ?? {},
+    listTools: (options) => client.listTools(undefined, options),
+    listResources: (options) => client.listResources(undefined, options),
+    listPrompts: (options) => client.listPrompts(undefined, options),
     close: () => client.close()
   }
 }

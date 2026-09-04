@@ -44,6 +44,7 @@ export type PreparedAttempt = Readonly<{
   resources: StructuredExecutorInput['resources']
   resolvedConfig: ResolvedAttemptConfig
   mcpConnections: readonly McpLocalConnection[]
+  mcpCredentialValues?: Readonly<Record<string, string>>
   credentialValues: Readonly<Record<string, string>>
   systemPrompt: string
   prompt: string

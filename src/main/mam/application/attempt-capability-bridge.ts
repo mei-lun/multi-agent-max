@@ -1,6 +1,7 @@
 import type { DiagnosticsRecorder } from '../diagnostics/diagnostics-recorder'
 import { FileKnowledgeConnector } from '../gateways/file-knowledge-connector'
 import { McpSdkConnector } from '../gateways/mcp-sdk-connector'
+import { resolveMcpConnection } from '../gateways/mcp-connection-resolver'
 import type { GitStateRepository } from '../state-store/git-state-repository'
 import { AttemptHumanAttentionApplicationService } from './attempt-human-attention-application-service'
 import { AttemptResourceApplicationService } from './attempt-resource-application-service'
@@ -27,8 +28,12 @@ export function createAttemptCapabilityBridge(input: {
   const resources = new AttemptResourceApplicationService(
     input.prepared.resolvedConfig,
     input.authority,
-    new McpSdkConnector((connectionRef) =>
-      input.prepared.mcpConnections.find((connection) => connection.connectionRef === connectionRef)
+    new McpSdkConnector((profile) =>
+      resolveMcpConnection(
+        profile,
+        input.prepared.mcpConnections,
+        input.prepared.mcpCredentialValues ?? {}
+      )
     ),
     new FileKnowledgeConnector(input.repository.projectDirectory),
     input.diagnostics

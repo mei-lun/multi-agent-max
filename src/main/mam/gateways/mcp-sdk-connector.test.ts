@@ -32,6 +32,7 @@ describe('MCP SDK connector', () => {
     )
 
     try {
+      await expect(connector.probe(fixture.profile)).resolves.toMatchObject({ connected: true })
       const first = await gateway.execute(toolRequest(fixture))
       const second = await gateway.execute(toolRequest(fixture))
       await expect(
@@ -61,7 +62,7 @@ describe('MCP SDK connector', () => {
       expect(firstPayload).toMatchObject({
         query: 'scheduler',
         canary: 'isolated',
-        inheritedHome: ''
+        inheritedHome: process.platform === 'win32' ? null : ''
       })
       expect(secondPayload.pid).toBe(firstPayload.pid)
       expect(resolver).toHaveBeenCalledTimes(1)

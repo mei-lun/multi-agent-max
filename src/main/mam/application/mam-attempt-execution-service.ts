@@ -23,7 +23,7 @@ import {
   attemptExecutionPrompt,
   conflictAttemptWorktree,
   requireLocalBinding,
-  resolveAttemptCredentials,
+  resolveExecutionCredentials,
   resolveExecutableTask
 } from './mam-attempt-execution-preparation'
 import type { ExecutorRouter, PreparedAttempt } from './mam-attempt-execution-types'
@@ -189,12 +189,8 @@ export class MamAttemptExecutionService {
       createdAt,
       workspaceMode: task.workspaceMode
     })
-    const credentialValues = resolveAttemptCredentials(
-      resolved.snapshot.execution.providerSecretRef,
-      settings.secretBindings,
-      settings.bindingIdentity,
-      this.secretValues
-    )
+    const { providerCredentials: credentialValues, mcpCredentials: mcpCredentialValues } =
+      resolveExecutionCredentials({ resolved, settings, provider: this.secretValues })
     const materialized = await this.resources.materialize(resolved)
     const systemPrompt = withHumanInteractionPolicy(
       resolveSystemPrompt(role.systemPromptRef, repository.projectDirectory)
@@ -236,6 +232,7 @@ export class MamAttemptExecutionService {
       resources: materialized,
       resolvedConfig: resolved,
       mcpConnections: settings.mcpConnections,
+      mcpCredentialValues,
       credentialValues,
       systemPrompt,
       prompt: attemptExecutionPrompt(task, worktree.branch),
