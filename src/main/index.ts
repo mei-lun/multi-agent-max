@@ -177,6 +177,7 @@ function createMainWindow(): void {
       const directory = result.filePaths[0]
       if (result.canceled || !directory) return undefined
       const repository = GitStateRepository.attach(directory, undefined, {
+        ...stateRepositoryOptions(localSettings),
         gitClient: createGitCommandClient(localSettings.get().gitExecutable)
       })
       service.setRunSource(repository)
@@ -276,8 +277,13 @@ function configuredStateRepository(
     throw new Error('MAM_PROJECT_DIRECTORY must be an absolute path')
   }
   return GitStateRepository.attach(projectDirectory, undefined, {
+    ...stateRepositoryOptions(settings),
     gitClient: createGitCommandClient(settings.get().gitExecutable)
   })
+}
+
+function stateRepositoryOptions(settings: MamLocalSettingsStore): { remote?: null } {
+  return settings.get().collaborationMode === 'local' ? { remote: null } : {}
 }
 
 function configureSmokeUserData(): void {

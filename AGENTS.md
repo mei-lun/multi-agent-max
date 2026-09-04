@@ -18,6 +18,9 @@ before adding new visual values or components.
   project.
 - Every intentional feature, optimization, bug fix, refactor, documentation change, or
   configuration change must update that version file in the same change set.
+- Every feature, optimization, bug fix, refactor, or configuration change that changes runtime
+  code behavior must increment the `package.json` patch version. Do not reuse a version for a
+  later independent code change, even while the minor version remains in development.
 - Keep the version file's feature inventory accurate and append a dated change entry that records
   behavior, implementation scope, state or migration impact, verification, and known limits.
 - When `package.json` receives a new version, create the matching `docs/versions/<version>.md`,

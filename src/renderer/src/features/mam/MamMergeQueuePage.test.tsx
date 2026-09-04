@@ -34,6 +34,7 @@ describe('MamMergeQueuePage', () => {
           schemaVersion: '1.0.0',
           bindingIdentity: 'machine.test',
           gitExecutable: 'git',
+          collaborationMode: 'distributed',
           automaticWorkflowRunIds: [run.run.id],
           executorBindings: [],
           secretBindings: [],

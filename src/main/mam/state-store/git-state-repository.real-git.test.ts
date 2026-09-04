@@ -112,6 +112,31 @@ describe('GitStateRepository with real Git clones', () => {
     expect(reattached.rebuild('run.git').eventIds).toHaveLength(1)
   })
 
+  it('keeps state local when local-only mode is forced despite a configured remote', () => {
+    const root = mkdtempSync(join(tmpdir(), 'mam-local-only-remote-'))
+    temporaryDirectories.push(root)
+    const origin = join(root, 'origin.git')
+    const project = join(root, 'project')
+    const state = join(root, 'state')
+    mkdirSync(project)
+    git(root, ['init', '--bare', origin])
+    git(project, ['init'])
+    configureIdentity(project)
+    writeFileSync(join(project, 'README.md'), '# local only\n')
+    git(project, ['add', 'README.md'])
+    git(project, ['commit', '-m', 'base'])
+    git(project, ['branch', '-M', 'main'])
+    git(project, ['remote', 'add', 'origin', origin])
+
+    const repository = GitStateRepository.attach(project, state, { remote: null })
+    initializeRun(new GitCommandRetryCoordinator(repository))
+
+    expect(repository.collaborationMode).toBe('local')
+    expect(repository.remote).toBeUndefined()
+    expect(git(state, ['branch', '--show-current'])).toBe('mam-state')
+    expect(() => git(origin, ['rev-parse', 'refs/heads/mam-state'])).toThrow()
+  })
+
   it('allows separate local state worktrees to publish to one local branch', () => {
     const root = mkdtempSync(join(tmpdir(), 'mam-local-state-pair-'))
     temporaryDirectories.push(root)

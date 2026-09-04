@@ -27,7 +27,8 @@ import {
 } from './git-system-artifact-writer'
 
 export type GitStateRepositoryOptions = Readonly<{
-  remote?: string
+  /** Omit to auto-detect; pass null to force local-only state even when a remote exists. */
+  remote?: string | null
   branch?: string
   gitClient?: GitCommandClient
 }>
@@ -94,9 +95,11 @@ export class GitStateRepository {
       throw new GitStateRepositoryError('not_git_repository', 'project is not a Git worktree')
     }
     const remote =
-      options.remote === undefined
-        ? detectGitRemote(project, git)
-        : options.remote.trim() || undefined
+      options.remote === null
+        ? undefined
+        : options.remote === undefined
+          ? detectGitRemote(project, git)
+          : options.remote.trim() || undefined
     if (remote) assertGitStateRemoteConfigured(project, remote, git)
     if (!git.succeeds(state, ['rev-parse', '--is-inside-work-tree'])) {
       attachGitStateWorktree({ project, state, ...(remote ? { remote } : {}), branch, git })

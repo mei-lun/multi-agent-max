@@ -12,6 +12,7 @@ import { Input } from '../../components/ui/input'
 import { Textarea } from '../../components/ui/textarea'
 import { MamLocalProfileBindings } from './MamLocalProfileBindings'
 import { MamWorkflowLabeledField } from './MamWorkflowFieldControls'
+import { MamProfileCheckbox } from './MamProfileFieldControls'
 
 export function MamLocalSettingsEditor({
   settings,
@@ -84,6 +85,14 @@ export function MamLocalSettingsEditor({
           onChange={(event) => update(withDefaultDirectory(draft, event.target.value))}
         />
       </MamWorkflowLabeledField>
+      <MamProfileCheckbox
+        label="Local-only execution"
+        description="Keep mam-state and task branches local; do not fetch or push Git state to a remote. Re-select the project or restart MAM after changing this."
+        checked={draft.collaborationMode === 'local'}
+        onChange={(local) =>
+          update({ ...draft, collaborationMode: local ? 'local' : 'distributed' })
+        }
+      />
       {projectDirectory && (
         <p className="text-xs text-muted-foreground">
           Attached now: <span className="font-mono">{projectDirectory}</span>
