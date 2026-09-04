@@ -33,6 +33,10 @@ import type {
 } from '../../../../shared/mam/model-catalog'
 import type { MamUiSnapshot } from '../../../../shared/mam/ui-projection'
 import type { MamExportExecutionActivityInput } from '../../../../shared/mam/execution-activity-export'
+import type {
+  CodexResourceCandidate,
+  MamImportCodexResourcesInput
+} from '../../../../shared/mam/resource-import'
 
 export type MamSnapshotState = Readonly<{
   snapshot?: MamUiSnapshot
@@ -67,6 +71,9 @@ export type MamSnapshotState = Readonly<{
   importWorkflowPackage(): Promise<void>
   exportWorkflowPackage(input: MamExportWorkflowPackageInput): Promise<string | undefined>
   importSkill(): Promise<void>
+  listCodexResources(): Promise<readonly CodexResourceCandidate[]>
+  importCodexResources(input: MamImportCodexResourcesInput): Promise<void>
+  checkResourceHealth(): Promise<void>
   exportDiagnostics(): Promise<string | undefined>
   exportExecutionActivity(input: MamExportExecutionActivityInput): Promise<string | undefined>
   getAttemptDiff(input: MamGetAttemptDiffInput): Promise<MamAttemptDiff>

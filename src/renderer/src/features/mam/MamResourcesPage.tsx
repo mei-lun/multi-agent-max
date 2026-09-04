@@ -1,22 +1,44 @@
-import { Database, PackageOpen, Server, Upload } from 'lucide-react'
+import { Database, PackageOpen, RefreshCw, Server, Upload } from 'lucide-react'
+import { useState } from 'react'
 import type { MamSaveProfileInput } from '../../../../shared/mam/application-command'
 import type { MamUiSnapshot } from '../../../../shared/mam/ui-projection'
+import type {
+  CodexResourceCandidate,
+  MamImportCodexResourcesInput
+} from '../../../../shared/mam/resource-import'
 import { Badge } from '../../components/ui/badge'
 import { Button } from '../../components/ui/button'
 import { MamProfileEditorDialog } from './MamProfileEditorDialog'
 import { mamProfileTemplate } from './mam-profile-templates'
+import { MamCodexResourceImportDialog } from './MamCodexResourceImportDialog'
+import { resourceHealthView } from './mam-resource-health-view'
 
 export function MamResourcesPage({
   snapshot,
   pending,
   onSaveProfile,
-  onImportSkill
+  onImportSkill,
+  onListCodexResources,
+  onImportCodexResources,
+  onCheckResourceHealth
 }: Readonly<{
   snapshot: MamUiSnapshot
   pending: boolean
   onSaveProfile(input: MamSaveProfileInput): Promise<void>
   onImportSkill(): Promise<void>
+  onListCodexResources(): Promise<readonly CodexResourceCandidate[]>
+  onImportCodexResources(input: MamImportCodexResourcesInput): Promise<void>
+  onCheckResourceHealth(): Promise<void>
 }>): React.JSX.Element {
+  const [checking, setChecking] = useState(false)
+  const checkAll = async (): Promise<void> => {
+    setChecking(true)
+    try {
+      await onCheckResourceHealth()
+    } finally {
+      setChecking(false)
+    }
+  }
   return (
     <section aria-labelledby="resources-title" className="mx-auto w-full max-w-5xl space-y-6 p-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -29,6 +51,21 @@ export function MamResourcesPage({
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <MamCodexResourceImportDialog
+            disabled={pending}
+            onList={onListCodexResources}
+            onImport={onImportCodexResources}
+          />
+          <Button
+            className="w-28"
+            variant="outline"
+            size="xs"
+            disabled={pending || checking}
+            onClick={() => void checkAll()}
+          >
+            <RefreshCw className={checking ? 'animate-spin' : undefined} />
+            {checking ? 'Checking…' : 'Check all'}
+          </Button>
           <Button
             variant="outline"
             size="xs"
@@ -66,6 +103,12 @@ export function MamResourcesPage({
                 role.skillBindings.some((binding) => binding.skillId === skill.id)
               ).length
             }
+            health={resourceHealthView(
+              'skill',
+              skill.id,
+              skill.version,
+              snapshot.resourceHealth
+            )}
             action={
               <MamProfileEditorDialog
                 kind="skill"
@@ -92,6 +135,12 @@ export function MamResourcesPage({
                 role.mcpBindings.some((binding) => binding.serverProfileId === server.id)
               ).length
             }
+            health={resourceHealthView(
+              'mcp',
+              server.id,
+              server.version,
+              snapshot.resourceHealth
+            )}
             action={
               <MamProfileEditorDialog
                 kind="mcp"
@@ -124,6 +173,12 @@ export function MamResourcesPage({
                 )
               ).length
             }
+            health={resourceHealthView(
+              'knowledge',
+              knowledge.id,
+              knowledge.version,
+              snapshot.resourceHealth
+            )}
             action={
               <MamProfileEditorDialog
                 kind="knowledge"
@@ -161,7 +216,7 @@ function ResourceSection({
       {hasChildren ? (
         <div className="grid gap-3 lg:grid-cols-2">{children}</div>
       ) : (
-        <p className="rounded-xl border border-dashed border-border p-6 text-center text-xs text-muted-foreground">
+        <p className="rounded-md border border-dashed border-border p-6 text-center text-xs text-muted-foreground">
           {empty}
         </p>
       )}
@@ -175,6 +230,7 @@ function ResourceCard({
   version,
   metadata,
   roleCount,
+  health,
   action
 }: Readonly<{
   title: string
@@ -182,18 +238,28 @@ function ResourceCard({
   version: number
   metadata: string
   roleCount: number
+  health: ReturnType<typeof resourceHealthView>
   action: React.ReactNode
 }>): React.JSX.Element {
   return (
-    <article className="rounded-xl border border-border bg-card p-4">
+    <article className="rounded-md border border-border bg-card p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="truncate text-sm font-semibold">{title}</h3>
           <p className="mt-1 truncate font-mono text-xs text-muted-foreground">{id}</p>
         </div>
-        <Badge variant="outline">v{version}</Badge>
+        <div className="flex shrink-0 gap-2">
+          <Badge variant={health.variant}>{health.label}</Badge>
+          <Badge variant="outline">v{version}</Badge>
+        </div>
       </div>
       <p className="mt-3 truncate text-xs text-muted-foreground">{metadata}</p>
+      {health.message && (
+        <p className="mt-2 text-xs text-destructive">
+          {health.message}
+          {health.checkedAt ? ` Checked ${new Date(health.checkedAt).toLocaleString()}.` : ''}
+        </p>
+      )}
       <div className="mt-3 flex items-center justify-between gap-3 border-t border-border pt-3">
         <span className="text-xs text-muted-foreground">Allowed by {roleCount} Roles</span>
         {action}

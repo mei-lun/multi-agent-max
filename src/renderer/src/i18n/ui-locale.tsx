@@ -90,6 +90,7 @@ export function translateUiText(source: string, locale: UiLocale): string {
     [/^Resolved by Attempt (.+)$/, (value) => `由尝试 ${value} 解决`],
     [/^Allowed by (\d+) Roles$/, (count) => `${count} 个角色允许使用`],
     [/^(\d+) execution warnings$/, (count) => `${count} 条并发执行警告`],
+    [/^Import selected \((\d+)\)$/, (count) => `导入已选资源（${count}）`],
     [
       /^(\d+) Attempts? already appear active\. Starting remains allowed and records a concurrent execution warning\.$/,
       (count) => `已有 ${count} 次尝试处于活动状态。仍可开始，并会记录并发执行警告。`

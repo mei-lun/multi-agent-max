@@ -267,6 +267,9 @@ export function App(): React.JSX.Element {
                 onSaveModelConnection={state.saveModelConnection}
                 onFetchModelCatalog={state.fetchModelCatalog}
                 onImportSkill={state.importSkill}
+                onListCodexResources={state.listCodexResources}
+                onImportCodexResources={state.importCodexResources}
+                onCheckResourceHealth={state.checkResourceHealth}
                 onExportDiagnostics={state.exportDiagnostics}
                 onExportExecutionActivity={state.exportExecutionActivity}
                 onOpenSettings={() => setPage('settings')}
@@ -345,6 +348,9 @@ function ActivePage({
   onSaveModelConnection,
   onFetchModelCatalog,
   onImportSkill,
+  onListCodexResources,
+  onImportCodexResources,
+  onCheckResourceHealth,
   onExportDiagnostics,
   onExportExecutionActivity,
   onOpenSettings,
@@ -390,6 +396,9 @@ function ActivePage({
   onSaveModelConnection: ReturnType<typeof useMamSnapshot>['saveModelConnection']
   onFetchModelCatalog: ReturnType<typeof useMamSnapshot>['fetchModelCatalog']
   onImportSkill: ReturnType<typeof useMamSnapshot>['importSkill']
+  onListCodexResources: ReturnType<typeof useMamSnapshot>['listCodexResources']
+  onImportCodexResources: ReturnType<typeof useMamSnapshot>['importCodexResources']
+  onCheckResourceHealth: ReturnType<typeof useMamSnapshot>['checkResourceHealth']
   onExportDiagnostics: ReturnType<typeof useMamSnapshot>['exportDiagnostics']
   onExportExecutionActivity: ReturnType<typeof useMamSnapshot>['exportExecutionActivity']
   onOpenSettings(): void
@@ -530,6 +539,9 @@ function ActivePage({
         pending={pending}
         onSaveProfile={onSaveProfile}
         onImportSkill={onImportSkill}
+        onListCodexResources={onListCodexResources}
+        onImportCodexResources={onImportCodexResources}
+        onCheckResourceHealth={onCheckResourceHealth}
       />
     )
   }

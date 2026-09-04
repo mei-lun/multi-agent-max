@@ -37,6 +37,9 @@ describe('MAM Resources and Settings pages', () => {
         pending={false}
         onSaveProfile={async () => undefined}
         onImportSkill={async () => undefined}
+        onListCodexResources={async () => []}
+        onImportCodexResources={async () => undefined}
+        onCheckResourceHealth={async () => undefined}
       />
     )
     const settings = renderToStaticMarkup(
@@ -51,6 +54,9 @@ describe('MAM Resources and Settings pages', () => {
       />
     )
     expect(resources).toContain('Import Skill')
+    expect(resources).toContain('Import from Codex')
+    expect(resources).toContain('Check all')
+    expect(resources).toContain('Unchecked')
     expect(resources).toContain('Skill Registry')
     expect(resources).toContain('New version')
     expect(settings).toContain('Git executable')

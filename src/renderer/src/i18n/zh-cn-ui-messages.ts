@@ -6,8 +6,10 @@ import { ZH_CN_RUN_MESSAGES } from './zh-cn-run-messages'
 import { ZH_CN_WORKFLOW_MESSAGES } from './zh-cn-workflow-messages'
 import { ZH_CN_LIVE_ACTIVITY_MESSAGES } from './zh-cn-live-activity-messages'
 import { ZH_CN_HUMAN_ATTENTION_MESSAGES } from './zh-cn-human-attention-messages'
+import { ZH_CN_RESOURCE_MESSAGES } from './zh-cn-resource-messages'
 
 export const ZH_CN_UI_MESSAGES: Readonly<Record<string, string>> = {
+  ...ZH_CN_RESOURCE_MESSAGES,
   Overview: '概览',
   Roles: '角色',
   Workflows: '工作流',
@@ -233,18 +235,9 @@ export const ZH_CN_UI_MESSAGES: Readonly<Record<string, string>> = {
   Integrating: '正在集成',
   Superseded: '已取代',
   Queued: '排队中',
-  'Versioned Skills, MCP servers, Knowledge Bases, and their Role allowlists.':
-    '管理版本化技能、MCP 服务、知识库及角色白名单。',
-  'Import Skill': '导入技能',
-  'Import package': '导入工作流包',
-  'Export package': '导出工作流包',
-  'Skill Registry': '技能注册表',
-  'No imported Skills': '没有已导入技能',
-  'MCP Server Profiles': 'MCP 服务配置',
-  'No MCP Server Profiles': '没有 MCP 服务配置',
-  'Knowledge Base Profiles': '知识库配置',
-  'No Knowledge Base Profiles': '没有知识库配置',
-  'Allowed by': '允许角色数',
+  'Local-only execution': '仅本地执行',
+  'Keep mam-state and task branches local; do not fetch or push Git state to a remote. Re-select the project or restart MAM after changing this.':
+    '将 mam-state 和任务分支保留在本地，不拉取或推送远程 Git 状态。更改后请重新选择项目或重启 MAM。',
   'Executor, Provider, Model, Git, directories, and machine-local bindings.':
     '配置执行器、提供方、模型、Git、目录和本机绑定。',
   Executors: '执行器',

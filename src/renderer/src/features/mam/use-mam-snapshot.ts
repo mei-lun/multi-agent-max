@@ -29,6 +29,7 @@ import { useMamDeletionActions } from './use-mam-deletion-actions'
 import { mamApplicationErrorMessage } from './mam-application-error-message'
 import type { MamSnapshotState } from './mam-snapshot-state'
 import { useMamHumanAttentionActions } from './use-mam-human-attention-actions'
+import { useMamResourceActions } from './use-mam-resource-actions'
 
 export function useMamSnapshot(): MamSnapshotState {
   const [snapshot, setSnapshot] = useState<MamUiSnapshot>()
@@ -250,6 +251,7 @@ export function useMamSnapshot(): MamSnapshotState {
   const getAttemptDiff = useCallback(async (input: MamGetAttemptDiffInput) => {
     return MamAttemptDiffSchema.parse(await getMamRendererApi().getAttemptDiff(input))
   }, [])
+  const resourceActions = useMamResourceActions(setSnapshot)
   useEffect(() => {
     mounted.current = true
     void refresh()
@@ -287,6 +289,7 @@ export function useMamSnapshot(): MamSnapshotState {
     deleteRoleProfile,
     deleteWorkflow,
     importSkill,
+    ...resourceActions,
     importWorkflowPackage,
     exportWorkflowPackage,
     exportDiagnostics,
