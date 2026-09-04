@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { ArtifactVersionSchema } from './artifact'
 import { EffectiveRoleConfigSnapshotSchema, RoleProfileSchema } from './role'
 import { WorkflowDefinitionSchema } from './workflow'
+import {
+  CodexResourceCandidateSchema,
+  MamImportCodexResourcesInputSchema
+} from '../resource-import'
+import { ResourceHealthResultSchema } from '../resource-health'
 
 const hash = 'a'.repeat(64)
 
@@ -150,6 +155,54 @@ describe('MAM domain contracts', () => {
     expect(ArtifactVersionSchema.parse(artifact)).toEqual(artifact)
     const { taskId: _, ...withoutTask } = artifact
     expect(ArtifactVersionSchema.safeParse(withoutTask).success).toBe(false)
+  })
+
+  it('keeps Codex discovery candidates secret-free and validates import selections', () => {
+    const candidate = {
+      key: 'skill:user:release',
+      kind: 'skill',
+      resourceId: 'skill.release',
+      displayName: 'Release',
+      source: {
+        kind: 'user',
+        label: 'User Skills',
+        path: '/Users/me/.codex/skills/release'
+      },
+      fingerprint: hash,
+      importState: 'new',
+      requiredSecretNames: []
+    }
+    expect(CodexResourceCandidateSchema.parse(candidate)).toEqual(candidate)
+    expect(
+      CodexResourceCandidateSchema.safeParse({
+        ...candidate,
+        environment: { API_TOKEN: 'secret-value' }
+      }).success
+    ).toBe(false)
+    expect(
+      MamImportCodexResourcesInputSchema.parse({
+        candidateKeys: [candidate.key],
+        missingSecrets: {}
+      })
+    ).toEqual({ candidateKeys: [candidate.key], missingSecrets: {} })
+  })
+
+  it('describes persisted resource health without a transient checking state', () => {
+    const result = {
+      kind: 'mcp',
+      resourceId: 'mcp.docs',
+      version: 2,
+      fingerprint: hash,
+      status: 'pi-incompatible',
+      checkedAt: '2026-09-04T08:00:00Z',
+      stage: 'mcp.capabilities',
+      code: 'mcp_list_tools_failed',
+      message: 'The server could not list its tools.'
+    }
+    expect(ResourceHealthResultSchema.parse(result)).toEqual(result)
+    expect(ResourceHealthResultSchema.safeParse({ ...result, status: 'checking' }).success).toBe(
+      false
+    )
   })
 })
 

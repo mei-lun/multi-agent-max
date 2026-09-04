@@ -100,7 +100,8 @@ describe('MamMyRolePage', () => {
           models: [],
           skills: [],
           mcpServers: [],
-          knowledgeBases: [],
+        knowledgeBases: [],
+        resourceHealth: [],
           workflows: [],
           localSettings: {
             schemaVersion: '1.0.0',

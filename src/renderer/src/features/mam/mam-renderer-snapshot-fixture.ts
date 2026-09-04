@@ -51,6 +51,7 @@ export function mamUiSnapshotFixture(): MamUiSnapshot {
     skills: [],
     mcpServers: [],
     knowledgeBases: [],
+    resourceHealth: [],
     workflows: [],
     localSettings: {
       schemaVersion: '1.0.0',

@@ -29,6 +29,7 @@ import { MamSkillDefinitionSchema } from './domain/skill-definition'
 import { MamLocalSettingsSchema } from './local-settings'
 import { NodeRunSchema, WorkflowDefinitionSchema, WorkflowRunSchema } from './domain/workflow'
 import { HumanAttentionItemSchema, HumanReviewDecisionSchema } from './domain/human-attention'
+import { ResourceHealthResultSchema } from './resource-health'
 
 export const MamUiTaskSnapshotSchema = z
   .object({
@@ -194,6 +195,7 @@ export const MamUiSnapshotSchema = z
     skills: z.array(MamSkillDefinitionSchema),
     mcpServers: z.array(McpServerProfileSchema),
     knowledgeBases: z.array(KnowledgeBaseProfileSchema),
+    resourceHealth: z.array(ResourceHealthResultSchema).default([]),
     workflows: z.array(WorkflowDefinitionSchema),
     localSettings: MamLocalSettingsSchema,
     projectBinding: z
