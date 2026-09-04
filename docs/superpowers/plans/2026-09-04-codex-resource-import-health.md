@@ -1,6 +1,6 @@
 # Codex Resource Import and Health Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Add selectable import of all local Codex Skills and MCP servers and a one-click health check that marks invalid or Pi-incompatible Skills, MCP servers, and Knowledge Bases.
 
@@ -36,7 +36,7 @@
 - Produces: `CodexResourceCandidateSchema`, `MamImportCodexResourcesInputSchema`, `ResourceHealthResultSchema`, and health results on the UI snapshot.
 - Consumed by: discovery, importer, health store, query snapshot, IPC, and renderer tasks.
 
-- [ ] **Step 1: Write failing contract tests**
+- [x] **Step 1: Write failing contract tests**
 
 Add examples that accept secret-free Skill/MCP candidates and all four UI health states, reject candidate payloads containing `environment`, `headers`, or secret values, and parse an existing `MamLocalSettings` document without new fields.
 
@@ -57,13 +57,13 @@ expect(ResourceHealthResultSchema.parse(healthyResult).status).toBe('healthy')
 expect(MamLocalSettingsSchema.parse(legacySettings).mcpConnections).toEqual([])
 ```
 
-- [ ] **Step 2: Run the focused contract test and confirm failure**
+- [x] **Step 2: Run the focused contract test and confirm failure**
 
 Run: `corepack pnpm vitest run src/shared/mam/domain/domain-contracts.test.ts`
 
 Expected: FAIL because the resource import and health schemas do not exist.
 
-- [ ] **Step 3: Add exact shared schemas and types**
+- [x] **Step 3: Add exact shared schemas and types**
 
 Define candidate source kinds `user | system | plugin | config`, import states `new | updated | current | unavailable`, health statuses `healthy | invalid | pi-incompatible`, and a health snapshot entry keyed by `kind`, `resourceId`, `version`, and `fingerprint`. Define import input as selected opaque keys plus `missingSecrets: Record<string, string>`.
 
@@ -89,13 +89,13 @@ export const ResourceHealthResultSchema = z
 
 Reuse the existing `McpServerProfile.credentialRef` and local `secretBindings` contracts for credential bundles, leaving legacy local MCP connection parsing unchanged. Add `resourceHealth` with an empty default to `MamUiSnapshotSchema`.
 
-- [ ] **Step 4: Run shared tests and typecheck**
+- [x] **Step 4: Run shared tests and typecheck**
 
 Run: `corepack pnpm vitest run src/shared/mam/domain/domain-contracts.test.ts && corepack pnpm typecheck`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit the contracts**
+- [x] **Step 5: Commit the contracts**
 
 ```bash
 git add src/shared/mam/resource-import.ts src/shared/mam/resource-health.ts src/shared/mam/ui-projection.ts src/shared/mam/domain/domain-contracts.test.ts
@@ -113,7 +113,7 @@ git commit -m "feat: define resource import health contracts"
 - Consumes: `CodexResourceCandidate`, `ProfileCatalog`, `MamLocalSettingsStore`, existing `validateSkillPackage()`.
 - Produces: `class CodexResourceDiscovery { list(): Promise<readonly CodexResourceCandidate[]>; resolve(key: string): Promise<ResolvedCodexCandidate | undefined> }` where resolved MCP candidates retain secrets only inside the main process.
 
-- [ ] **Step 1: Write fixture-based discovery tests**
+- [x] **Step 1: Write fixture-based discovery tests**
 
 Create temporary Codex homes containing user and `.system` Skills, enabled plugin manifests with Skill roots and `desktop-mcp.json`, and a `config.toml` with stdio and HTTP servers. Assert source labels, deterministic keys, canonical deduplication, `new/updated/current`, unavailable rows, and absence of raw secret values.
 
@@ -131,27 +131,27 @@ expect(candidates.map(({ kind, source }) => [kind, source.kind])).toEqual(
 expect(JSON.stringify(candidates)).not.toContain('sk-test-secret')
 ```
 
-- [ ] **Step 2: Run the discovery test and confirm failure**
+- [x] **Step 2: Run the discovery test and confirm failure**
 
 Run: `corepack pnpm vitest run src/main/mam/resources/codex-resource-discovery.test.ts`
 
 Expected: FAIL because `CodexResourceDiscovery` is missing.
 
-- [ ] **Step 3: Implement Codex home and enabled-plugin resolution**
+- [x] **Step 3: Implement Codex home and enabled-plugin resolution**
 
 Resolve an injected home for tests, then `process.env.CODEX_HOME`, then `join(homedir(), '.codex')`. Parse TOML with a dedicated parser dependency or the repository's available structured parser; do not parse TOML with regular expressions. Resolve plugin cache roots from enabled `[plugins."name@marketplace"]` entries and validate every manifest-relative path remains within its plugin root.
 
-- [ ] **Step 4: Implement normalized Skill and MCP discovery**
+- [x] **Step 4: Implement normalized Skill and MCP discovery**
 
 Reuse `validateSkillPackage` for fingerprint and metadata. Support Codex `command`, `args`, `cwd`, `url`, `env`, `env_vars`, enabled flags, and plugin `mcpServers` descriptors. Normalize but retain a private `ResolvedCodexCandidate` containing source configuration and credential values for import.
 
-- [ ] **Step 5: Run discovery tests, lint, and typecheck**
+- [x] **Step 5: Run discovery tests, lint, and typecheck**
 
 Run: `corepack pnpm vitest run src/main/mam/resources/codex-resource-discovery.test.ts && corepack pnpm lint && corepack pnpm typecheck`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit discovery**
+- [x] **Step 6: Commit discovery**
 
 ```bash
 git add package.json pnpm-lock.yaml src/main/mam/resources/codex-home-resolver.ts src/main/mam/resources/codex-resource-discovery.ts src/main/mam/resources/codex-resource-discovery.test.ts
@@ -173,7 +173,7 @@ git commit -m "feat: discover local Codex resources"
 - Consumes: `CodexResourceDiscovery.resolve()`, `MamImportCodexResourcesInput`, `ProfileCatalog`, local settings, and encrypted secrets.
 - Produces: `CodexResourceImporter.import(input): Promise<MamUiSnapshot>` via the command service, inactive Profile staging methods, and recovery of an interrupted local transaction.
 
-- [ ] **Step 1: Write failing importer tests**
+- [x] **Step 1: Write failing importer tests**
 
 Cover multi-select success, unchanged no-op, updated activation, hidden immutable history, required missing secrets, secret bundle encryption, stale keys, ID collisions, validation-before-write, rollback on write failure, and transaction recovery.
 
@@ -185,27 +185,27 @@ expect(settings.get().mcpConnections[0]).not.toHaveProperty('environment.API_TOK
 expect(secretStore.resolveSecret('secret.mcp.docs')).toContain('API_TOKEN')
 ```
 
-- [ ] **Step 2: Run importer tests and confirm failure**
+- [x] **Step 2: Run importer tests and confirm failure**
 
 Run: `corepack pnpm vitest run src/main/mam/resources/codex-resource-importer.test.ts`
 
 Expected: FAIL because importer and staging APIs are absent.
 
-- [ ] **Step 3: Add staging and snapshot/restore ports**
+- [x] **Step 3: Add staging and snapshot/restore ports**
 
 Add narrowly named registry methods for saving inactive versions and removing only inactive versions created by the failed transaction. Add local settings and encrypted-secret snapshot/restore methods scoped to the importer. Persist a transaction journal under the MAM user-data root before activation and remove it after commit or restore.
 
-- [ ] **Step 4: Implement deterministic imports**
+- [x] **Step 4: Implement deterministic imports**
 
 Rediscover and resolve every opaque key, reject stale fingerprints and unavailable candidates, validate all resources first, create only changed versions, store one encrypted JSON credential bundle per imported MCP, update local bindings, then activate staged versions. Preserve old versions internally but expose only active versions through existing registries.
 
-- [ ] **Step 5: Run importer and existing profile tests**
+- [x] **Step 5: Run importer and existing profile tests**
 
 Run: `corepack pnpm vitest run src/main/mam/resources/codex-resource-importer.test.ts src/main/mam/application/mam-profile-commands.test.ts src/main/mam/profiles/versioned-profile-registry.test.ts`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit importer and transaction support**
+- [x] **Step 6: Commit importer and transaction support**
 
 ```bash
 git add src/main/mam/resources/codex-resource-importer.ts src/main/mam/resources/codex-resource-import-transaction.ts src/main/mam/resources/codex-resource-importer.test.ts src/main/mam/application/encrypted-local-secret-store.ts src/main/mam/profiles/mam-local-settings-store.ts src/main/mam/profiles/versioned-profile-registry.ts src/main/mam/application/mam-profile-write-ports.ts
@@ -225,7 +225,7 @@ git commit -m "feat: import selected Codex resources"
 - Consumes: local MCP connections, `credentialRef`, and a secret value resolver.
 - Produces: `resolveMcpConnection(profile): McpLocalConnection | undefined` and `McpSdkConnector.probe(profile): Promise<McpCapabilitySummary>` using initialization plus advertised list operations.
 
-- [ ] **Step 1: Write failing credential and probe tests**
+- [x] **Step 1: Write failing credential and probe tests**
 
 Assert stdio environment and HTTP headers are reconstructed only for the requested profile, legacy plaintext connections remain supported, malformed encrypted bundles fail with stable codes, capability list calls are made only when advertised, and clients always close.
 
@@ -239,27 +239,27 @@ expect(client.listTools).toHaveBeenCalledOnce()
 expect(client.close).toHaveBeenCalledOnce()
 ```
 
-- [ ] **Step 2: Run focused MCP tests and confirm failure**
+- [x] **Step 2: Run focused MCP tests and confirm failure**
 
 Run: `corepack pnpm vitest run src/main/mam/gateways/mcp-connection-resolver.test.ts src/main/mam/gateways/mcp-sdk-connector.test.ts`
 
 Expected: FAIL because credential-bundle resolution and probe methods are missing.
 
-- [ ] **Step 3: Implement credential resolution and SDK capability listing**
+- [x] **Step 3: Implement credential resolution and SDK capability listing**
 
 Parse the encrypted JSON bundle with Zod, merge it into a cloned connection, and retain the minimal environment boundary. Extend the SDK client port with server capability inspection plus `listTools`, `listResources`, and `listPrompts`. The probe must not invoke tools, read resources, or fetch prompts.
 
-- [ ] **Step 4: Wire Attempts to the shared resolver**
+- [x] **Step 4: Wire Attempts to the shared resolver**
 
 Replace the inline `settings.mcpConnections.find(...)` callback in `attempt-capability-bridge.ts` with the resolver used by health checks, passing only the local secret provider required for the selected Profile.
 
-- [ ] **Step 5: Run MCP, bridge, and type tests**
+- [x] **Step 5: Run MCP, bridge, and type tests**
 
 Run: `corepack pnpm vitest run src/main/mam/gateways/mcp-connection-resolver.test.ts src/main/mam/gateways/mcp-sdk-connector.test.ts src/main/mam/application/executor-capability-bridge.test.ts && corepack pnpm typecheck`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit runtime MCP support**
+- [x] **Step 6: Commit runtime MCP support**
 
 ```bash
 git add src/main/mam/gateways/mcp-connection-resolver.ts src/main/mam/gateways/mcp-connection-resolver.test.ts src/main/mam/gateways/mcp-sdk-connector.ts src/main/mam/gateways/mcp-sdk-connector.test.ts src/main/mam/application/attempt-capability-bridge.ts
@@ -278,7 +278,7 @@ git commit -m "feat: resolve encrypted MCP connections"
 - Consumes: active registries, local settings, MCP resolver/connector, `FileKnowledgeConnector`, Pi `loadSkills`, and a clock.
 - Produces: `ResourceHealthChecker.checkAll(): Promise<readonly ResourceHealthResult[]>`, fingerprint matching, atomic cache persistence, and current results in `MamUiSnapshot.resourceHealth`.
 
-- [ ] **Step 1: Write failing health tests**
+- [x] **Step 1: Write failing health tests**
 
 Cover healthy and digest-changed Skills, Pi loader diagnostics, MCP initialization/list failures and timeouts, healthy empty Knowledge searches, first-result reads, unsupported Knowledge kinds, bounded concurrency, per-resource isolation, redaction, and stale fingerprint filtering.
 
@@ -294,31 +294,31 @@ expect(results).toEqual(
 expect(JSON.stringify(results)).not.toContain('secret-value')
 ```
 
-- [ ] **Step 2: Run health tests and confirm failure**
+- [x] **Step 2: Run health tests and confirm failure**
 
 Run: `corepack pnpm vitest run src/main/mam/resources/resource-health-checker.test.ts`
 
 Expected: FAIL because the health store and checker do not exist.
 
-- [ ] **Step 3: Implement atomic local health storage and fingerprints**
+- [x] **Step 3: Implement atomic local health storage and fingerprints**
 
 Follow the repository's temporary-file plus rename pattern. Hash active Profile content, local connection/binding shape, and encrypted credential content without persisting secret material. Return only results whose version and fingerprint match current state.
 
-- [ ] **Step 4: Implement bounded, isolated probes**
+- [x] **Step 4: Implement bounded, isolated probes**
 
 Use Pi's public `loadSkills` export; classify MAM package failures as `invalid` and Pi diagnostics as `pi-incompatible`. Probe MCP with a 30-second timeout and guaranteed disposal. Probe file Knowledge through `FileKnowledgeConnector.search()` and read the first small result when present. Limit concurrent probes to three and convert every failure into a redacted result.
 
-- [ ] **Step 5: Add current health results to query snapshots**
+- [x] **Step 5: Add current health results to query snapshots**
 
 Inject the health store into `MamUiQueryService` and merge only matching current results into `getSnapshot()`. Keep `resourceHealth: []` in fixtures that do not inject a store.
 
-- [ ] **Step 6: Run focused and snapshot tests**
+- [x] **Step 6: Run focused and snapshot tests**
 
 Run: `corepack pnpm vitest run src/main/mam/resources/resource-health-checker.test.ts src/renderer/src/features/mam/mam-integration-view-model.test.ts && corepack pnpm typecheck`
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit health services**
+- [x] **Step 7: Commit health services**
 
 ```bash
 git add src/main/mam/resources/resource-health-store.ts src/main/mam/resources/resource-health-checker.ts src/main/mam/resources/resource-health-checker.test.ts src/main/mam/application/mam-ui-query-service.ts
@@ -341,17 +341,17 @@ git commit -m "feat: check resource health through Pi paths"
 - Consumes: discovery `list`, importer `import`, checker `checkAll`, and their shared schemas.
 - Produces: renderer API methods `listCodexResources()`, `importCodexResources(input)`, and `checkResourceHealth()`.
 
-- [ ] **Step 1: Extend the seeded smoke test with failing IPC expectations**
+- [x] **Step 1: Extend the seeded smoke test with failing IPC expectations**
 
 Assert the three channels are registered, trusted-renderer checks run before service calls, discovery returns secret-free fixture candidates, import refreshes the snapshot, and health results appear after a deterministic check.
 
-- [ ] **Step 2: Run seeded smoke and confirm failure**
+- [x] **Step 2: Run seeded smoke and confirm failure**
 
 Run: `corepack pnpm vitest run --config vitest.smoke.config.ts src/main/desktop-seeded-project.smoke.ts`
 
 Expected: FAIL because the channels and methods are absent.
 
-- [ ] **Step 3: Add API constants and typed methods**
+- [x] **Step 3: Add API constants and typed methods**
 
 ```ts
 export const MAM_LIST_CODEX_RESOURCES_CHANNEL = 'mam:list-codex-resources'
@@ -361,21 +361,21 @@ export const MAM_CHECK_RESOURCE_HEALTH_CHANNEL = 'mam:check-resource-health'
 
 Add methods with schema-validated inputs/results to `MamRendererApi`, preload, and the main command service. Ensure runtime logger payloads contain channel and duration only.
 
-- [ ] **Step 4: Compose services in the Electron main process**
+- [x] **Step 4: Compose services in the Electron main process**
 
 Instantiate discovery, importer, health store, MCP resolver, and checker under `mamRoot`. Recover an interrupted import before registering IPC. Notify the renderer after import and after health results are persisted.
 
-- [ ] **Step 5: Add renderer callbacks without broad pending-state coupling**
+- [x] **Step 5: Add renderer callbacks without broad pending-state coupling**
 
 Expose local pending states for discovery/import/check so a long health run does not disable unrelated Workflow actions. Refresh the authoritative snapshot after import and health completion.
 
-- [ ] **Step 6: Run smoke, API, and type tests**
+- [x] **Step 6: Run smoke, API, and type tests**
 
 Run: `corepack pnpm vitest run --config vitest.smoke.config.ts src/main/desktop-seeded-project.smoke.ts && corepack pnpm typecheck`
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit IPC integration**
+- [x] **Step 7: Commit IPC integration**
 
 ```bash
 git add src/shared/mam/application-api.ts src/main/mam/application/mam-ui-command-service.ts src/main/ipc/mam-ipc.ts src/main/index.ts src/preload/index.ts src/renderer/src/features/mam/use-mam-snapshot.ts src/main/desktop-smoke-probe.ts src/main/desktop-seeded-project.smoke.ts
@@ -402,7 +402,7 @@ git commit -m "feat: expose Codex resource operations"
 - Consumes: candidate list/import/check callbacks and `MamUiSnapshot.resourceHealth`.
 - Produces: accessible searchable multi-select dialog, fixed-width `Check all` action, progress/error state, and persistent health Badges/reasons on resource cards.
 
-- [ ] **Step 1: Write failing view-model and rendered UI tests**
+- [x] **Step 1: Write failing view-model and rendered UI tests**
 
 Test search filtering, select-all limited to filtered rows, no default selection, current/unavailable disabled rows, missing-secret validation, status labels, redacted reasons, and card radius/style tokens.
 
@@ -413,35 +413,35 @@ expect(rendered).toContain('Check all')
 expect(rendered).toContain('Healthy')
 ```
 
-- [ ] **Step 2: Run UI tests and confirm failure**
+- [x] **Step 2: Run UI tests and confirm failure**
 
 Run: `corepack pnpm vitest run src/renderer/src/features/mam/MamCodexResourceImportDialog.test.tsx src/renderer/src/features/mam/mam-resource-health-view.test.ts src/renderer/src/features/mam/MamResourcesSettingsPages.test.tsx`
 
 Expected: FAIL because dialog and health view modules are absent.
 
-- [ ] **Step 3: Add shadcn Checkbox and Tabs primitives**
+- [x] **Step 3: Add shadcn Checkbox and Tabs primitives**
 
 Install the matching Radix packages at versions compatible with the existing shadcn stack. Follow existing Button/Input/Dialog token usage and expose only the variants required by the import dialog.
 
-- [ ] **Step 4: Implement the import dialog**
+- [x] **Step 4: Implement the import dialog**
 
 Load candidates when opened, keep raw secrets out of component props, filter by name/ID/source, support tab-scoped select-all, collect only required missing values, preserve non-secret selection after errors, and submit selected opaque keys.
 
-- [ ] **Step 5: Render one-click health and persistent problem marks**
+- [x] **Step 5: Render one-click health and persistent problem marks**
 
 Add `Import from Codex`, secondary folder import, and fixed-width `Check all`. Map current results to cards by kind/ID/version and render `Unchecked`, `Healthy`, `Invalid`, or `Pi incompatible`. Show reason and timestamp only for problem states. Use `rounded-md`/8px cards and avoid nested cards.
 
-- [ ] **Step 6: Wire the Resources page in App**
+- [x] **Step 6: Wire the Resources page in App**
 
 Pass discovery/import/check methods and their local pending states through the existing page selection boundary without changing unrelated page props.
 
-- [ ] **Step 7: Run UI tests, format, lint, and typecheck**
+- [x] **Step 7: Run UI tests, format, lint, and typecheck**
 
 Run: `corepack pnpm vitest run src/renderer/src/features/mam/MamCodexResourceImportDialog.test.tsx src/renderer/src/features/mam/mam-resource-health-view.test.ts src/renderer/src/features/mam/MamResourcesSettingsPages.test.tsx && corepack pnpm format:check && corepack pnpm lint && corepack pnpm typecheck`
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit the Resources UI**
+- [x] **Step 8: Commit the Resources UI**
 
 ```bash
 git add package.json pnpm-lock.yaml src/renderer/src/components/ui/checkbox.tsx src/renderer/src/components/ui/tabs.tsx src/renderer/src/features/mam/MamCodexResourceImportDialog.tsx src/renderer/src/features/mam/MamCodexResourceImportDialog.test.tsx src/renderer/src/features/mam/mam-resource-health-view.ts src/renderer/src/features/mam/mam-resource-health-view.test.ts src/renderer/src/features/mam/MamResourcesPage.tsx src/renderer/src/features/mam/MamResourcesSettingsPages.test.tsx src/renderer/src/App.tsx src/renderer/src/assets/main.css
@@ -462,45 +462,45 @@ git commit -m "feat: add resource import and health UI"
 - Consumes: all completed behavior and verification evidence.
 - Produces: accurate 0.1.2 feature baseline, user-facing resource workflow documentation, checked plan boxes, and a clean verified branch.
 
-- [ ] **Step 1: Increment and document version 0.1.2**
+- [x] **Step 1: Increment and document version 0.1.2**
 
 Set `package.json#version` to `0.1.2`, update the lockfile importer version, create the 0.1.2 record by carrying forward the supported 0.1.1 baseline, and record behavior, implementation scope, local state/schema impact, verification, and known platform limits. Update the version index current row.
 
-- [ ] **Step 2: Document resource import and health workflows**
+- [x] **Step 2: Document resource import and health workflows**
 
 Add concise Chinese and English README sections describing `Import from Codex`, encrypted MCP credentials, `Check all`, the four states, the lack of Codex Knowledge Base import, and the distinction between deterministic Pi-path compatibility and model behavior.
 
-- [ ] **Step 3: Run focused resource suites**
+- [x] **Step 3: Run focused resource suites**
 
 Run: `corepack pnpm vitest run src/main/mam/resources src/main/mam/gateways/mcp-connection-resolver.test.ts src/main/mam/gateways/mcp-sdk-connector.test.ts src/renderer/src/features/mam/MamCodexResourceImportDialog.test.tsx src/renderer/src/features/mam/mam-resource-health-view.test.ts src/renderer/src/features/mam/MamResourcesSettingsPages.test.tsx`
 
 Expected: PASS.
 
-- [ ] **Step 4: Run complete verification**
+- [x] **Step 4: Run complete verification**
 
 Run: `corepack pnpm verify`
 
 Expected: format check, lint, typecheck, complete tests, and production build all PASS.
 
-- [ ] **Step 5: Run seeded Electron smoke**
+- [x] **Step 5: Run seeded Electron smoke**
 
 Run: `corepack pnpm smoke:desktop:seeded`
 
 Expected: PASS with discovery/import/health IPC coverage. If the host cannot run a platform-specific external MCP executable, use only the deterministic fixture server and record that limit in `0.1.2.md`.
 
-- [ ] **Step 6: Review final diff and version consistency**
+- [x] **Step 6: Review final diff and version consistency**
 
 Run: `git diff --check && git status --short && node -e "const p=require('./package.json'); if(p.version!=='0.1.2') process.exit(1)"`
 
 Expected: no whitespace errors; only intended files remain; package, lockfile, version index, and version archive agree on 0.1.2.
 
-- [ ] **Step 7: Commit release records and final fixes**
+- [x] **Step 7: Commit release records and final fixes**
 
 ```bash
 git add package.json pnpm-lock.yaml README.md README.en.md docs/versions/README.md docs/versions/0.1.2.md docs/superpowers/plans/2026-09-04-codex-resource-import-health.md
 git commit -m "docs: record Codex resource health release"
 ```
 
-- [ ] **Step 8: Request final code review**
+- [x] **Step 8: Request final code review**
 
 Use the `requesting-code-review` skill against the complete branch diff, address any correctness or security findings, rerun affected tests, and keep the worktree clean.

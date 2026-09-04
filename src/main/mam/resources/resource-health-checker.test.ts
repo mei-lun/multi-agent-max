@@ -55,9 +55,29 @@ describe('resource health checker', () => {
       }))
     })
 
-    expect(checker.listCurrent().map((result) => result.resourceId)).not.toContain(
-      'knowledge.docs'
+    expect(checker.listCurrent().map((result) => result.resourceId)).not.toContain('knowledge.docs')
+  })
+
+  it('isolates an undecryptable MCP credential from other resource checks', async () => {
+    const fixture = await createFixture()
+    const checker = new ResourceHealthChecker({
+      ...fixture,
+      localSecrets: {
+        resolveSecret() {
+          throw new Error('OS credential decryption failed')
+        }
+      },
+      probeMcp: async () => ({ connected: true, tools: 0, resources: 0, prompts: 0 })
+    })
+
+    await expect(checker.checkAll()).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ resourceId: 'skill.release', status: 'healthy' }),
+        expect.objectContaining({ resourceId: 'mcp.docs', status: 'invalid' }),
+        expect.objectContaining({ resourceId: 'knowledge.docs', status: 'healthy' })
+      ])
     )
+    expect(() => checker.listCurrent()).not.toThrow()
   })
 })
 

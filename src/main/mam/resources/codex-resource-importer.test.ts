@@ -38,8 +38,16 @@ describe('Codex resource importer', () => {
     expect(JSON.stringify(settings)).not.toContain('sk-import-secret')
     expect(fixture.secrets.resolveSecret('secret.mcp.docs')).toContain('sk-import-secret')
 
-    expect((await fixture.discovery.list()).every((candidate) => candidate.importState === 'current'))
-      .toBe(true)
+    expect(
+      (await fixture.discovery.list()).every((candidate) => candidate.importState === 'current')
+    ).toBe(true)
+    const current = await fixture.discovery.list()
+    await fixture.importer.import({
+      candidateKeys: current.map((candidate) => candidate.key),
+      missingSecrets: {}
+    })
+    expect(fixture.profiles.skills.listVersions('skill.release')).toHaveLength(2)
+    expect(fixture.profiles.mcpServers.listVersions('mcp.docs')).toHaveLength(1)
   })
 
   it('does not write any selected resource when a required environment value is missing', async () => {
@@ -57,6 +65,22 @@ describe('Codex resource importer', () => {
     expect(fixture.profiles.mcpServers.listActive()).toEqual([])
     expect(fixture.settings.get().mcpConnections).toEqual([])
     expect(fixture.secrets.listConfigured()).toEqual([])
+  })
+
+  it('scopes a supplied missing value to its selected MCP candidate', async () => {
+    const fixture = await createFixture({ missingToken: true })
+    const mcp = (await fixture.discovery.list()).find((candidate) => candidate.kind === 'mcp')!
+
+    await fixture.importer.import({
+      candidateKeys: [mcp.key],
+      missingSecrets: { [`${mcp.key}:API_TOKEN`]: 'candidate-secret' }
+    })
+
+    expect(fixture.secrets.resolveSecret('secret.mcp.docs')).toContain('candidate-secret')
+    expect(
+      (await fixture.discovery.list()).find((candidate) => candidate.resourceId === 'mcp.docs')
+        ?.importState
+    ).toBe('current')
   })
 })
 
@@ -103,7 +127,8 @@ async function createFixture(options: { missingToken?: boolean } = {}) {
     codexHome,
     environment: {},
     profiles,
-    localSettings: settings
+    localSettings: settings,
+    localSecrets: secrets
   })
   const importer = new CodexResourceImporter({
     discovery,
@@ -118,5 +143,8 @@ async function createFixture(options: { missingToken?: boolean } = {}) {
 
 function writeSkill(directory: string, name: string, description: string): void {
   mkdirSync(directory, { recursive: true })
-  writeFileSync(join(directory, 'SKILL.md'), `---\nname: ${name}\ndescription: ${description}\n---\n`)
+  writeFileSync(
+    join(directory, 'SKILL.md'),
+    `---\nname: ${name}\ndescription: ${description}\n---\n`
+  )
 }

@@ -17,7 +17,8 @@ export function resolveMcpConnection(
   credentialValues: Readonly<Record<string, string>>
 ): McpLocalConnection | undefined {
   const connection = connections.find((item) => item.connectionRef === profile.connectionRef)
-  if (!connection || !profile.credentialRef) return connection ? structuredClone(connection) : undefined
+  if (!connection || !profile.credentialRef)
+    return connection ? structuredClone(connection) : undefined
   const encoded = credentialValues[profile.credentialRef]
   if (!encoded) throw new Error(`mcp_credential_unavailable:${profile.credentialRef}`)
   const bundle = McpCredentialBundleSchema.parse(JSON.parse(encoded))

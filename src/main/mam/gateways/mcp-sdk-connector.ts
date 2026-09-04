@@ -154,7 +154,7 @@ async function connectSdkClient(
   timeoutMs: number
 ): Promise<McpClientPort> {
   const transport = createTransport(connection)
-  const client = new Client({ name: 'multi-agent-max', version: '0.1.0' }, { capabilities: {} })
+  const client = new Client({ name: 'multi-agent-max', version: '0.1.2' }, { capabilities: {} })
   // The SDK's HTTP transport narrows an optional field incompatibly under exactOptionalPropertyTypes.
   await client.connect(transport as Parameters<Client['connect']>[0], {
     timeout: timeoutMs,

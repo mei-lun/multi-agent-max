@@ -25,7 +25,7 @@ export type ResolvedCodexMcp = Readonly<{
     headers: Record<string, string>
   }
   missingCredentialTargets: Readonly<
-    Record<string, Readonly<{ kind: 'environment' | 'header'; key: string }>>
+    Record<string, Readonly<{ kind: 'environment' | 'header'; key: string; prefix?: string }>>
   >
 }>
 
@@ -36,7 +36,9 @@ export function createCodexMcpCandidates(input: {
   environment: Readonly<Record<string, string | undefined>>
   importState(
     profile: Omit<McpServerProfile, 'version'>,
-    connection: McpLocalConnection
+    connection: McpLocalConnection,
+    credentials: Readonly<{ environment: Record<string, string>; headers: Record<string, string> }>,
+    missingCredentialTargets: ResolvedCodexMcp['missingCredentialTargets']
   ): CodexResourceCandidate['importState']
 }): ResolvedCodexMcp[] {
   if (!isRecord(input.servers)) return []
@@ -45,9 +47,52 @@ export function createCodexMcpCandidates(input: {
     try {
       return [createCandidate(name, raw, input)]
     } catch {
-      return []
+      return [unavailableCandidate(name, raw, input)]
     }
   })
+}
+
+function unavailableCandidate(
+  name: string,
+  raw: Record<string, unknown>,
+  input: Omit<Parameters<typeof createCodexMcpCandidates>[0], 'servers'>
+): ResolvedCodexMcp {
+  const resourceId = normalizeResourceId(name, 'mcp')
+  const fingerprint = hashValue(canonicalJson(raw))
+  const connectionRef = `${resourceId}.connection`
+  const candidate = CodexResourceCandidateSchema.parse({
+    key: candidateKey('mcp', `${input.source.path}:${name}`, fingerprint),
+    kind: 'mcp',
+    resourceId,
+    displayName: name,
+    source: input.source,
+    fingerprint,
+    importState: 'unavailable',
+    requiredSecretNames: [],
+    unavailableReason:
+      typeof raw.__unavailable_reason === 'string'
+        ? raw.__unavailable_reason
+        : 'The MCP configuration uses an unsupported format.'
+  })
+  return {
+    kind: 'mcp',
+    candidate,
+    profile: {
+      id: resourceId,
+      displayName: name,
+      transport: 'stdio',
+      connectionRef
+    },
+    connection: {
+      connectionRef,
+      transport: 'stdio',
+      command: 'unavailable',
+      args: [],
+      environment: {}
+    },
+    credentials: { environment: {}, headers: {} },
+    missingCredentialTargets: {}
+  }
 }
 
 function createCandidate(
@@ -60,7 +105,7 @@ function createCandidate(
   const environment = stringRecord(raw.env)
   const missingCredentialTargets: Record<
     string,
-    Readonly<{ kind: 'environment' | 'header'; key: string }>
+    Readonly<{ kind: 'environment' | 'header'; key: string; prefix?: string }>
   > = {}
   const requiredSecretNames = stringArray(raw.env_vars).filter((key) => {
     const value = input.environment[key]
@@ -74,8 +119,22 @@ function createCandidate(
     if (value === undefined) {
       requiredSecretNames.push(environmentKey)
       missingCredentialTargets[environmentKey] = { kind: 'header', key: header }
+    } else headers[header] = value
+  }
+  const bearerEnvironment =
+    typeof raw.bearer_token_env_var === 'string' ? raw.bearer_token_env_var : undefined
+  if (bearerEnvironment) {
+    const value = input.environment[bearerEnvironment]
+    if (value === undefined) {
+      requiredSecretNames.push(bearerEnvironment)
+      missingCredentialTargets[bearerEnvironment] = {
+        kind: 'header',
+        key: 'Authorization',
+        prefix: 'Bearer '
+      }
+    } else {
+      headers.Authorization = `Bearer ${value}`
     }
-    else headers[header] = value
   }
   const hasCredentials =
     Object.keys(environment).length + Object.keys(headers).length + requiredSecretNames.length > 0
@@ -95,13 +154,18 @@ function createCandidate(
     })
   )
   const candidate = CodexResourceCandidateSchema.parse({
-    key: candidateKey('mcp', `${input.source.path}:${name}`),
+    key: candidateKey('mcp', `${input.source.path}:${name}`, fingerprint),
     kind: 'mcp',
     resourceId,
     displayName: name,
     source: input.source,
     fingerprint,
-    importState: input.importState(profile, connection),
+    importState: input.importState(
+      profile,
+      connection,
+      { environment, headers },
+      missingCredentialTargets
+    ),
     requiredSecretNames: [...new Set(requiredSecretNames)].sort()
   })
   return {
@@ -131,7 +195,8 @@ function createConnection(
     }
   }
   if (typeof raw.url === 'string') {
-    return { connectionRef, transport: 'http', url: raw.url, headers: {} }
+    const transport = raw.type === 'sse' ? 'sse' : 'http'
+    return { connectionRef, transport, url: raw.url, headers: {} }
   }
   throw new Error('unsupported_mcp_transport')
 }

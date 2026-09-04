@@ -10,7 +10,10 @@ export function TabsList({
 }: React.ComponentProps<typeof TabsPrimitive.List>): React.JSX.Element {
   return (
     <TabsPrimitive.List
-      className={cn('inline-flex h-8 items-center rounded-md bg-muted p-1 text-muted-foreground', className)}
+      className={cn(
+        'inline-flex h-8 items-center rounded-md bg-muted p-1 text-muted-foreground',
+        className
+      )}
       {...props}
     />
   )

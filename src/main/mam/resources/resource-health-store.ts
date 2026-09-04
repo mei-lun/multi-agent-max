@@ -29,11 +29,11 @@ export class ResourceHealthStore {
   save(results: readonly ResourceHealthResult[]): void {
     mkdirSync(dirname(this.path), { recursive: true, mode: 0o700 })
     const temporary = `${this.path}.${process.pid}.${randomUUID()}.tmp`
-    writeFileSync(
-      temporary,
-      `${JSON.stringify({ schemaVersion: '1.0.0', results }, null, 2)}\n`,
-      { encoding: 'utf8', mode: 0o600, flag: 'wx' }
-    )
+    writeFileSync(temporary, `${JSON.stringify({ schemaVersion: '1.0.0', results }, null, 2)}\n`, {
+      encoding: 'utf8',
+      mode: 0o600,
+      flag: 'wx'
+    })
     renameSync(temporary, this.path)
   }
 }

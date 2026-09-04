@@ -27,10 +27,7 @@ import type {
 } from './application-command'
 import type { MamFetchModelCatalogInput, MamModelCatalogResult } from './model-catalog'
 import type { MamExportExecutionActivityInput } from './execution-activity-export'
-import type {
-  CodexResourceCandidate,
-  MamImportCodexResourcesInput
-} from './resource-import'
+import type { CodexResourceCandidate, MamImportCodexResourcesInput } from './resource-import'
 import type {
   MamDesignApplyProposalInput,
   MamDesignCancelInput,

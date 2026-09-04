@@ -10,7 +10,7 @@ MAM is not an agent runtime or a remote-machine manager. It coordinates structur
 Git remains the authority for shared workflow state.
 
 > [!IMPORTANT]
-> MAM is under active development (`0.1.0`). macOS is the first supported release target. The
+> MAM is under active development (`0.1.2`). macOS is the first supported release target. The
 > current application executes production attempts through Pi RPC only; Codex CLI and Grok CLI
 > adapters remain in the repository for later activation.
 
@@ -106,7 +106,7 @@ history, review, Git branches/worktrees, merge queues, and recovery on top of gr
 | **Needs Attention** | Handle role questions, rework conversations, and human review in one queue sorted by scope, blocked task count, waiting time, and stable ID. Each item opens in a separate dialog for multi-turn communication. |
 | **Reviews** | Review submitted work against an exact Attempt, result, validation evidence, and Git diff; approve, request changes, or block; and resolve aggregated multi-reviewer disagreements. |
 | **Merge Queue** | Track immutable reviewed revisions, execute deterministic integration order, rerun validation, and inspect queued, active, failed, conflicting, and historical entries. |
-| **Resources** | Import and manage versioned Skills, MCP Server Profiles, and Knowledge Base Profiles, including the role allowlists that reference them. |
+| **Resources** | Selectively import Skills and MCP servers from local Codex user, built-in, and plugin sources; manage Knowledge Bases; and check every resource for validity and Pi compatibility. |
 | **Settings** | Configure Provider, Model, and advanced Executor Profiles together with machine-local executable, secret, MCP, Skill, knowledge, and Git path bindings; export diagnostics when needed. |
 
 ## Interface and delivery demo
@@ -229,6 +229,14 @@ provider-key  -> MAM_SECRET_PROVIDER_KEY
 The conversion uppercases the ID, replaces punctuation with underscores, and prefixes
 `MAM_SECRET_`. Effective configuration snapshots record only references and content hashes, never
 the secret value.
+
+## Codex resource import and health
+
+Open **Resources** and choose **Import from Codex** to search and select user Skills, built-in Skills, enabled plugin Skills, and MCP servers from `config.toml` or plugins. Unchanged resources are not imported again. Updated content becomes the current version immediately, while previous versions remain available only to Runs and Attempts that already froze them.
+
+MCP environment and header values never cross into the renderer or enter shared Profiles, logs, or plaintext local settings. MAM reads them in the main process and stores one credential bundle in OS-encrypted storage. Codex does not expose a separate portable local Knowledge Base registry, so Knowledge Bases remain configured in MAM and are not imported from Codex.
+
+Choose **Check all** to mark each current Skill, MCP server, and Knowledge Base as **Unchecked**, **Healthy**, **Invalid**, or **Pi incompatible**. Checks use Pi's Skill loader and MAM's MCP and Knowledge bridges without calling a model or invoking an MCP tool. A passing result proves the deterministic Pi loading or bridge path works; it does not guarantee that a model will choose the resource in every task.
 
 ## Automatic review, human gates, and role communication
 
@@ -372,7 +380,7 @@ or model.
   authority
 - [Requirements delta and traceability](docs/readme/MAM_REQUIREMENTS_DELTA_2026-07-27.md) — stable
   requirement IDs and superseded semantics
-- [0.1.0 version feature record](docs/versions/0.1.0.md) — current capabilities, optimization
+- [0.1.2 version feature record](docs/versions/0.1.2.md) — current capabilities, optimization
   history, limits, and verification baseline
 - [Version record policy](docs/versions/README.md) — mandatory record format and update process for
   every subsequent change
@@ -389,7 +397,7 @@ When documents conflict, the final product and reuse plan takes precedence.
 Keep changes aligned with [`AGENTS.md`](AGENTS.md) and the product authority above. Every feature,
 optimization, fix, refactor, documentation update, or configuration change must update the version
 record matching `package.json` in the same change set; the current record is
-[`docs/versions/0.1.0.md`](docs/versions/0.1.0.md). Before opening a pull request, run:
+[`docs/versions/0.1.2.md`](docs/versions/0.1.2.md). Before opening a pull request, run:
 
 ```bash
 pnpm verify

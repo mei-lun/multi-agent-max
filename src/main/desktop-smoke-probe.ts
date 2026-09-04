@@ -15,6 +15,7 @@ type SmokeState = Readonly<{
   resourcesReady?: boolean
   settingsReady?: boolean
   designReady?: boolean
+  resourceDiscoverySafe?: boolean
 }>
 
 export function installDesktopSmokeProbe(window: BrowserWindow): void {
@@ -39,12 +40,14 @@ async function probe(window: BrowserWindow): Promise<void> {
     }
     const savedWorkflowVersion = await saveWorkflowVersion(window, chinese)
     const navigationState = await probeNavigationSurfaces(window, chinese)
+    const resourceDiscoverySafe = await probeResourceDiscovery(window)
     const state = {
       ...rendererState,
       ...(commandTaskStatus ? { commandTaskStatus } : {}),
       ...recoveryState,
       ...(savedWorkflowVersion ? { savedWorkflowVersion } : {}),
-      ...navigationState
+      ...navigationState,
+      resourceDiscoverySafe
     }
     const expectedText = process.env.MAM_DESKTOP_SMOKE_EXPECT
     const passed =
@@ -58,13 +61,25 @@ async function probe(window: BrowserWindow): Promise<void> {
       (!process.env.MAM_DESKTOP_SMOKE_SAVE_WORKFLOW || savedWorkflowVersion === 2) &&
       navigationState.resourcesReady &&
       navigationState.settingsReady &&
-      navigationState.designReady
+      navigationState.designReady &&
+      resourceDiscoverySafe
     process.stdout.write(`MAM_DESKTOP_SMOKE ${JSON.stringify({ passed, ...state })}\n`)
     app.exit(passed ? 0 : 1)
   } catch (error) {
     process.stderr.write(`MAM_DESKTOP_SMOKE_FAILED ${String(error)}\n`)
     app.exit(1)
   }
+}
+
+function probeResourceDiscovery(window: BrowserWindow): Promise<boolean> {
+  return window.webContents.executeJavaScript(`(async () => {
+    const candidates = await window.mam.listCodexResources();
+    if (!Array.isArray(candidates)) return false;
+    const payload = JSON.stringify(candidates);
+    return !payload.includes('"environment"') &&
+      !payload.includes('"headers"') &&
+      !payload.includes('"secretValue"');
+  })()`)
 }
 
 async function probeNavigationSurfaces(

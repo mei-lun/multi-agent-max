@@ -14,9 +14,7 @@ export function useMamResourceActions(onSnapshot: (snapshot: MamUiSnapshot) => v
   }, [])
   const importCodexResources = useCallback(
     async (input: MamImportCodexResourcesInput) => {
-      onSnapshot(
-        MamUiSnapshotSchema.parse(await getMamRendererApi().importCodexResources(input))
-      )
+      onSnapshot(MamUiSnapshotSchema.parse(await getMamRendererApi().importCodexResources(input)))
     },
     [onSnapshot]
   )

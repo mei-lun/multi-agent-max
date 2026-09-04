@@ -7,7 +7,7 @@ Multi-Agent Max（MAM）是一款本地运行、由 Git 驱动的多 Agent 工�
 MAM 不是新的 Agent Runtime，也不是远程机器管理器。它负责协调结构化 Executor，并以 Git 作为共享工作流状态的权威来源。
 
 > [!IMPORTANT]
-> MAM 仍在积极开发中（`0.1.0`）。macOS 是首个正式支持的发布目标。当前应用只通过 Pi RPC 执行生产 Attempt；Codex CLI 和 Grok CLI Adapter 仍保留在仓库中，等待后续启用。
+> MAM 仍在积极开发中（`0.1.2`）。macOS 是首个正式支持的发布目标。当前应用只通过 Pi RPC 执行生产 Attempt；Codex CLI 和 Grok CLI Adapter 仍保留在仓库中，等待后续启用。
 
 ## 核心能力
 
@@ -70,7 +70,7 @@ MAM 不是图数据库、GraphQL 服务或通用图数据基础设施，也不�
 | **待我处理** | 集中处理角色问题、返工沟通和人工审核；列表按影响范围、阻塞 Task 数、等待时间和稳定 ID 确定性排序，点开后在独立 Dialog 中多轮沟通。 |
 | **审核** | 处理待审核成果，查看精确 Attempt 的结果、验证证据与 Git Diff，提交通过、要求修改或阻塞意见，并处理多 Reviewer 的聚合结果与意见分歧。 |
 | **合并队列** | 查看已经审核的不可变 Revision，按确定性顺序执行集成、重新运行验证，并跟踪等待、执行中、失败、冲突与历史记录。 |
-| **资源** | 导入和管理带版本的 Skill、MCP Server 与 Knowledge Base Profile，查看它们被哪些角色白名单引用。 |
+| **资源** | 从本地 Codex 的用户、内置和插件来源选择导入 Skill 与 MCP，管理 Knowledge Base，并一键检查全部资源的有效性和 Pi 兼容性。 |
 | **设置** | 配置 Provider、Model 和高级 Executor Profile，以及仅保存在本机的可执行文件、密钥、MCP 连接、Skill、知识库和 Git 路径绑定；也可导出诊断信息。 |
 
 ## 界面与交付演示
@@ -170,6 +170,14 @@ provider-key  -> MAM_SECRET_PROVIDER_KEY
 ```
 
 转换规则是：将 ID 转为大写，把标点替换为下划线，再添加 `MAM_SECRET_` 前缀。Effective Config Snapshot 只记录引用和内容 Hash，绝不记录密钥值。
+
+## Codex 资源导入与健康检查
+
+在 **Resources（资源）** 中选择 **Import from Codex（从 Codex 导入）**，可以搜索并勾选本机 Codex 的用户 Skill、内置 Skill、已启用插件 Skill，以及 `config.toml` 或插件提供的 MCP。内容未变化的资源不会重复导入；内容变化时，新版本直接成为当前版本，旧版本只为已冻结的 Run 和 Attempt 保留。
+
+MCP 的环境变量和请求头值不会发送到 Renderer，也不会写入共享 Profile、日志或明文本机设置；MAM 只在主进程中读取并写入系统加密存储。Codex 没有独立、可移植的本地知识库注册表，因此知识库仍在 MAM 中配置，不从 Codex 自动导入。
+
+选择 **Check all（检查全部）** 会检查所有当前 Skill、MCP 和知识库，并持续显示 **未检查**、**正常**、**异常** 或 **Pi 不兼容**。检查使用 Pi 的 Skill loader、MAM 的 MCP 桥接和 Knowledge Gateway，不调用模型，也不执行 MCP 工具。通过检查表示 Pi 的确定性加载或桥接链路可用，不保证模型在具体任务中一定会主动选择该资源。
 
 ## 自动审核、人工门禁与角色沟通
 
@@ -292,7 +300,7 @@ Codex CLI 和 Grok CLI 仍是计划中的结构化 Executor。启用前必须通
 
 - [最终产品设计与代码复用方案](docs/final-reuse-integration-plan.md)：当前产品权威
 - [需求差异与追踪表](docs/readme/MAM_REQUIREMENTS_DELTA_2026-07-27.md)：稳定 Requirement ID 与已废弃语义
-- [0.1.0 版本功能档案](docs/versions/0.1.0.md)：当前阶段的完整能力、优化演进、限制与验证基线
+- [0.1.2 版本功能档案](docs/versions/0.1.2.md)：当前阶段的完整能力、优化演进、限制与验证基线
 - [版本记录规则](docs/versions/README.md)：所有后续改动必须遵循的记录格式与更新流程
 - [人工审核与角色澄清产品设计](docs/readme/HUMAN_REVIEW_AND_CLARIFICATION_DESIGN.md)：审核门禁、统一待处理队列和多轮沟通
 - [迁移状态](docs/MIGRATION_STATUS.md)：已实现链路与后置 Executor 工作
@@ -303,7 +311,7 @@ Codex CLI 和 Grok CLI 仍是计划中的结构化 Executor。启用前必须通
 
 ## 参与贡献
 
-所有改动都应遵循 [`AGENTS.md`](AGENTS.md) 和上述产品权威文档。每一组功能、优化、修复、重构、文档或配置改动，还必须在同一变更集中同步更新与 `package.json` 版本一致的版本档案；当前文件是 [`docs/versions/0.1.0.md`](docs/versions/0.1.0.md)。提交 Pull Request 前请运行：
+所有改动都应遵循 [`AGENTS.md`](AGENTS.md) 和上述产品权威文档。每一组功能、优化、修复、重构、文档或配置改动，还必须在同一变更集中同步更新与 `package.json` 版本一致的版本档案；当前文件是 [`docs/versions/0.1.2.md`](docs/versions/0.1.2.md)。提交 Pull Request 前请运行：
 
 ```bash
 pnpm verify

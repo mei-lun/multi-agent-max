@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { CodexResourceCandidate } from '../../../../shared/mam/resource-import'
-import { filterCodexCandidates, selectFilteredCandidates } from './MamCodexResourceImportDialog'
+import {
+  filterCodexCandidates,
+  secretInputKey,
+  selectFilteredCandidates
+} from './MamCodexResourceImportDialog'
 
 const candidates: CodexResourceCandidate[] = [
   candidate('skill.release', 'Release', 'skill', 'new'),
@@ -10,15 +14,19 @@ const candidates: CodexResourceCandidate[] = [
 
 describe('Codex resource import selection', () => {
   it('filters by tab and query', () => {
-    expect(filterCodexCandidates(candidates, 'skill', 'rel').map((item) => item.resourceId)).toEqual([
-      'skill.release'
-    ])
+    expect(
+      filterCodexCandidates(candidates, 'skill', 'rel').map((item) => item.resourceId)
+    ).toEqual(['skill.release'])
   })
 
   it('selects only importable rows in the current filter', () => {
     expect(selectFilteredCandidates(new Set(), candidates.slice(0, 2), true)).toEqual(
       new Set(['skill:skill.release'])
     )
+  })
+
+  it('scopes same-named secret inputs to one candidate', () => {
+    expect(secretInputKey(candidates[0]!, 'API_TOKEN')).toBe('skill:skill.release:API_TOKEN')
   })
 })
 

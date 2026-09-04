@@ -111,9 +111,7 @@ export function resolveAttemptCredentialSet(
   return Object.assign(
     {},
     ...secretRefs.flatMap((secretRef) =>
-      secretRef
-        ? [resolveAttemptCredentials(secretRef, bindings, bindingIdentity, provider)]
-        : []
+      secretRef ? [resolveAttemptCredentials(secretRef, bindings, bindingIdentity, provider)] : []
     )
   )
 }

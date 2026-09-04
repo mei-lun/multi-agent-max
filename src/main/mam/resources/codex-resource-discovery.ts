@@ -1,5 +1,5 @@
 import { readFile, readdir, realpath } from 'node:fs/promises'
-import { isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { join, resolve } from 'node:path'
 import { parse as parseToml } from '@iarna/toml'
 import type { ProfileCatalog } from '../profiles/profile-catalog'
 import type { MamLocalSettingsStore } from '../profiles/mam-local-settings-store'
@@ -8,19 +8,26 @@ import {
   CodexResourceCandidateSchema,
   type CodexResourceCandidate
 } from '../../../shared/mam/resource-import'
-import type { McpLocalConnection, McpServerProfile } from '../../../shared/mam/domain/resource-profile'
 import { resolveCodexHome } from './codex-home-resolver'
 import { createCodexMcpCandidates, type ResolvedCodexMcp } from './codex-mcp-candidate'
+import { containedPath, directoryNames, enabledPluginKeys, readJson } from './codex-resource-files'
+import { markResourceIdCollisions } from './codex-resource-collisions'
 import {
   candidateKey,
-  canonicalJson,
+  compareResourceVersions,
+  configuredSkillPaths,
+  discoveryErrorCode,
   hashValue,
   isRecord,
-  normalizeResourceId
+  mcpImportState,
+  normalizeResourceId,
+  safeResolveSecret,
+  skillDiscoveryError,
+  unavailableSkill,
+  unavailableMcp
 } from './codex-resource-values'
 
 type CandidateSource = CodexResourceCandidate['source']
-
 export type ResolvedCodexCandidate = ResolvedCodexSkill | ResolvedCodexMcp
 
 export type ResolvedCodexSkill = Readonly<{
@@ -36,6 +43,7 @@ export type CodexResourceDiscoveryOptions = Readonly<{
   environment?: Readonly<Record<string, string | undefined>>
   profiles?: Pick<ProfileCatalog, 'skills' | 'mcpServers'>
   localSettings?: MamLocalSettingsStore
+  localSecrets?: Readonly<{ resolveSecret(secretRef: string): string | undefined }>
 }>
 
 export class CodexResourceDiscovery {
@@ -58,6 +66,8 @@ export class CodexResourceDiscovery {
   private async discover(): Promise<ResolvedCodexCandidate[]> {
     const results: ResolvedCodexCandidate[] = []
     const seenSkillPaths = new Set<string>()
+    const config = await this.readConfig()
+    const disabledSkillPaths = configuredSkillPaths(config, this.codexHome, false)
     await this.discoverSkillRoot(
       join(this.codexHome, 'skills'),
       { kind: 'user', label: 'User Skills', path: join(this.codexHome, 'skills') },
@@ -75,10 +85,19 @@ export class CodexResourceDiscovery {
       results,
       seenSkillPaths
     )
-    const config = await this.readConfig()
+    for (let index = results.length - 1; index >= 0; index -= 1) {
+      const resource = results[index]!
+      if (
+        resource.kind === 'skill' &&
+        disabledSkillPaths.has(resolve(resource.package.canonicalPath))
+      ) {
+        results.splice(index, 1)
+      }
+    }
+    await this.discoverConfiguredSkills(config, results, seenSkillPaths)
     results.push(...this.configMcpCandidates(config))
     await this.discoverPlugins(config, results, seenSkillPaths)
-    return results.sort((left, right) =>
+    return markResourceIdCollisions(results).sort((left, right) =>
       `${left.candidate.kind}:${left.candidate.displayName}:${left.candidate.key}`.localeCompare(
         `${right.candidate.kind}:${right.candidate.displayName}:${right.candidate.key}`
       )
@@ -104,7 +123,7 @@ export class CodexResourceDiscovery {
         const validated = await validateSkillPackage(canonical)
         const resourceId = normalizeResourceId(validated.declaredId ?? validated.name, 'skill')
         const candidate = this.candidate({
-          key: candidateKey('skill', canonical),
+          key: candidateKey('skill', canonical, validated.contentDigest),
           kind: 'skill',
           resourceId,
           displayName: validated.name,
@@ -118,15 +137,19 @@ export class CodexResourceDiscovery {
         results.push({
           kind: 'skill',
           candidate: this.candidate({
-            key: candidateKey('skill', canonical),
+            key: candidateKey(
+              'skill',
+              canonical,
+              hashValue(`${canonical}:${discoveryErrorCode(error)}`)
+            ),
             kind: 'skill',
             resourceId: normalizeResourceId(entry.name, 'skill'),
             displayName: entry.name,
             source: { ...source, path: canonical },
-            fingerprint: hashValue(`${canonical}:${errorCode(error)}`),
+            fingerprint: hashValue(`${canonical}:${discoveryErrorCode(error)}`),
             importState: 'unavailable',
             requiredSecretNames: [],
-            unavailableReason: friendlyError(error)
+            unavailableReason: skillDiscoveryError(error)
           }),
           package: unavailableSkill(canonical, entry.name)
         })
@@ -143,41 +166,109 @@ export class CodexResourceDiscovery {
     const cache = join(this.codexHome, 'plugins', 'cache')
     for (const marketplace of await directoryNames(cache)) {
       for (const pluginName of await directoryNames(join(cache, marketplace))) {
-        if (enabled.size > 0 && !enabled.has(`${pluginName}@${marketplace}`)) continue
+        if (!enabled.has(`${pluginName}@${marketplace}`)) continue
         const versions = await directoryNames(join(cache, marketplace, pluginName))
-        const version = versions.sort(compareVersions).at(-1)
+        const version = versions.sort(compareResourceVersions).at(-1)
         if (!version) continue
         const root = join(cache, marketplace, pluginName, version)
-        const manifestPath = join(root, '.codex-plugin', 'plugin.json')
-        const manifest = await readJson(manifestPath)
-        if (!manifest) continue
-        const source = { kind: 'plugin' as const, label: `${pluginName}@${marketplace}`, path: root }
+        const source = {
+          kind: 'plugin' as const,
+          label: `${pluginName}@${marketplace}`,
+          path: root
+        }
+        const manifest = await readJson(join(root, '.codex-plugin', 'plugin.json'))
+        if (!manifest) {
+          results.push(
+            ...this.mcpCandidates(
+              unavailableMcp(pluginName, 'The plugin manifest could not be parsed.'),
+              source,
+              root
+            )
+          )
+          continue
+        }
         const skillRef = typeof manifest.skills === 'string' ? manifest.skills : undefined
         if (skillRef) {
           const skillRoot = containedPath(root, skillRef)
           await this.discoverSkillRoot(skillRoot, source, results, seen)
         }
-        const mcp = await readJson(join(root, 'desktop-mcp.json'))
-        results.push(...this.mcpCandidates(mcp?.mcpServers, source, root))
+        const mcpRef =
+          typeof manifest.mcpServers === 'string' ? manifest.mcpServers : 'desktop-mcp.json'
+        const mcp = await readJson(containedPath(root, mcpRef))
+        const servers =
+          mcp?.mcpServers ??
+          (typeof manifest.mcpServers === 'string'
+            ? unavailableMcp(pluginName, 'The plugin MCP manifest is unavailable.')
+            : undefined)
+        results.push(...this.mcpCandidates(servers, source, root))
       }
     }
+  }
+
+  private async discoverConfiguredSkills(
+    config: Record<string, unknown>,
+    results: ResolvedCodexCandidate[],
+    seen: Set<string>
+  ): Promise<void> {
+    if (!isRecord(config.skills) || !Array.isArray(config.skills.config)) return
+    for (const entry of config.skills.config) {
+      if (!isRecord(entry) || entry.enabled === false || typeof entry.path !== 'string') continue
+      const configuredPath = resolve(this.codexHome, entry.path)
+      const directory = configuredPath.toLowerCase().endsWith('skill.md')
+        ? resolve(configuredPath, '..')
+        : configuredPath
+      await this.discoverSingleSkill(
+        directory,
+        { kind: 'config', label: 'Codex config.toml', path: configuredPath },
+        results,
+        seen
+      )
+    }
+  }
+
+  private async discoverSingleSkill(
+    path: string,
+    source: CandidateSource,
+    results: ResolvedCodexCandidate[],
+    seen: Set<string>
+  ): Promise<void> {
+    const parent = resolve(path, '..')
+    const name = path.slice(parent.length).replace(/^[/\\]/, '')
+    await this.discoverSkillRoot(
+      parent,
+      source,
+      results,
+      seen,
+      new Set((await directoryNames(parent)).filter((entry) => entry !== name))
+    )
   }
 
   private async readConfig(): Promise<Record<string, unknown>> {
     try {
       const parsed = parseToml(await readFile(join(this.codexHome, 'config.toml'), 'utf8'))
       return isRecord(parsed) ? parsed : {}
-    } catch {
-      return {}
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return {}
+      return {
+        mcp_servers: {
+          'codex-config': {
+            __unavailable_reason: 'Codex config.toml could not be parsed.'
+          }
+        }
+      }
     }
   }
 
   private configMcpCandidates(config: Record<string, unknown>): ResolvedCodexMcp[] {
-    return this.mcpCandidates(config.mcp_servers, {
-      kind: 'config',
-      label: 'Codex config.toml',
-      path: join(this.codexHome, 'config.toml')
-    }, this.codexHome)
+    return this.mcpCandidates(
+      config.mcp_servers,
+      {
+        kind: 'config',
+        label: 'Codex config.toml',
+        path: join(this.codexHome, 'config.toml')
+      },
+      this.codexHome
+    )
   }
 
   private mcpCandidates(
@@ -190,7 +281,20 @@ export class CodexResourceDiscovery {
       source,
       baseDirectory,
       environment: this.environment,
-      importState: (profile, connection) => this.mcpImportState(profile, connection)
+      importState: (profile, connection, credentials, missingTargets) =>
+        mcpImportState({
+          profile,
+          connection,
+          credentials,
+          missingTargets,
+          active: this.options.profiles?.mcpServers.getActive(profile.id),
+          local: this.options.localSettings
+            ?.get()
+            .mcpConnections.find((item) => item.connectionRef === profile.connectionRef),
+          storedCredentials: profile.credentialRef
+            ? safeResolveSecret(this.options.localSecrets, profile.credentialRef)
+            : undefined
+        })
     })
   }
 
@@ -200,74 +304,7 @@ export class CodexResourceDiscovery {
     return active.contentDigest === digest ? 'current' : 'updated'
   }
 
-  private mcpImportState(
-    profile: Omit<McpServerProfile, 'version'>,
-    connection: McpLocalConnection
-  ): CodexResourceCandidate['importState'] {
-    const active = this.options.profiles?.mcpServers.getActive(profile.id)
-    if (!active) return 'new'
-    const { version: _version, ...activeContent } = active
-    const local = this.options.localSettings
-      ?.get()
-      .mcpConnections.find((item) => item.connectionRef === profile.connectionRef)
-    return canonicalJson(activeContent) === canonicalJson(profile) && canonicalJson(local) === canonicalJson(connection)
-      ? 'current'
-      : 'updated'
-  }
-
   private candidate(input: CodexResourceCandidate): CodexResourceCandidate {
     return CodexResourceCandidateSchema.parse(input)
   }
-}
-
-
-async function readJson(path: string): Promise<Record<string, unknown> | undefined> {
-  try {
-    const value: unknown = JSON.parse(await readFile(path, 'utf8'))
-    return isRecord(value) ? value : undefined
-  } catch {
-    return undefined
-  }
-}
-
-async function directoryNames(path: string): Promise<string[]> {
-  return (await readdir(path, { withFileTypes: true }).catch(() => []))
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-}
-
-function enabledPluginKeys(config: Record<string, unknown>): Set<string> {
-  if (!isRecord(config.plugins)) return new Set()
-  return new Set(
-    Object.entries(config.plugins)
-      .filter(([, value]) => !isRecord(value) || value.enabled !== false)
-      .map(([key]) => key)
-  )
-}
-
-function containedPath(root: string, child: string): string {
-  const target = resolve(root, child)
-  const traversal = relative(root, target)
-  if (traversal === '..' || traversal.startsWith(`..${sep}`) || isAbsolute(traversal)) {
-    throw new Error('plugin_path_escape')
-  }
-  return target
-}
-
-function compareVersions(left: string, right: string): number {
-  return left.localeCompare(right, undefined, { numeric: true })
-}
-
-function errorCode(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
-}
-
-function friendlyError(error: unknown): string {
-  const code = errorCode(error)
-  if (code.includes('missing_skill_md')) return 'SKILL.md is missing.'
-  return 'The Skill package could not be read.'
-}
-
-function unavailableSkill(path: string, name: string): ValidatedSkillPackage {
-  return { canonicalPath: path, name, description: '', contentDigest: hashValue(path) }
 }

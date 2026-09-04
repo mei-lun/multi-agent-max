@@ -1,8 +1,10 @@
 import { resolve } from 'node:path'
 import { loadSkills } from '@earendil-works/pi-coding-agent'
 import type { ResourceHealthResult } from '../../../shared/mam/resource-health'
-import type { McpLocalConnection, McpServerProfile } from '../../../shared/mam/domain/resource-profile'
-import type { EncryptedLocalSecretStore } from '../application/encrypted-local-secret-store'
+import type {
+  McpLocalConnection,
+  McpServerProfile
+} from '../../../shared/mam/domain/resource-profile'
 import { FileKnowledgeConnector } from '../gateways/file-knowledge-connector'
 import { resolveMcpConnection } from '../gateways/mcp-connection-resolver'
 import { McpSdkConnector } from '../gateways/mcp-sdk-connector'
@@ -22,7 +24,7 @@ type McpProbeResult = Readonly<{
 export type ResourceHealthCheckerOptions = Readonly<{
   profiles: ProfileCatalog
   localSettings: MamLocalSettingsStore
-  localSecrets: EncryptedLocalSecretStore
+  localSecrets: Readonly<{ resolveSecret(secretRef: string): string | undefined }>
   projectDirectory: string | (() => string)
   store: ResourceHealthStore
   now?: () => string
@@ -35,6 +37,12 @@ type Descriptor = Readonly<{
   version: number
   fingerprint: string
   check(): Promise<Omit<ResourceHealthResult, 'kind' | 'resourceId' | 'version' | 'fingerprint'>>
+}>
+
+type HealthCredential = Readonly<{
+  fingerprint: string
+  value?: string
+  error?: string
 }>
 
 export class ResourceHealthChecker {
@@ -83,9 +91,7 @@ export class ResourceHealthChecker {
         const connection = settings.mcpConnections.find(
           (item) => item.connectionRef === profile.connectionRef
         )
-        const secret = profile.credentialRef
-          ? this.options.localSecrets.resolveSecret(profile.credentialRef)
-          : undefined
+        const credential = this.readCredential(profile.credentialRef)
         return {
           kind: 'mcp',
           resourceId: profile.id,
@@ -93,9 +99,9 @@ export class ResourceHealthChecker {
           fingerprint: profileContentHash({
             profile,
             connection,
-            secretHash: secret ? profileContentHash(secret) : undefined
+            secretHash: credential.fingerprint
           }),
-          check: () => this.checkMcp(profile, settings.mcpConnections, secret)
+          check: () => this.checkMcp(profile, settings.mcpConnections, credential)
         }
       }),
       ...this.options.profiles.knowledgeBases.listActive().map((profile): Descriptor => {
@@ -143,17 +149,23 @@ export class ResourceHealthChecker {
   private async checkMcp(
     profile: McpServerProfile,
     connections: readonly McpLocalConnection[],
-    secret: string | undefined
+    credential: HealthCredential
   ): Promise<ReturnType<Descriptor['check']> extends Promise<infer T> ? T : never> {
     const checkedAt = this.now()
+    if (credential.error) {
+      return failure('invalid', checkedAt, 'mcp.credentials', credential.error)
+    }
     let connection: McpLocalConnection | undefined
     try {
       connection = resolveMcpConnection(
         profile,
         connections,
-        profile.credentialRef && secret ? { [profile.credentialRef]: secret } : {}
+        profile.credentialRef && credential.value
+          ? { [profile.credentialRef]: credential.value }
+          : {}
       )
-      if (!connection) return failure('invalid', checkedAt, 'mcp.connection', 'mcp_connection_missing')
+      if (!connection)
+        return failure('invalid', checkedAt, 'mcp.connection', 'mcp_connection_missing')
     } catch (error) {
       return failure('invalid', checkedAt, 'mcp.credentials', errorCode(error))
     }
@@ -162,6 +174,20 @@ export class ResourceHealthChecker {
       return { status: 'healthy', checkedAt, stage: 'mcp.capabilities' }
     } catch (error) {
       return failure('pi-incompatible', checkedAt, 'mcp.capabilities', errorCode(error))
+    }
+  }
+
+  private readCredential(secretRef: string | undefined): HealthCredential {
+    if (!secretRef) return { fingerprint: profileContentHash('none') }
+    try {
+      const value = this.options.localSecrets.resolveSecret(secretRef)
+      return {
+        fingerprint: profileContentHash(value ?? 'missing'),
+        ...(value ? { value } : {})
+      }
+    } catch (error) {
+      const code = errorCode(error)
+      return { fingerprint: profileContentHash(`unreadable:${code}`), error: code }
     }
   }
 
@@ -243,7 +269,12 @@ function healthKey(value: Pick<Descriptor, 'kind' | 'resourceId' | 'version'>): 
 }
 
 function isSearchResult(value: unknown): value is { matches: { documentRef: string }[] } {
-  return value !== null && typeof value === 'object' && 'matches' in value && Array.isArray(value.matches)
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    'matches' in value &&
+    Array.isArray(value.matches)
+  )
 }
 
 async function mapLimit<T, R>(

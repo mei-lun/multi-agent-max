@@ -31,10 +31,14 @@ export function MamResourcesPage({
   onCheckResourceHealth(): Promise<void>
 }>): React.JSX.Element {
   const [checking, setChecking] = useState(false)
+  const [checkError, setCheckError] = useState<string>()
   const checkAll = async (): Promise<void> => {
     setChecking(true)
+    setCheckError(undefined)
     try {
       await onCheckResourceHealth()
+    } catch (cause) {
+      setCheckError(cause instanceof Error ? cause.message : String(cause))
     } finally {
       setChecking(false)
     }
@@ -90,6 +94,11 @@ export function MamResourcesPage({
           />
         </div>
       </div>
+      {checkError && (
+        <p role="alert" className="text-sm text-destructive">
+          Resource health check failed: {checkError}
+        </p>
+      )}
       <ResourceSection title="Skill Registry" icon={PackageOpen} empty="No imported Skills">
         {snapshot.skills.map((skill) => (
           <ResourceCard
@@ -103,12 +112,7 @@ export function MamResourcesPage({
                 role.skillBindings.some((binding) => binding.skillId === skill.id)
               ).length
             }
-            health={resourceHealthView(
-              'skill',
-              skill.id,
-              skill.version,
-              snapshot.resourceHealth
-            )}
+            health={resourceHealthView('skill', skill.id, skill.version, snapshot.resourceHealth)}
             action={
               <MamProfileEditorDialog
                 kind="skill"
@@ -135,12 +139,7 @@ export function MamResourcesPage({
                 role.mcpBindings.some((binding) => binding.serverProfileId === server.id)
               ).length
             }
-            health={resourceHealthView(
-              'mcp',
-              server.id,
-              server.version,
-              snapshot.resourceHealth
-            )}
+            health={resourceHealthView('mcp', server.id, server.version, snapshot.resourceHealth)}
             action={
               <MamProfileEditorDialog
                 kind="mcp"

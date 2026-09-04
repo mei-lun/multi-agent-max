@@ -18,7 +18,8 @@ export function createDesktopResourceServices(input: {
 }) {
   const discovery = new CodexResourceDiscovery({
     profiles: input.profiles,
-    localSettings: input.localSettings
+    localSettings: input.localSettings,
+    localSecrets: input.localSecrets
   })
   const importer = new CodexResourceImporter({
     discovery,

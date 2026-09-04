@@ -24,6 +24,7 @@ export const ZH_CN_RESOURCE_MESSAGES: Readonly<Record<string, string>> = {
   'Select filtered resources': '选择筛选出的资源',
   'Scanning local Codex resources…': '正在扫描本地 Codex 资源…',
   'No matching resources': '没有匹配的资源',
+  'Resource health check failed:': '资源健康检查失败：',
   'Import package': '导入工作流包',
   'Export package': '导出工作流包',
   'Skill Registry': '技能注册表',

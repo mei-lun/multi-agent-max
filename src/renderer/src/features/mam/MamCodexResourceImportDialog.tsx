@@ -41,15 +41,21 @@ export function MamCodexResourceImportDialog({
     [candidates, kind, query]
   )
   const selectedCandidates = candidates.filter((candidate) => selected.has(candidate.key))
-  const requiredSecrets = [...new Set(selectedCandidates.flatMap((item) => item.requiredSecretNames))]
+  const requiredSecrets = selectedCandidates.flatMap((candidate) =>
+    candidate.requiredSecretNames.map((name) => ({ candidate, name }))
+  )
   const canSubmit =
-    selected.size > 0 && requiredSecrets.every((name) => Boolean(secrets[name]?.trim()))
+    selected.size > 0 &&
+    requiredSecrets.every(({ candidate, name }) =>
+      Boolean(secrets[secretInputKey(candidate, name)]?.trim())
+    )
 
   const changeOpen = (next: boolean): void => {
     setOpen(next)
     if (!next) return
     setLoading(true)
     setError(undefined)
+    setCandidates([])
     setSelected(new Set())
     setSecrets({})
     void onList()
@@ -104,21 +110,32 @@ export function MamCodexResourceImportDialog({
         {requiredSecrets.length > 0 && (
           <fieldset className="space-y-3 border-t border-border pt-4">
             <legend className="text-sm font-medium">Required MCP values</legend>
-            {requiredSecrets.map((name) => (
-              <label key={name} className="block space-y-1 text-xs">
-                <span className="font-mono">{name}</span>
-                <Input
-                  type="password"
-                  value={secrets[name] ?? ''}
-                  onChange={(event) => setSecrets({ ...secrets, [name]: event.target.value })}
-                />
-              </label>
-            ))}
+            {requiredSecrets.map(({ candidate, name }) => {
+              const key = secretInputKey(candidate, name)
+              return (
+                <label key={key} className="block space-y-1 text-xs">
+                  <span>
+                    {candidate.displayName} · <span className="font-mono">{name}</span>
+                  </span>
+                  <Input
+                    type="password"
+                    value={secrets[key] ?? ''}
+                    onChange={(event) => setSecrets({ ...secrets, [key]: event.target.value })}
+                  />
+                </label>
+              )
+            })}
           </fieldset>
         )}
-        {error && <p className="text-xs text-destructive" role="alert">{error}</p>}
+        {error && (
+          <p className="text-xs text-destructive" role="alert">
+            {error}
+          </p>
+        )}
         <DialogFooter>
-          <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+          <Button variant="ghost" onClick={() => setOpen(false)}>
+            Cancel
+          </Button>
           <Button disabled={loading || !canSubmit} onClick={() => void submit()}>
             {loading && <Loader2 className="animate-spin" />}
             {`Import selected (${selected.size})`}
@@ -150,7 +167,12 @@ function CandidatePicker({
     <div className="space-y-3">
       <div className="relative">
         <Search className="pointer-events-none absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
-        <Input className="pl-8" value={query} placeholder="Search resources" onChange={(event) => onQuery(event.target.value)} />
+        <Input
+          className="pl-8"
+          value={query}
+          placeholder="Search resources"
+          onChange={(event) => onQuery(event.target.value)}
+        />
       </div>
       <label className="flex items-center gap-2 text-xs font-medium">
         <Checkbox
@@ -167,28 +189,39 @@ function CandidatePicker({
           <p className="p-4 text-xs text-muted-foreground">Scanning local Codex resources…</p>
         ) : candidates.length === 0 ? (
           <p className="p-4 text-xs text-muted-foreground">No matching resources</p>
-        ) : candidates.map((candidate) => (
-          <label key={candidate.key} className="flex items-start gap-3 p-3">
-            <Checkbox
-              checked={selected.has(candidate.key)}
-              disabled={!isImportable(candidate)}
-              onCheckedChange={(checked) => {
-                const next = new Set(selected)
-                if (checked === true) next.add(candidate.key)
-                else next.delete(candidate.key)
-                onSelected(next)
-              }}
-            />
-            <span className="min-w-0 flex-1">
-              <span className="flex items-center justify-between gap-2 text-xs font-medium">
-                <span className="truncate">{candidate.displayName}</span>
-                <Badge variant="outline">{candidateStatus(candidate.importState)}</Badge>
+        ) : (
+          candidates.map((candidate) => (
+            <label key={candidate.key} className="flex items-start gap-3 p-3">
+              <Checkbox
+                checked={selected.has(candidate.key)}
+                disabled={!isImportable(candidate)}
+                onCheckedChange={(checked) => {
+                  const next = new Set(selected)
+                  if (checked === true) next.add(candidate.key)
+                  else next.delete(candidate.key)
+                  onSelected(next)
+                }}
+              />
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center justify-between gap-2 text-xs font-medium">
+                  <span className="truncate">{candidate.displayName}</span>
+                  <Badge variant="outline">{candidateStatus(candidate.importState)}</Badge>
+                </span>
+                <span className="mt-1 block truncate font-mono text-[11px] text-muted-foreground">
+                  {candidate.resourceId}
+                </span>
+                <span className="mt-1 block truncate text-[11px] text-muted-foreground">
+                  {candidate.source.label} · {candidate.source.path}
+                </span>
+                {candidate.unavailableReason && (
+                  <span className="mt-1 block text-[11px] text-destructive">
+                    {candidate.unavailableReason}
+                  </span>
+                )}
               </span>
-              <span className="mt-1 block truncate font-mono text-[11px] text-muted-foreground">{candidate.resourceId}</span>
-              <span className="mt-1 block truncate text-[11px] text-muted-foreground">{candidate.source.label} · {candidate.source.path}</span>
-            </span>
-          </label>
-        ))}
+            </label>
+          ))
+        )}
       </div>
     </div>
   )
@@ -200,8 +233,13 @@ export function filterCodexCandidates(
   query: string
 ): CodexResourceCandidate[] {
   const normalized = query.trim().toLocaleLowerCase()
-  return candidates.filter((candidate) =>
-    candidate.kind === kind && (!normalized || `${candidate.displayName} ${candidate.resourceId} ${candidate.source.label}`.toLocaleLowerCase().includes(normalized))
+  return candidates.filter(
+    (candidate) =>
+      candidate.kind === kind &&
+      (!normalized ||
+        `${candidate.displayName} ${candidate.resourceId} ${candidate.source.label} ${candidate.source.path}`
+          .toLocaleLowerCase()
+          .includes(normalized))
   )
 }
 
@@ -216,6 +254,10 @@ export function selectFilteredCandidates(
     else next.delete(candidate.key)
   }
   return next
+}
+
+export function secretInputKey(candidate: CodexResourceCandidate, name: string): string {
+  return `${candidate.key}:${name}`
 }
 
 function isImportable(candidate: CodexResourceCandidate): boolean {

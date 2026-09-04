@@ -49,7 +49,8 @@ export class CodexResourceImporter {
       this.stageProfiles(changed, targets)
       this.saveLocalState(changed)
       targets.forEach((target) => {
-        const registry = target.kind === 'skill' ? this.options.profiles.skills : this.options.profiles.mcpServers
+        const registry =
+          target.kind === 'skill' ? this.options.profiles.skills : this.options.profiles.mcpServers
         registry.activate(target.id, target.stagedVersion)
       })
       this.transaction.commit()
@@ -79,18 +80,23 @@ export class CodexResourceImporter {
     for (const resource of resources) {
       if (resource.kind !== 'mcp') continue
       for (const name of resource.candidate.requiredSecretNames) {
-        const value = supplied[name]
+        const value = supplied[`${resource.candidate.key}:${name}`]
         if (!value) throw new Error(`mam_import_missing_secret:${name}`)
         const target = resource.missingCredentialTargets[name]
         if (!target) throw new Error(`mam_import_secret_target_missing:${name}`)
-        if (target.kind === 'environment') resource.credentials.environment[target.key] = value
-        else resource.credentials.headers[target.key] = value
+        const resolvedValue = `${target.prefix ?? ''}${value}`
+        if (target.kind === 'environment') {
+          resource.credentials.environment[target.key] = resolvedValue
+        } else {
+          resource.credentials.headers[target.key] = resolvedValue
+        }
       }
     }
   }
 
   private targetFor(resource: ResolvedCodexCandidate) {
-    const registry = resource.kind === 'skill' ? this.options.profiles.skills : this.options.profiles.mcpServers
+    const registry =
+      resource.kind === 'skill' ? this.options.profiles.skills : this.options.profiles.mcpServers
     const previous = registry.getActive(resource.candidate.resourceId)
     const versions = registry.listVersions(resource.candidate.resourceId)
     return {
@@ -163,7 +169,11 @@ export class CodexResourceImporter {
       secretBindings: credentialRef
         ? [
             ...settings.secretBindings.filter((binding) => binding.secretRef !== credentialRef),
-            { id: credentialRef, secretRef: credentialRef, bindingIdentity: settings.bindingIdentity }
+            {
+              id: credentialRef,
+              secretRef: credentialRef,
+              bindingIdentity: settings.bindingIdentity
+            }
           ]
         : settings.secretBindings
     }

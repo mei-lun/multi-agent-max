@@ -1,6 +1,6 @@
 {
   "name": "multi-agent-max",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "Git-driven multi-agent workflow control plane",
   "type": "module",

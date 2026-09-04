@@ -74,6 +74,7 @@ describe('desktop seeded-project acceptance', () => {
     expect(result.stdout).toContain('"recoveryOriginalStatus":"blocked"')
     expect(result.stdout).toContain('"recoveryReplacementStatus":"recovery_planned"')
     expect(result.stdout).toContain('"savedWorkflowVersion":2')
+    expect(result.stdout).toContain('"resourceDiscoverySafe":true')
   })
 })
 
