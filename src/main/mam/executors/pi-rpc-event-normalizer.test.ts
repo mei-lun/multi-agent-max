@@ -12,6 +12,29 @@ afterEach(async () => {
 })
 
 describe('Pi RPC event normalization', () => {
+  it('keeps assistant failure diagnostics without retaining full message content', () => {
+    const event = normalizePiRpcEvent({
+      event: {
+        type: 'message_end',
+        message: {
+          role: 'assistant',
+          stopReason: 'error',
+          errorMessage: 'Request timed out. mam-canary-secret-provider',
+          content: [{ type: 'text', text: 'private document' }]
+        }
+      },
+      executorInvocationId: 'executor-invocation.1',
+      timestamp: '2026-09-13T00:00:00Z'
+    })
+    expect(event.payload.message).toEqual({
+      role: 'assistant',
+      stopReason: 'error',
+      errorMessage: 'Request timed out. [REDACTED]',
+      contentTypes: ['text']
+    })
+    expect(JSON.stringify(event)).not.toContain('private document')
+  })
+
   it('preserves unknown events while redacting event payloads and RPC logs', async () => {
     const root = await mkdtemp(join(tmpdir(), 'mam-pi-rpc-log-'))
     directories.push(root)

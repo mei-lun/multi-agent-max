@@ -10,6 +10,7 @@ export function normalizePiRpcEvent(input: {
   event: unknown
   executorInvocationId: string
   timestamp: string
+  secrets?: readonly string[]
 }): ExecutorEvent {
   const event = asRecord(compactPiRpcEvent(input.event))
   const sourceEventType = typeof event.type === 'string' ? event.type : 'unknown'
@@ -21,7 +22,7 @@ export function normalizePiRpcEvent(input: {
     executorKind: 'pi-rpc',
     executorInvocationId: input.executorInvocationId,
     sourceEventType,
-    payload: redactPiRpcValue(payload)
+    payload: redactPiRpcValue(payload, input.secrets)
   })
 }
 
@@ -50,6 +51,8 @@ export function compactPiRpcEvent(value: unknown): unknown {
       type,
       message: {
         role: message.role,
+        ...(typeof message.stopReason === 'string' ? { stopReason: message.stopReason } : {}),
+        ...(typeof message.errorMessage === 'string' ? { errorMessage: message.errorMessage } : {}),
         contentTypes: Array.isArray(message.content)
           ? message.content.map((item) => asRecord(item).type).filter(Boolean)
           : []

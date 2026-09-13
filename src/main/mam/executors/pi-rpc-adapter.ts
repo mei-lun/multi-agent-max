@@ -21,6 +21,7 @@ import { ExecutorLocalPreflight } from './executor-local-preflight'
 import { normalizePiRpcEvent, normalizePiRpcUsage } from './pi-rpc-event-normalizer'
 import { preparePiRpcInvocation, type PiRpcInvocation } from './pi-rpc-invocation'
 import { PiRpcLogWriter } from './pi-rpc-log-writer'
+import { PiRpcOutcome } from './pi-rpc-outcome'
 import type { ExecutorCapabilityBridge } from '../application/executor-capability-bridge'
 import { startPiApplicationApiBridge } from './pi-application-api-bridge-server'
 import { emitObservedExecutorEvent, type ExecutorEventListener } from './executor-event-listener'
@@ -111,10 +112,13 @@ export class PiRpcAdapter {
       )
       const client = await this.createClient(invocation.launchOptions)
       const events: ExecutorEvent[] = []
+      const outcome = new PiRpcOutcome(Object.values(input.credentialValues))
       const unsubscribe = client.onEvent((event) => {
+        outcome.observe(event)
         void logger.append('event', event).catch(() => undefined)
         const normalized = normalizePiRpcEvent({
           event,
+          secrets: Object.values(input.credentialValues),
           executorInvocationId: input.executorInvocationId,
           timestamp: this.now()
         })
@@ -132,6 +136,8 @@ export class PiRpcAdapter {
         const idle = client.waitForIdle(input.snapshot.budget.maxDurationSeconds * 1000)
         await client.prompt(workPrompt)
         await idle
+        const failure = outcome.getFailure()
+        if (failure) fail(failure.code, failure.message)
         const [resultText, stats] = await Promise.all([
           client.getLastAssistantText(),
           client.getSessionStats()

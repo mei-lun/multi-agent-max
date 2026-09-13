@@ -22,6 +22,85 @@ afterEach(async () => {
 })
 
 describe('PiRpcAdapter', () => {
+  it.each([
+    ['Request timed out.', 'executor_timeout'],
+    ['Provider rejected request plainCredentialForRegression123', 'executor_process_failed']
+  ])('rejects a settled model failure: %s', async (message, code) => {
+    const fixture = await createFixture()
+    const client = new OutcomePiClient([
+      {
+        type: 'message_end',
+        message: { role: 'assistant', stopReason: 'error', errorMessage: message }
+      },
+      { type: 'auto_retry_end', success: false, attempt: 3, finalError: message }
+    ])
+    const readResult = vi.spyOn(client, 'getLastAssistantText')
+    const adapter = new PiRpcAdapter(
+      () => client,
+      () => '2026-09-13T00:00:00Z',
+      readyPreflight()
+    )
+    const onEvent = vi.fn()
+
+    const error = await adapter
+      .execute({
+        ...executionInput(fixture),
+        credentialValues: { 'secret.provider': 'plainCredentialForRegression123' },
+        onEvent
+      })
+      .catch((cause) => cause)
+
+    expect(error).toMatchObject({ code })
+    expect(error.message).not.toContain('plainCredentialForRegression123')
+    expect(JSON.stringify(onEvent.mock.calls)).not.toContain('plainCredentialForRegression123')
+    expect(readResult).not.toHaveBeenCalled()
+    expect(client.stopped).toBe(true)
+    expect(onEvent.mock.calls.some(([event]) => event.type === 'invocation_completed')).toBe(false)
+  })
+
+  it('accepts a successful response after a transient Pi retry', async () => {
+    const fixture = await createFixture()
+    const client = new OutcomePiClient([
+      {
+        type: 'message_end',
+        message: { role: 'assistant', stopReason: 'error', errorMessage: 'Request timed out.' }
+      },
+      {
+        type: 'auto_retry_start',
+        attempt: 1,
+        maxAttempts: 3,
+        delayMs: 2000,
+        errorMessage: 'Request timed out.'
+      },
+      { type: 'message_end', message: { role: 'assistant', stopReason: 'stop' } },
+      { type: 'auto_retry_end', success: true, attempt: 1 }
+    ])
+    const adapter = new PiRpcAdapter(
+      () => client,
+      () => '2026-09-13T00:00:00Z',
+      readyPreflight()
+    )
+    await expect(adapter.execute(executionInput(fixture))).resolves.toMatchObject({
+      result: { status: 'submitted' }
+    })
+  })
+
+  it('rejects an aborted assistant response even when prior result text exists', async () => {
+    const fixture = await createFixture()
+    const client = new OutcomePiClient([
+      { type: 'message_end', message: { role: 'assistant', stopReason: 'aborted' } },
+      { type: 'auto_retry_end', success: true, attempt: 1 }
+    ])
+    const adapter = new PiRpcAdapter(
+      () => client,
+      () => '2026-09-13T00:00:00Z',
+      readyPreflight()
+    )
+    await expect(adapter.execute(executionInput(fixture))).rejects.toMatchObject({
+      code: 'executor_aborted'
+    })
+  })
+
   it('runs the official RPC client with isolated config and retains an optional standard result', async () => {
     const fixture = await createFixture()
     const clients: RpcClient[] = []
@@ -61,6 +140,8 @@ describe('PiRpcAdapter', () => {
     expect(started?.payload.environmentKeys).toContain('MAM_PI_PROVIDER_KEY')
     expect(started?.payload.environmentKeys).not.toContain('HOME')
     expect(started?.payload.environmentKeys).not.toContain('MAM_PI_EXECUTABLE')
+    expect(started?.payload.environmentKeys).not.toContain('MAM_PI_NODE_EXECUTABLE')
+    expect(execution.invocation.launchOptions.env?.MAM_PI_NODE_EXECUTABLE).toBe(process.execPath)
     expect(execution.invocation.launchOptions.args).toContain('--no-extensions')
     expect(execution.invocation.launchOptions.args).not.toContain('--extension')
     expect(execution.invocation.launchOptions.args).toContain('--tools')
@@ -256,6 +337,17 @@ class ControllablePiClient implements PiRpcClient {
 
   getStderr(): string {
     return ''
+  }
+}
+
+class OutcomePiClient extends ControllablePiClient {
+  constructor(private readonly events: readonly unknown[]) {
+    super(JSON.stringify(agentPayload()))
+  }
+
+  override async prompt(): Promise<void> {
+    for (const event of this.events) this.emitForTest(event as never)
+    await super.prompt()
   }
 }
 

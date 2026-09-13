@@ -63,7 +63,8 @@ describe('Pi RPC real process', () => {
       expect(execution.stderr).not.toContain('Failed to load extension')
     } finally {
       await provider.stop()
-      await rm(root, { recursive: true, force: true })
+      // Windows can retain the child's working directory briefly after process exit.
+      await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
     }
   }, 30_000)
 })

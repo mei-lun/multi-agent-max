@@ -137,6 +137,7 @@ export async function preparePiRpcInvocation(input: {
       env: {
         ...piEnvironment,
         MAM_PI_EXECUTABLE: binding.executablePath,
+        MAM_PI_NODE_EXECUTABLE: process.execPath,
         MAM_PI_ENVIRONMENT_KEYS: JSON.stringify(Object.keys(piEnvironment))
       },
       provider: snapshot.providerProfile.id,
