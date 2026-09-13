@@ -12,6 +12,7 @@ export function ensureBuiltinPiProfile(
   configRoot: string
 ): void {
   if (!catalog.executors.getActive(BUILTIN_PI_EXECUTOR_ID)) {
+    if (catalog.executors.listVersions(BUILTIN_PI_EXECUTOR_ID).length > 0) return
     catalog.executors.save({
       id: BUILTIN_PI_EXECUTOR_ID,
       version: 1,

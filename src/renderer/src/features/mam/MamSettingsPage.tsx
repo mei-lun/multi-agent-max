@@ -5,6 +5,8 @@ import type {
   MamSaveModelConnectionInput,
   MamSaveProfileInput
 } from '../../../../shared/mam/application-command'
+import type { MamDeleteExecutionProfileInput } from '../../../../shared/mam/application-command'
+import { MamDeleteExecutionProfileDialog } from './MamDeleteExecutionProfileDialog'
 import type {
   MamFetchModelCatalogInput,
   MamModelCatalogResult
@@ -29,6 +31,7 @@ export function MamSettingsPage({
   snapshot,
   pending,
   onSaveProfile,
+  onDeleteExecutionProfile,
   onSaveLocalSettings,
   onSaveModelConnection,
   onFetchModelCatalog,
@@ -37,6 +40,7 @@ export function MamSettingsPage({
   snapshot: MamUiSnapshot
   pending: boolean
   onSaveProfile(input: MamSaveProfileInput): Promise<void>
+  onDeleteExecutionProfile(input: MamDeleteExecutionProfileInput): Promise<void>
   onSaveLocalSettings(input: MamSaveLocalSettingsInput): Promise<void>
   onSaveModelConnection(input: MamSaveModelConnectionInput): Promise<void>
   onFetchModelCatalog(input: MamFetchModelCatalogInput): Promise<MamModelCatalogResult>
@@ -68,6 +72,15 @@ export function MamSettingsPage({
             <SettingsProfileCard
               key={profile.id}
               title={profile.kind}
+              remove={
+                <MamDeleteExecutionProfileDialog
+                  input={{ kind: 'executor', profileId: profile.id }}
+                  name={profile.kind}
+                  snapshot={snapshot}
+                  pending={pending}
+                  onDelete={onDeleteExecutionProfile}
+                />
+              }
               detail={profile.executableRef}
               profile={profile}
               action={
@@ -88,6 +101,15 @@ export function MamSettingsPage({
             <SettingsProfileCard
               key={profile.id}
               title={profile.protocol}
+              remove={
+                <MamDeleteExecutionProfileDialog
+                  input={{ kind: 'provider', profileId: profile.id }}
+                  name={profile.id}
+                  snapshot={snapshot}
+                  pending={pending}
+                  onDelete={onDeleteExecutionProfile}
+                />
+              }
               detail={profile.baseUrl ?? 'Executor-native endpoint'}
               profile={profile}
               action={
@@ -108,6 +130,15 @@ export function MamSettingsPage({
             <SettingsProfileCard
               key={profile.id}
               title={profile.displayName}
+              remove={
+                <MamDeleteExecutionProfileDialog
+                  input={{ kind: 'model', profileId: profile.id }}
+                  name={profile.displayName}
+                  snapshot={snapshot}
+                  pending={pending}
+                  onDelete={onDeleteExecutionProfile}
+                />
+              }
               detail={profile.remoteModelId}
               profile={profile}
               action={
@@ -241,12 +272,14 @@ function SettingsProfileCard({
   title,
   detail,
   profile,
-  action
+  action,
+  remove
 }: Readonly<{
   title: string
   detail: string
   profile: Readonly<{ id: string; version: number }>
   action: React.ReactNode
+  remove: React.ReactNode
 }>): React.JSX.Element {
   return (
     <article className="rounded-xl border border-border bg-card p-3">
@@ -258,7 +291,10 @@ function SettingsProfileCard({
         <Badge variant="outline">v{profile.version}</Badge>
       </div>
       <p className="mt-2 truncate text-xs text-muted-foreground">{detail}</p>
-      <div className="mt-3 flex justify-end border-t border-border pt-2">{action}</div>
+      <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-border pt-2">
+        {action}
+        {remove}
+      </div>
     </article>
   )
 }

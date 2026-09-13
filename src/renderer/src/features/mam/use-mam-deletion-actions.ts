@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 import type {
   MamDeleteRoleProfileInput,
+  MamDeleteExecutionProfileInput,
   MamDeleteWorkflowInput
 } from '../../../../shared/mam/application-command'
 import { getMamRendererApi } from '../../renderer-api'
@@ -22,5 +23,10 @@ export function useMamDeletionActions(applyChange: ApplyChange) {
       applyChange(() => getMamRendererApi().deleteWorkflow(input), options),
     [applyChange]
   )
-  return { deleteRoleProfile, deleteWorkflow }
+  const deleteExecutionProfile = useCallback(
+    (input: MamDeleteExecutionProfileInput) =>
+      applyChange(() => getMamRendererApi().deleteExecutionProfile(input), options),
+    [applyChange]
+  )
+  return { deleteRoleProfile, deleteWorkflow, deleteExecutionProfile }
 }

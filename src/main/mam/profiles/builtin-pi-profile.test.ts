@@ -32,6 +32,11 @@ describe('built-in Pi profile', () => {
     expect(binding?.executorProfileId).toBe(BUILTIN_PI_EXECUTOR_ID)
     expect(binding?.configRoot).toBe(configRoot)
     expect(isAbsolute(binding?.executablePath ?? '')).toBe(true)
+    catalog.executors.deactivate(BUILTIN_PI_EXECUTOR_ID)
+    ensureBuiltinPiProfile(catalog, settings, configRoot)
+    expect(catalog.executors.getActive(BUILTIN_PI_EXECUTOR_ID)).toBeUndefined()
+    expect(catalog.executors.listVersions(BUILTIN_PI_EXECUTOR_ID)).toHaveLength(1)
+    expect(settings.get().executorBindings[0]).toEqual(binding)
   })
 
   it('repairs a stale built-in binding after switching to development', () => {

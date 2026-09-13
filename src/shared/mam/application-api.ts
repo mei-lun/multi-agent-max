@@ -16,6 +16,7 @@ import type {
   MamSaveLocalSettingsInput,
   MamSaveModelConnectionInput,
   MamDeleteRoleProfileInput,
+  MamDeleteExecutionProfileInput,
   MamDeleteWorkflowInput,
   MamExportWorkflowPackageInput,
   MamSaveProfileInput,
@@ -66,6 +67,7 @@ export const MAM_SAVE_LOCAL_SETTINGS_CHANNEL = 'mam:save-local-settings'
 export const MAM_SAVE_MODEL_CONNECTION_CHANNEL = 'mam:save-model-connection'
 export const MAM_FETCH_MODEL_CATALOG_CHANNEL = 'mam:fetch-model-catalog'
 export const MAM_DELETE_ROLE_PROFILE_CHANNEL = 'mam:delete-role-profile'
+export const MAM_DELETE_EXECUTION_PROFILE_CHANNEL = 'mam:delete-execution-profile'
 export const MAM_DELETE_WORKFLOW_CHANNEL = 'mam:delete-workflow'
 export const MAM_IMPORT_WORKFLOW_PACKAGE_CHANNEL = 'mam:import-workflow-package'
 export const MAM_EXPORT_WORKFLOW_PACKAGE_CHANNEL = 'mam:export-workflow-package'
@@ -111,6 +113,7 @@ export type MamRendererApi = Readonly<{
   saveModelConnection(input: MamSaveModelConnectionInput): Promise<MamUiSnapshot>
   fetchModelCatalog(input: MamFetchModelCatalogInput): Promise<MamModelCatalogResult>
   deleteRoleProfile(input: MamDeleteRoleProfileInput): Promise<MamUiSnapshot>
+  deleteExecutionProfile(input: MamDeleteExecutionProfileInput): Promise<MamUiSnapshot>
   deleteWorkflow(input: MamDeleteWorkflowInput): Promise<MamUiSnapshot>
   importWorkflowPackage(): Promise<MamUiSnapshot | undefined>
   exportWorkflowPackage(input: MamExportWorkflowPackageInput): Promise<string | undefined>

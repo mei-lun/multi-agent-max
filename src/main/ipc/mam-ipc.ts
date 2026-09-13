@@ -1,4 +1,5 @@
-import { ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
+import { mamIpcRequestHandler } from './mam-ipc-request-handler'
+import { ipcMain, type BrowserWindow } from 'electron'
 import type { MamUiQueryService } from '../mam/application/mam-ui-query-service'
 import type { MamUiCommandService } from '../mam/application/mam-ui-command-service'
 import type { MamWorkflowRunCommandService } from '../mam/application/mam-workflow-run-command-service'
@@ -32,6 +33,7 @@ import {
   MAM_SAVE_MODEL_CONNECTION_CHANNEL,
   MAM_FETCH_MODEL_CATALOG_CHANNEL,
   MAM_DELETE_ROLE_PROFILE_CHANNEL,
+  MAM_DELETE_EXECUTION_PROFILE_CHANNEL,
   MAM_DELETE_WORKFLOW_CHANNEL,
   MAM_IMPORT_WORKFLOW_PACKAGE_CHANNEL,
   MAM_EXPORT_WORKFLOW_PACKAGE_CHANNEL,
@@ -70,27 +72,7 @@ export function registerMamIpc(
   resourceOperations: MamResourceOperations,
   runtimeLogger?: DesktopRuntimeLogger
 ): () => void {
-  const handle = (
-    channel: string,
-    callback: (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown | Promise<unknown>
-  ): void => {
-    ipcMain.handle(channel, async (event, ...args) => {
-      const startedAt = Date.now()
-      runtimeLogger?.record('ipc', 'request', { channel })
-      try {
-        const result = await callback(event, ...args)
-        runtimeLogger?.record('ipc', 'complete', { channel, durationMs: Date.now() - startedAt })
-        return result
-      } catch (error) {
-        runtimeLogger?.record('ipc', 'error', {
-          channel,
-          durationMs: Date.now() - startedAt,
-          error: error instanceof Error ? error.message : String(error)
-        })
-        throw error
-      }
-    })
-  }
+  const handle = mamIpcRequestHandler(runtimeLogger)
 
   handle(MAM_GET_UI_SNAPSHOT_CHANNEL, (event) => {
     assertTrustedRenderer(event, window)
@@ -224,14 +206,18 @@ export function registerMamIpc(
     assertTrustedRenderer(event, window)
     return commands.fetchModelCatalog(input)
   })
-  handle(MAM_DELETE_ROLE_PROFILE_CHANNEL, (event, input: unknown) => {
-    assertTrustedRenderer(event, window)
-    return commands.deleteRoleProfile(input)
-  })
-  handle(MAM_DELETE_WORKFLOW_CHANNEL, (event, input: unknown) => {
-    assertTrustedRenderer(event, window)
-    return commands.deleteWorkflow(input)
-  })
+  const deletions = {
+    [MAM_DELETE_ROLE_PROFILE_CHANNEL]: (input: unknown) => commands.deleteRoleProfile(input),
+    [MAM_DELETE_EXECUTION_PROFILE_CHANNEL]: (input: unknown) =>
+      commands.deleteExecutionProfile(input),
+    [MAM_DELETE_WORKFLOW_CHANNEL]: (input: unknown) => commands.deleteWorkflow(input)
+  }
+  for (const [channel, remove] of Object.entries(deletions)) {
+    handle(channel, (event, input: unknown) => {
+      assertTrustedRenderer(event, window)
+      return remove(input)
+    })
+  }
   handle(MAM_IMPORT_WORKFLOW_PACKAGE_CHANNEL, (event) => {
     assertTrustedRenderer(event, window)
     return importWorkflowPackage()
@@ -288,6 +274,7 @@ export function registerMamIpc(
     ipcMain.removeHandler(MAM_SAVE_MODEL_CONNECTION_CHANNEL)
     ipcMain.removeHandler(MAM_FETCH_MODEL_CATALOG_CHANNEL)
     ipcMain.removeHandler(MAM_DELETE_ROLE_PROFILE_CHANNEL)
+    ipcMain.removeHandler(MAM_DELETE_EXECUTION_PROFILE_CHANNEL)
     ipcMain.removeHandler(MAM_DELETE_WORKFLOW_CHANNEL)
     ipcMain.removeHandler(MAM_IMPORT_WORKFLOW_PACKAGE_CHANNEL)
     ipcMain.removeHandler(MAM_EXPORT_WORKFLOW_PACKAGE_CHANNEL)

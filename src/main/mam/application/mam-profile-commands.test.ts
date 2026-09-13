@@ -1,7 +1,7 @@
 import { mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ProfileCatalog } from '../profiles/profile-catalog'
 import { MamLocalSettingsStore } from '../profiles/mam-local-settings-store'
 import { MamUiCommandService } from './mam-ui-command-service'
@@ -99,6 +99,44 @@ describe('MAM Profile Application commands', () => {
     })
     expect(savedSecrets.get(provider.secretRef!)).toBe('sk-local-test-value')
     expect(JSON.stringify(afterConnection)).not.toContain('sk-local-test-value')
+    expect(() =>
+      service.deleteExecutionProfile({ kind: 'provider', profileId: provider.id })
+    ).toThrow('Profile is still used by')
+    const modelId = afterConnection.models[0]!.id
+    expect(service.deleteExecutionProfile({ kind: 'model', profileId: modelId }).models).toEqual([])
+    expect(profiles.models.listVersions(modelId)).toHaveLength(1)
+    expect(
+      service.deleteExecutionProfile({ kind: 'provider', profileId: provider.id }).providers
+    ).toEqual([])
+    expect(profiles.providers.listVersions(provider.id)).toHaveLength(1)
+    expect(savedSecrets.get(provider.secretRef!)).toBe('sk-local-test-value')
+    service.saveProfile({ kind: 'role', profile: { ...roleProfile(), version: 2 } })
+    expect(() =>
+      service.deleteExecutionProfile({ kind: 'executor', profileId: 'executor.codex' })
+    ).toThrow('Profile is still used by')
+    service.deleteRoleProfile({ roleProfileId: 'role.requirements' })
+    const currentSnapshot = query.getSnapshot()
+    const frozenSnapshot = {
+      ...currentSnapshot,
+      runs: [
+        {
+          run: { status: 'running' },
+          roleProfiles: [roleProfile()]
+        }
+      ]
+    } as unknown as ReturnType<typeof query.getSnapshot>
+    const snapshotSpy = vi.spyOn(query, 'getSnapshot').mockReturnValue(frozenSnapshot)
+    expect(() =>
+      service.deleteExecutionProfile({ kind: 'executor', profileId: 'executor.codex' })
+    ).toThrow('Profile is still used by')
+    snapshotSpy.mockRestore()
+    expect(
+      service.deleteExecutionProfile({ kind: 'executor', profileId: 'executor.codex' }).executors
+    ).toEqual([])
+    expect(profiles.executors.listVersions('executor.codex')).toHaveLength(1)
+    expect(() =>
+      service.deleteExecutionProfile({ kind: 'role', profileId: 'role.requirements' })
+    ).toThrow()
 
     const skillDirectory = join(root, 'skill-package')
     mkdirSync(skillDirectory)

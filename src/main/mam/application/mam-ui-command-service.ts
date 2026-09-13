@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto'
+import { saveCatalogProfile } from './profile-save-command'
 import {
   MamAssignTaskInputSchema,
   MamRecoverAttemptInputSchema,
   MamReassignTaskInputSchema,
   MamSaveLocalSettingsInputSchema,
-  MamSaveProfileInputSchema,
   MamSelectAttemptInputSchema,
   MamSaveWorkflowInputSchema
 } from '../../../shared/mam/application-command'
@@ -33,6 +33,7 @@ import {
 } from './workflow-package-command'
 import {
   deactivateRoleProfile,
+  deactivateExecutionProfile,
   deactivateWorkflow as deactivateWorkflowProfile
 } from './profile-deactivation-command'
 import { MamHumanAttentionUiCommands } from './mam-human-attention-ui-commands'
@@ -206,18 +207,7 @@ export class MamUiCommandService extends MamHumanAttentionUiCommands {
   }
 
   saveProfile(input: unknown): MamUiSnapshot {
-    const parsed = MamSaveProfileInputSchema.parse(input)
-    const profiles = this.requireProfiles()
-    const registries = {
-      role: profiles.roles,
-      executor: profiles.executors,
-      provider: profiles.providers,
-      model: profiles.models,
-      skill: profiles.skills,
-      mcp: profiles.mcpServers,
-      knowledge: profiles.knowledgeBases
-    } as const
-    registries[parsed.kind].save(parsed.profile)
+    saveCatalogProfile(input, this.requireProfiles())
     return this.query.getSnapshot()
   }
 
@@ -248,6 +238,16 @@ export class MamUiCommandService extends MamHumanAttentionUiCommands {
 
   deleteRoleProfile(input: unknown): MamUiSnapshot {
     deactivateRoleProfile(input, this.requireProfiles(), makeMamUiCommandError)
+    return this.query.getSnapshot()
+  }
+
+  deleteExecutionProfile(input: unknown): MamUiSnapshot {
+    deactivateExecutionProfile(
+      input,
+      this.requireProfiles(),
+      this.query.getSnapshot(),
+      makeMamUiCommandError
+    )
     return this.query.getSnapshot()
   }
 

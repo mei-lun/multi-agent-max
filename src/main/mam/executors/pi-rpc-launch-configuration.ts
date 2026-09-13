@@ -1,4 +1,5 @@
 import type { EffectiveRoleConfigSnapshot } from '../../../shared/mam/domain/role'
+import type { ProviderProtocol } from '../../../shared/mam/domain/execution-profile'
 
 export function piModels(snapshot: EffectiveRoleConfigSnapshot): Record<string, unknown> {
   const secretEnvironmentKey = snapshot.execution.providerSecretRef
@@ -8,8 +9,17 @@ export function piModels(snapshot: EffectiveRoleConfigSnapshot): Record<string, 
     providers: {
       [snapshot.providerProfile.id]: {
         api: snapshot.execution.providerProtocol,
+        // Identify the host app: some compatible gateways reject the SDK's default User-Agent.
+        ...(['openai-responses', 'openai-completions'].includes(snapshot.execution.providerProtocol)
+          ? { headers: { 'User-Agent': 'Multi-Agent-Max' } }
+          : {}),
         ...(snapshot.execution.providerBaseUrl
-          ? { baseUrl: snapshot.execution.providerBaseUrl }
+          ? {
+              baseUrl: piProviderBaseUrl(
+                snapshot.execution.providerProtocol,
+                snapshot.execution.providerBaseUrl
+              )
+            }
           : {}),
         ...(secretEnvironmentKey ? { apiKey: `$${secretEnvironmentKey}` } : {}),
         models: [
@@ -23,6 +33,16 @@ export function piModels(snapshot: EffectiveRoleConfigSnapshot): Record<string, 
       }
     }
   }
+}
+
+export function piProviderBaseUrl(protocol: ProviderProtocol, configured: string): string {
+  if (protocol !== 'openai-responses' && protocol !== 'openai-completions') return configured
+  const base = new URL(configured)
+  const suffix = protocol === 'openai-responses' ? '/responses' : '/chat/completions'
+  const path = base.pathname.replace(/\/+$/, '')
+  // Pi's SDK appends the operation path; bare origins use the same /v1 default as Design.
+  base.pathname = path.endsWith(suffix) ? path.slice(0, -suffix.length) || '/' : path || '/v1'
+  return base.toString().replace(/\/$/, '')
 }
 
 export function piArguments(

@@ -243,7 +243,8 @@ export function useMamSnapshot(): MamSnapshotState {
     (input: MamFetchModelCatalogInput) => getMamRendererApi().fetchModelCatalog(input),
     []
   )
-  const { deleteRoleProfile, deleteWorkflow } = useMamDeletionActions(applyAuthoritativeChange)
+  const { deleteRoleProfile, deleteWorkflow, deleteExecutionProfile } =
+    useMamDeletionActions(applyAuthoritativeChange)
   const { importSkill, importWorkflowPackage, exportWorkflowPackage } =
     useMamPackageActions(applyAuthoritativeChange)
   const exportDiagnostics = useCallback(() => getMamRendererApi().exportDiagnostics(), [])
@@ -287,6 +288,7 @@ export function useMamSnapshot(): MamSnapshotState {
     saveModelConnection,
     fetchModelCatalog,
     deleteRoleProfile,
+    deleteExecutionProfile,
     deleteWorkflow,
     importSkill,
     ...resourceActions,

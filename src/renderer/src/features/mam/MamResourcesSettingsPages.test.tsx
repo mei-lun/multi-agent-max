@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { MamResourcesPage } from './MamResourcesPage'
 import { MamSettingsPage } from './MamSettingsPage'
+import { TooltipProvider } from '../../components/ui/tooltip'
 import { mamUiSnapshotFixture } from './mam-renderer-snapshot-fixture'
 
 describe('MAM Resources and Settings pages', () => {
@@ -43,15 +44,18 @@ describe('MAM Resources and Settings pages', () => {
       />
     )
     const settings = renderToStaticMarkup(
-      <MamSettingsPage
-        snapshot={snapshot}
-        pending={false}
-        onSaveProfile={async () => undefined}
-        onSaveModelConnection={async () => undefined}
-        onFetchModelCatalog={async () => ({ models: [] })}
-        onSaveLocalSettings={async () => undefined}
-        onExportDiagnostics={async () => undefined}
-      />
+      <TooltipProvider>
+        <MamSettingsPage
+          onDeleteExecutionProfile={async () => undefined}
+          snapshot={snapshot}
+          pending={false}
+          onSaveProfile={async () => undefined}
+          onSaveModelConnection={async () => undefined}
+          onFetchModelCatalog={async () => ({ models: [] })}
+          onSaveLocalSettings={async () => undefined}
+          onExportDiagnostics={async () => undefined}
+        />
+      </TooltipProvider>
     )
     expect(resources).toContain('Import Skill')
     expect(resources).toContain('Import from Codex')
@@ -68,6 +72,8 @@ describe('MAM Resources and Settings pages', () => {
     expect(settings).toContain('MAM_SECRET_SECRET_OPENAI')
     expect(settings).toContain('Advanced local JSON')
     expect(settings).toContain('executor.codex')
+    expect(settings).toContain('Delete profile: codex-cli')
+    expect(settings).toContain('Delete profile: provider.openai')
     expect(settings).toContain('Export diagnostics')
   })
 })

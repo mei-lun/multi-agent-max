@@ -260,6 +260,7 @@ export function App(): React.JSX.Element {
                 onGetAttemptDiff={state.getAttemptDiff}
                 onSaveProfile={state.saveProfile}
                 onDeleteRoleProfile={state.deleteRoleProfile}
+                onDeleteExecutionProfile={state.deleteExecutionProfile}
                 onImportWorkflowPackage={state.importWorkflowPackage}
                 onExportWorkflowPackage={state.exportWorkflowPackage}
                 onDeleteWorkflow={state.deleteWorkflow}
@@ -340,6 +341,7 @@ function ActivePage({
   onSelectAttempt,
   onGetAttemptDiff,
   onSaveProfile,
+  onDeleteExecutionProfile,
   onDeleteRoleProfile,
   onImportWorkflowPackage,
   onExportWorkflowPackage,
@@ -388,6 +390,7 @@ function ActivePage({
   onSelectAttempt: ReturnType<typeof useMamSnapshot>['selectAttempt']
   onGetAttemptDiff: ReturnType<typeof useMamSnapshot>['getAttemptDiff']
   onSaveProfile: ReturnType<typeof useMamSnapshot>['saveProfile']
+  onDeleteExecutionProfile: ReturnType<typeof useMamSnapshot>['deleteExecutionProfile']
   onDeleteRoleProfile: ReturnType<typeof useMamSnapshot>['deleteRoleProfile']
   onImportWorkflowPackage: ReturnType<typeof useMamSnapshot>['importWorkflowPackage']
   onExportWorkflowPackage: ReturnType<typeof useMamSnapshot>['exportWorkflowPackage']
@@ -548,6 +551,7 @@ function ActivePage({
   if (page === 'settings') {
     return (
       <MamSettingsPage
+        onDeleteExecutionProfile={onDeleteExecutionProfile}
         snapshot={snapshot}
         pending={pending}
         onSaveProfile={onSaveProfile}

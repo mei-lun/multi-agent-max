@@ -1,4 +1,4 @@
-import { createServer, type Server } from 'node:http'
+import { createServer, type Server, type ServerResponse } from 'node:http'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -13,60 +13,75 @@ import { profileContentHash } from '../profiles/profile-content-hash'
 import { PiRpcAdapter } from './pi-rpc-adapter'
 import type { ExecutorCapabilityBridge } from '../application/executor-capability-bridge'
 
-describe('Pi RPC real process', () => {
-  it('runs the installed Pi CLI against a local provider through the standard Result API', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'mam-pi-real-process-'))
-    const provider = await startProvider()
-    try {
-      const snapshot = effectiveSnapshot(provider.baseUrl)
-      const adapter = new PiRpcAdapter()
-      const execute = vi.fn(async () => ({ matches: [] }))
-      const execution = await adapter.execute({
-        profile: executorProfile(),
-        binding: executorBinding(root),
-        snapshot,
-        resources: resources(root, snapshot),
-        executorInvocationId: 'executor-invocation.real-pi',
-        workspacePath: root,
-        systemPrompt: 'Return the exact structured JSON requested by the caller.',
-        prompt: 'Complete the local integration task.',
-        credentialValues: { 'secret.provider': 'mam-canary-secret-real-process' },
-        capabilityBridge: { execute } as unknown as ExecutorCapabilityBridge,
-        authority: {
-          workflowRunId: snapshot.workflowRunId,
-          nodeRunId: 'node-run.real-pi',
-          taskId: snapshot.taskId,
-          attemptId: snapshot.attemptId,
-          roleInstanceId: 'role-instance.real-pi',
-          executorInvocationId: 'replaced',
-          effectiveConfigHash: 'b'.repeat(64),
-          createdAt: '2026-07-28T08:20:00Z'
-        }
-      })
+type TestProtocol = 'openai-completions' | 'openai-responses'
 
-      expect(execution.result).toMatchObject({
-        status: 'submitted',
-        summary: 'Local Pi RPC integration completed.',
-        system: { executorInvocationId: 'executor-invocation.real-pi' }
-      })
-      expect(execution.events.some((event) => event.sourceEventType === 'agent_settled')).toBe(true)
-      expect(provider.requestCount()).toBeGreaterThanOrEqual(2)
-      expect(execute).toHaveBeenCalledWith({
-        method: 'knowledge.search',
-        request: {
-          knowledgeBaseProfileId: 'knowledge.real-pi',
-          query: 'requirements'
-        }
-      })
-      expect(execution.stderr).not.toContain('mam-canary-secret')
-      expect(execution.invocation.launchOptions.args).toContain('--extension')
-      expect(execution.stderr).not.toContain('Failed to load extension')
-    } finally {
-      await provider.stop()
-      // Windows can retain the child's working directory briefly after process exit.
-      await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
-    }
-  }, 30_000)
+describe('Pi RPC real process', () => {
+  it.each([
+    ['openai-completions', ''],
+    ['openai-completions', '/v1'],
+    ['openai-completions', '/v1/chat/completions'],
+    ['openai-responses', ''],
+    ['openai-responses', '/v1'],
+    ['openai-responses', '/v1/responses']
+  ] as const)(
+    'runs the installed Pi CLI using %s with path "%s" through the standard Result API',
+    async (protocol, providerPath) => {
+      const root = await mkdtemp(join(tmpdir(), 'mam-pi-real-process-'))
+      const provider = await startProvider(protocol)
+      try {
+        const snapshot = effectiveSnapshot(`${provider.baseUrl}${providerPath}`, protocol)
+        const adapter = new PiRpcAdapter()
+        const execute = vi.fn(async () => ({ matches: [] }))
+        const execution = await adapter.execute({
+          profile: executorProfile(),
+          binding: executorBinding(root),
+          snapshot,
+          resources: resources(root, snapshot),
+          executorInvocationId: 'executor-invocation.real-pi',
+          workspacePath: root,
+          systemPrompt: 'Return the exact structured JSON requested by the caller.',
+          prompt: 'Complete the local integration task.',
+          credentialValues: { 'secret.provider': 'mam-canary-secret-real-process' },
+          capabilityBridge: { execute } as unknown as ExecutorCapabilityBridge,
+          authority: {
+            workflowRunId: snapshot.workflowRunId,
+            nodeRunId: 'node-run.real-pi',
+            taskId: snapshot.taskId,
+            attemptId: snapshot.attemptId,
+            roleInstanceId: 'role-instance.real-pi',
+            executorInvocationId: 'replaced',
+            effectiveConfigHash: 'b'.repeat(64),
+            createdAt: '2026-07-28T08:20:00Z'
+          }
+        })
+
+        expect(execution.result).toMatchObject({
+          status: 'submitted',
+          summary: 'Local Pi RPC integration completed.',
+          system: { executorInvocationId: 'executor-invocation.real-pi' }
+        })
+        expect(execution.events.some((event) => event.sourceEventType === 'agent_settled')).toBe(
+          true
+        )
+        expect(provider.requestCount()).toBeGreaterThanOrEqual(2)
+        expect(execute).toHaveBeenCalledWith({
+          method: 'knowledge.search',
+          request: {
+            knowledgeBaseProfileId: 'knowledge.real-pi',
+            query: 'requirements'
+          }
+        })
+        expect(execution.stderr).not.toContain('mam-canary-secret')
+        expect(execution.invocation.launchOptions.args).toContain('--extension')
+        expect(execution.stderr).not.toContain('Failed to load extension')
+      } finally {
+        await provider.stop()
+        // Windows can retain the child's working directory briefly after process exit.
+        await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+      }
+    },
+    30_000
+  )
 })
 
 function executorProfile(): ExecutorProfile {
@@ -103,7 +118,7 @@ function resources(
   }
 }
 
-function effectiveSnapshot(baseUrl: string): EffectiveRoleConfigSnapshot {
+function effectiveSnapshot(baseUrl: string, protocol: TestProtocol): EffectiveRoleConfigSnapshot {
   const hash = 'a'.repeat(64)
   const ref = { id: 'profile', version: 1, contentHash: hash }
   const base = {
@@ -120,7 +135,7 @@ function effectiveSnapshot(baseUrl: string): EffectiveRoleConfigSnapshot {
     execution: {
       executableRef: 'executable.pi',
       adapterOptions: { mode: 'rpc' },
-      providerProtocol: 'openai-completions' as const,
+      providerProtocol: protocol,
       providerBaseUrl: baseUrl,
       providerSecretRef: 'secret.provider',
       remoteModelId: 'mam-local-model',
@@ -168,7 +183,7 @@ function effectiveSnapshot(baseUrl: string): EffectiveRoleConfigSnapshot {
   return { ...base, contentHash: profileContentHash(base) }
 }
 
-async function startProvider(): Promise<{
+async function startProvider(protocol: TestProtocol): Promise<{
   baseUrl: string
   requestCount: () => number
   stop: () => Promise<void>
@@ -176,12 +191,33 @@ async function startProvider(): Promise<{
   let requests = 0
   const server = createServer(async (request, response) => {
     await consumeRequest(request)
-    if (request.method !== 'POST' || !request.url?.endsWith('/chat/completions')) {
-      response.writeHead(404).end()
+    const expectedPath = protocol === 'openai-responses' ? '/v1/responses' : '/v1/chat/completions'
+    if (request.method !== 'POST' || request.url !== expectedPath) {
+      response.writeHead(403).end('Your request was blocked.')
+      return
+    }
+    if (request.headers.authorization !== 'Bearer mam-canary-secret-real-process') {
+      response.writeHead(401).end('Invalid API key')
+      return
+    }
+    if (request.headers['user-agent'] !== 'Multi-Agent-Max') {
+      response.writeHead(403).end('Your request was blocked.')
       return
     }
     requests += 1
     if (requests === 1) {
+      if (protocol === 'openai-responses') {
+        const tool = toolCallDelta().tool_calls[0]!
+        sendResponsesItem(response, {
+          type: 'function_call',
+          id: 'fc_mam',
+          call_id: tool.id,
+          name: tool.function.name,
+          arguments: tool.function.arguments,
+          status: 'completed'
+        })
+        return
+      }
       response.writeHead(200, { 'content-type': 'text/event-stream' })
       response.write(`data: ${JSON.stringify(chunk({ role: 'assistant' }, null))}\n\n`)
       response.write(`data: ${JSON.stringify(chunk(toolCallDelta(), null))}\n\n`)
@@ -199,6 +235,16 @@ async function startProvider(): Promise<{
       artifacts: [],
       usage: { status: 'unknown' }
     })
+    if (protocol === 'openai-responses') {
+      sendResponsesItem(response, {
+        type: 'message',
+        id: 'msg_mam',
+        role: 'assistant',
+        status: 'completed',
+        content: [{ type: 'output_text', text: content, annotations: [] }]
+      })
+      return
+    }
     response.writeHead(200, { 'content-type': 'text/event-stream' })
     response.write(`data: ${JSON.stringify(chunk({ role: 'assistant' }, null))}\n\n`)
     response.write(`data: ${JSON.stringify(chunk({ content }, null))}\n\n`)
@@ -209,10 +255,29 @@ async function startProvider(): Promise<{
   const address = server.address()
   if (!address || typeof address === 'string') throw new Error('provider did not bind')
   return {
-    baseUrl: `http://127.0.0.1:${address.port}/v1`,
+    baseUrl: `http://127.0.0.1:${address.port}`,
     requestCount: () => requests,
     stop: () => closeServer(server)
   }
+}
+
+function sendResponsesItem(response: ServerResponse, item: Record<string, unknown>): void {
+  response.writeHead(200, { 'content-type': 'text/event-stream' })
+  const events = [
+    { type: 'response.output_item.done', output_index: 0, item },
+    {
+      type: 'response.completed',
+      response: {
+        id: 'resp_mam',
+        status: 'completed',
+        output: [item],
+        usage: { input_tokens: 12, output_tokens: 8, total_tokens: 20 }
+      }
+    }
+  ]
+  for (const event of events)
+    response.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`)
+  response.end()
 }
 
 function toolCallDelta() {

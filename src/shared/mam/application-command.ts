@@ -30,6 +30,14 @@ export const MamDeleteRoleProfileInputSchema = z
   .object({ roleProfileId: MamEntityIdSchema })
   .strict()
 
+export const MamDeleteExecutionProfileInputSchema = z
+  .object({
+    kind: z.enum(['executor', 'provider', 'model']),
+    profileId: MamEntityIdSchema
+  })
+  .strict()
+export type MamDeleteExecutionProfileInput = z.infer<typeof MamDeleteExecutionProfileInputSchema>
+
 export const MamDeleteWorkflowInputSchema = z.object({ definitionId: MamEntityIdSchema }).strict()
 
 export { MamExportWorkflowPackageInputSchema }
