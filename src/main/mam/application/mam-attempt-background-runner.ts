@@ -1,5 +1,6 @@
 import { AttemptResultSchema, type AttemptResult } from '../../../shared/mam/domain/attempt-result'
 import { existsSync } from 'node:fs'
+import { diagnosticError } from '../diagnostics/diagnostic-error'
 import type { DiagnosticsRecorder } from '../diagnostics/diagnostics-recorder'
 import { GitCommandRetryCoordinator } from '../state-store/git-command-retry-coordinator'
 import type { GitStateRepository } from '../state-store/git-state-repository'
@@ -26,6 +27,7 @@ import { normalizePreparedReviewContracts } from './automatic-review-contract'
 import { AttemptExecutorEventObserver } from './attempt-executor-event-observer'
 import {
   attemptRunnerErrorCode as errorCode,
+  recordAttemptRunnerStart,
   recordAttemptRunnerCost as recordCost,
   recordAttemptRunnerEvent as record
 } from './attempt-runner-diagnostics'
@@ -50,6 +52,7 @@ export async function runPreparedAttempt(input: PreparedAttemptRunnerInput): Pro
   const eventObserver = new AttemptExecutorEventObserver(input)
   let executorCompleted = false
   try {
+    recordAttemptRunnerStart(input)
     const authority = attemptGatewayAuthority(prepared)
     const capability = createAttemptCapabilityBridge({
       prepared,
@@ -174,6 +177,7 @@ export async function runPreparedAttempt(input: PreparedAttemptRunnerInput): Pro
     } catch (error) {
       record(input, 'scheduler', {
         status: 'condition_advancement_failed',
+        error: diagnosticError(error),
         errorCode: errorCode(error),
         message: error instanceof Error ? error.message : String(error)
       })
@@ -192,6 +196,7 @@ export async function runPreparedAttempt(input: PreparedAttemptRunnerInput): Pro
     } catch (error) {
       record(input, 'scheduler', {
         status: 'review_panel_advancement_failed',
+        error: diagnosticError(error),
         errorCode: errorCode(error),
         message: error instanceof Error ? error.message : String(error)
       })
@@ -220,9 +225,14 @@ export async function runPreparedAttempt(input: PreparedAttemptRunnerInput): Pro
       })
     } catch (recoveryError) {
       recoveryStatus = `recovery_record_failed:${errorCode(recoveryError)}`
+      record(input, 'scheduler', {
+        status: 'recovery_record_failed',
+        error: diagnosticError(recoveryError)
+      })
     }
     record(input, 'executor', {
       status: 'execution_interrupted',
+      error: diagnosticError(error),
       errorCode: errorCode(error),
       message: error instanceof Error ? error.message : String(error),
       recoveryStatus,

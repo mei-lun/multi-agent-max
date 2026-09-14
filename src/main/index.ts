@@ -29,7 +29,7 @@ import { ensureBuiltinPiProfile } from './mam/profiles/builtin-pi-profile'
 import { MamDesignDraftStore } from './mam/application/mam-design-draft-store'
 import { MamDesignAssistantService } from './mam/application/mam-design-assistant-service'
 import { resolveDesignSecret } from './mam/application/design-secret-resolver'
-import { DesktopRuntimeLogger } from './mam/diagnostics/desktop-runtime-logger'
+import { attachWindowDiagnostics, startDesktopLogging } from './mam/diagnostics/desktop-diagnostics'
 import {
   exportWorkflowPackageDialog,
   importWorkflowPackageDialog
@@ -44,6 +44,8 @@ import {
 } from './mam/diagnostics/desktop-diagnostic-dialogs'
 let unregisterMamIpc: (() => void) | undefined
 configureSmokeUserData()
+const mamRoot = join(app.getPath('userData'), 'mam')
+const runtimeLogger = startDesktopLogging(mamRoot)
 function createMainWindow(): void {
   const isMac = process.platform === 'darwin'
   const window = new BrowserWindow({
@@ -61,9 +63,6 @@ function createMainWindow(): void {
     }
   })
   const notifySnapshotChanged = createSnapshotChangeNotifier(window)
-  const mamRoot = join(app.getPath('userData'), 'mam')
-  const runtimeLogger = new DesktopRuntimeLogger(join(mamRoot, 'diagnostics', 'runtime.jsonl'))
-  const stopRuntimeHeartbeat = runtimeLogger.startHeartbeat()
   runtimeLogger.record('main', 'window_create_start', { platform: process.platform })
   const profiles = new ProfileCatalog(join(mamRoot, 'catalog'))
   const localSettings = new MamLocalSettingsStore(
@@ -85,6 +84,10 @@ function createMainWindow(): void {
   const diagnostics = new DiagnosticsRecorder(
     join(app.getPath('userData'), 'mam', 'diagnostics', 'events.json')
   )
+  attachWindowDiagnostics(window, runtimeLogger, diagnostics, () => [
+    join(mamRoot, 'executors', 'pi'),
+    ...localSettings.get().executorBindings.map((binding) => binding.configRoot)
+  ])
   const initialRepository = configuredStateRepository(localSettings)
   let activeProjectDirectory =
     initialRepository?.projectDirectory ??
@@ -159,6 +162,7 @@ function createMainWindow(): void {
     ...(initialRepository ? { repository: initialRepository } : {})
   })
   const automaticRunner = attachAutomaticWorkflow({
+    runtimeLogger,
     attempts,
     commands,
     workflowRuns,
@@ -228,26 +232,11 @@ function createMainWindow(): void {
     if (url.startsWith('https://')) void shell.openExternal(url)
     return { action: 'deny' }
   })
-  window.on('unresponsive', () => runtimeLogger.record('window', 'unresponsive'))
-  window.on('responsive', () => runtimeLogger.record('window', 'responsive'))
-  window.webContents.on('did-start-loading', () =>
-    runtimeLogger.record('renderer', 'did_start_loading')
-  )
-  window.webContents.on('did-finish-load', () =>
-    runtimeLogger.record('renderer', 'did_finish_load')
-  )
-  window.webContents.on('render-process-gone', (_event, details) =>
-    runtimeLogger.record('renderer', 'render_process_gone', {
-      reason: details.reason,
-      exitCode: details.exitCode
-    })
-  )
   window.webContents.on('will-navigate', (event) => event.preventDefault())
   installDesktopSmokeProbe(window)
   window.once('ready-to-show', () => window.show())
   window.on('closed', () => {
     runtimeLogger.record('main', 'window_closed')
-    stopRuntimeHeartbeat()
     unregisterMamIpc?.()
     unregisterMamIpc = undefined
   })

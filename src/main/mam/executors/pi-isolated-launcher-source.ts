@@ -25,17 +25,14 @@ const secrets = Object.entries(childEnvironment)
   .filter(([key]) => /(?:key|token|secret|password|credential)/i.test(key))
   .map(([, value]) => value)
   .filter(Boolean)
-const carryLength = Math.max(512, ...secrets.map((secret) => secret.length))
 let stderrCarry = ''
 child.stderr.setEncoding('utf8')
 child.stderr.on('data', (chunk) => {
   const combined = stderrCarry + chunk
-  if (combined.length <= carryLength) {
-    stderrCarry = combined
-    return
-  }
-  process.stderr.write(redact(combined.slice(0, -carryLength)))
-  stderrCarry = combined.slice(-carryLength)
+  // Forward complete error lines before the launcher is terminated, keeping partial lines for redaction.
+  const lineEnd = combined.lastIndexOf('\\n') + 1
+  if (lineEnd) process.stderr.write(redact(combined.slice(0, lineEnd)))
+  stderrCarry = combined.slice(lineEnd)
 })
 child.on('error', (error) => {
   console.error(error instanceof Error ? error.message : String(error))

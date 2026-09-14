@@ -38,21 +38,27 @@ describe('DiagnosticsRecorder', () => {
     })
   })
 
-  it('retains only the most recent local diagnostic events', async () => {
+  it('retains all events within 24 hours and cleans up after restart and idle time', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'mam-diagnostics-retention-'))
     directories.push(directory)
     const path = join(directory, 'events.json')
     const events = Array.from({ length: 3_010 }, (_, index) => diagnosticEvent(index))
     await writeFile(path, JSON.stringify(events), 'utf8')
 
-    const recorder = new DiagnosticsRecorder(path)
-    expect(recorder.list()).toHaveLength(3_000)
-    expect(recorder.list()[0]?.at).toBe('2026-08-06T00:00:10.000Z')
-    expect(JSON.parse(await readFile(path, 'utf8'))).toHaveLength(3_000)
-
-    recorder.record(diagnosticEvent(3_010))
-    const persisted = JSON.parse(await readFile(path, 'utf8')) as unknown[]
-    expect(persisted).toHaveLength(3_000)
+    let now = Date.parse('2026-08-06T02:00:00.000Z')
+    const recorder = new DiagnosticsRecorder(path, () => now)
+    expect(recorder.list()).toHaveLength(3_010)
+    now = Date.parse('2026-08-07T00:00:10.000Z')
+    const restarted = new DiagnosticsRecorder(path, () => now)
+    expect(restarted.list()).toHaveLength(2_999)
+    expect(restarted.list()[0]?.at).toBe('2026-08-06T00:00:11.000Z')
+    expect(JSON.parse(await readFile(path, 'utf8'))).toHaveLength(2_999)
+    now = Date.parse('2026-08-08T00:00:00.000Z')
+    restarted.prune()
+    expect(JSON.parse(await readFile(path, 'utf8'))).toEqual([])
+    const exportPath = join(directory, 'export.json')
+    restarted.exportBundle(exportPath)
+    expect(JSON.parse(await readFile(exportPath, 'utf8')).events).toEqual([])
   })
 })
 

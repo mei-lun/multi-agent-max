@@ -110,6 +110,14 @@ export class PiRpcAdapter {
         Object.values(input.credentialValues),
         this.now
       )
+      await logger.append('event', {
+        type: 'mam.invocation_start',
+        ...input.authority,
+        executorInvocationId: input.executorInvocationId,
+        effectiveConfigHash: input.snapshot.contentHash,
+        model: input.snapshot.execution.remoteModelId,
+        rpcLogPath: invocation.rpcLogPath
+      })
       const client = await this.createClient(invocation.launchOptions)
       const events: ExecutorEvent[] = []
       const outcome = new PiRpcOutcome(Object.values(input.credentialValues))

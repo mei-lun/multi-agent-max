@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -13,21 +13,36 @@ afterEach(async () => {
 })
 
 describe('DesktopRuntimeLogger', () => {
-  it('rotates bounded local logs while retaining one backup', async () => {
+  it('keeps a full day of logs and prunes expired records including the legacy backup', async () => {
     const path = await logPath()
-    const logger = new DesktopRuntimeLogger(path, () => '2026-08-06T12:00:00.000Z', 512)
-
-    logger.record('test', 'first', { value: 'x'.repeat(220) })
-    logger.record('test', 'second', { value: 'x'.repeat(220) })
-    logger.record('test', 'third', { value: 'x'.repeat(220) })
-
+    await writeFile(`${path}.1`, JSON.stringify({ at: '2026-08-05T12:00:00.000Z' }) + '\n')
+    let now = '2026-08-06T12:00:00.000Z'
+    const logger = new DesktopRuntimeLogger(path, () => now)
+    expect(existsSync(`${path}.1`)).toBe(false)
+    logger.record('test', 'first', { value: 'x'.repeat(6 * 1024 * 1024) })
+    now = '2026-08-07T11:59:00.000Z'
+    logger.record('test', 'second')
+    expect(await readFile(path, 'utf8')).toContain('first')
+    now = '2026-08-07T12:00:00.000Z'
+    logger.record('test', 'third')
     const current = await readFile(path, 'utf8')
-    const backup = await readFile(`${path}.1`, 'utf8')
+    expect(current).not.toContain('first')
+    expect(current).toContain('second')
     expect(current).toContain('third')
-    expect(backup).toContain('second')
-    expect(backup).not.toContain('first')
-    expect((await stat(path)).size).toBeLessThanOrEqual(512)
-    expect((await stat(`${path}.1`)).size).toBeLessThanOrEqual(512)
+  })
+
+  it('redacts secrets in error stacks while preserving their call sites', async () => {
+    const path = await logPath()
+    const logger = new DesktopRuntimeLogger(path)
+    logger.record('ipc', 'error', {
+      error: {
+        stack:
+          'Error: token=private\n at execute (main.js:42)\n mam-canary-secret-provider sk-example12345'
+      }
+    })
+    const content = await readFile(path, 'utf8')
+    expect(content).toContain('main.js:42')
+    expect(content).not.toMatch(/private|mam-canary-secret|sk-example/)
   })
 
   it('samples healthy heartbeats once per minute', async () => {

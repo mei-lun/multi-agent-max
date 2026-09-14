@@ -1,6 +1,7 @@
 import process from 'node:process'
 
-process.stderr.write('fake pi stderr mam-canary-secret-stderr\n')
+process.stderr.write('fake pi stderr mam-canary-')
+setImmediate(() => process.stderr.write('secret-stderr\n'))
 process.stdout.write('this-is-not-json\n')
 
 const result = {

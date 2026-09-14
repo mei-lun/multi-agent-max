@@ -1,7 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
-
-const MAX_RETAINED_EVENTS = 3_000
+import { isRecentLog } from './log-retention'
 
 export type DiagnosticEvent = Readonly<{
   at: string
@@ -23,19 +22,25 @@ export type CostObservation = Readonly<{
 }>
 
 export class DiagnosticsRecorder {
-  private readonly events: DiagnosticEvent[]
+  private events: DiagnosticEvent[]
 
-  constructor(private readonly storagePath?: string) {
-    const loaded = storagePath ? loadEvents(storagePath) : []
-    this.events = loaded.slice(-MAX_RETAINED_EVENTS)
-    if (loaded.length > this.events.length) this.persist()
+  constructor(
+    private readonly storagePath?: string,
+    private readonly now: () => number = Date.now
+  ) {
+    this.events = storagePath ? loadEvents(storagePath) : []
+    if (storagePath) this.prune()
   }
 
   record(event: DiagnosticEvent): void {
     this.events.push(structuredClone(redactEvent(event)))
-    if (this.events.length > MAX_RETAINED_EVENTS) {
-      this.events.splice(0, this.events.length - MAX_RETAINED_EVENTS)
-    }
+    this.persist()
+  }
+
+  prune(): void {
+    const retained = this.events.filter((event) => isRecentLog(event?.at, this.now()))
+    if (retained.length === this.events.length) return
+    this.events = retained
     this.persist()
   }
 
@@ -44,10 +49,12 @@ export class DiagnosticsRecorder {
   }
 
   list(): readonly DiagnosticEvent[] {
+    if (this.storagePath) this.prune()
     return structuredClone(this.events)
   }
 
   listInterruptionEvents(): readonly DiagnosticEvent[] {
+    if (this.storagePath) this.prune()
     return structuredClone(
       this.events.filter(
         (event) => event.kind === 'executor' && event.payload.status === 'execution_interrupted'
@@ -55,7 +62,7 @@ export class DiagnosticsRecorder {
     )
   }
 
-  exportBundle(pathInput: string, events: readonly DiagnosticEvent[] = this.events): string {
+  exportBundle(pathInput: string, events: readonly DiagnosticEvent[] = this.list()): string {
     const path = resolve(pathInput)
     mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
     writeFileSync(path, `${JSON.stringify({ schemaVersion: '1.0.0', events }, null, 2)}\n`, {
@@ -68,6 +75,7 @@ export class DiagnosticsRecorder {
     if (!this.storagePath) {
       return
     }
+    this.events = this.events.filter((event) => isRecentLog(event?.at, this.now()))
     const path = resolve(this.storagePath)
     mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
     writeFileSync(path, `${JSON.stringify(this.events, null, 2)}\n`, { mode: 0o600 })

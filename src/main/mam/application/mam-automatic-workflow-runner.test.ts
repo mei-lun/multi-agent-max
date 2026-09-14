@@ -3,6 +3,32 @@ import { emptyWorkflowRunProjection } from '../state-store/git-event-projection'
 import { MamAutomaticWorkflowRunner } from './mam-automatic-workflow-runner'
 
 describe('MamAutomaticWorkflowRunner', () => {
+  it('logs a failed automatic start with its task and original error', async () => {
+    const state = fixture('ready')
+    const error = new Error('Executor is unavailable')
+    const record = vi.fn()
+    const start = vi.fn().mockRejectedValue(error)
+    const runner = new MamAutomaticWorkflowRunner(
+      { start } as never,
+      { assignTask: vi.fn() } as never,
+      () => '2026-08-05T00:00:00Z',
+      { record } as never
+    )
+    runner.setRepository(state.repository as never)
+    runner.notify()
+    await vi.waitFor(() => expect(record).toHaveBeenCalledOnce())
+    expect(record).toHaveBeenCalledWith(
+      'scheduler',
+      'automatic_start_failed',
+      expect.objectContaining({
+        workflowRunId: 'run.auto',
+        taskId: 'task.develop',
+        error: expect.objectContaining({ message: error.message, stack: error.stack })
+      })
+    )
+    expect(start).toHaveBeenCalledOnce()
+  })
+
   it('assigns and starts an executable fixed-role task without UI interaction', async () => {
     const state = fixture('ready')
     const assignments: unknown[] = []

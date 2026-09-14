@@ -4,6 +4,8 @@ import type { WorkflowRunProjection } from '../state-store/git-state-projection'
 import { projectWorkflowRun } from './workflow-run-projection'
 import type { MamAttemptExecutionService } from './mam-attempt-execution-service'
 import type { MamUiCommandService } from './mam-ui-command-service'
+import type { DesktopRuntimeLogger } from '../diagnostics/desktop-runtime-logger'
+import { diagnosticError } from '../diagnostics/diagnostic-error'
 
 /** Starts fixed-role Tasks whenever the projected workflow makes them executable. */
 export class MamAutomaticWorkflowRunner {
@@ -14,7 +16,8 @@ export class MamAutomaticWorkflowRunner {
   constructor(
     private readonly attempts: MamAttemptExecutionService,
     private readonly commands: MamUiCommandService,
-    private readonly now: () => string = () => new Date().toISOString()
+    private readonly now: () => string = () => new Date().toISOString(),
+    private readonly runtimeLogger?: DesktopRuntimeLogger
   ) {}
 
   setRepository(repository: GitStateRepository): void {
@@ -39,7 +42,11 @@ export class MamAutomaticWorkflowRunner {
         if (!next) return
         try {
           await this.start(next)
-        } catch {
+        } catch (error) {
+          this.runtimeLogger?.record('scheduler', 'automatic_start_failed', {
+            ...next,
+            error: diagnosticError(error)
+          })
           // Preflight, resource and recovery failures are visible in the normal UI snapshot.
           // Do not spin on a task that cannot currently start.
           return
