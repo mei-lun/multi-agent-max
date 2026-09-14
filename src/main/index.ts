@@ -30,6 +30,7 @@ import { MamDesignDraftStore } from './mam/application/mam-design-draft-store'
 import { MamDesignAssistantService } from './mam/application/mam-design-assistant-service'
 import { resolveDesignSecret } from './mam/application/design-secret-resolver'
 import { attachWindowDiagnostics, startDesktopLogging } from './mam/diagnostics/desktop-diagnostics'
+import { rememberLogDirectory } from './mam/diagnostics/log-directories'
 import {
   exportWorkflowPackageDialog,
   importWorkflowPackageDialog
@@ -45,7 +46,13 @@ import {
 let unregisterMamIpc: (() => void) | undefined
 configureSmokeUserData()
 const mamRoot = join(app.getPath('userData'), 'mam')
-const runtimeLogger = startDesktopLogging(mamRoot)
+const localSettings = new MamLocalSettingsStore(
+  join(mamRoot, 'local-settings.json'),
+  process.env.MAM_BINDING_ID ?? 'machine.local'
+)
+const logDirectory = localSettings.get().logDirectory ?? join(mamRoot, 'diagnostics')
+const runtimeLogger = startDesktopLogging(mamRoot, logDirectory)
+const previousLogDirectories = rememberLogDirectory(mamRoot, logDirectory)
 function createMainWindow(): void {
   const isMac = process.platform === 'darwin'
   const window = new BrowserWindow({
@@ -65,10 +72,6 @@ function createMainWindow(): void {
   const notifySnapshotChanged = createSnapshotChangeNotifier(window)
   runtimeLogger.record('main', 'window_create_start', { platform: process.platform })
   const profiles = new ProfileCatalog(join(mamRoot, 'catalog'))
-  const localSettings = new MamLocalSettingsStore(
-    join(mamRoot, 'local-settings.json'),
-    process.env.MAM_BINDING_ID ?? 'machine.local'
-  )
   ensureBuiltinPiProfile(profiles, localSettings, join(mamRoot, 'executors', 'pi'))
   const localSecrets = new EncryptedLocalSecretStore(join(mamRoot, 'secrets.enc.json'), {
     encrypt: (value) => {
@@ -81,13 +84,18 @@ function createMainWindow(): void {
     localSecrets,
     new EnvironmentAttemptSecretValueProvider()
   ])
-  const diagnostics = new DiagnosticsRecorder(
-    join(app.getPath('userData'), 'mam', 'diagnostics', 'events.json')
+  const diagnostics = new DiagnosticsRecorder(join(logDirectory, 'events.json'))
+  attachWindowDiagnostics(
+    window,
+    runtimeLogger,
+    diagnostics,
+    () => [
+      logDirectory,
+      join(mamRoot, 'executors', 'pi'),
+      ...localSettings.get().executorBindings.map((binding) => binding.configRoot)
+    ],
+    previousLogDirectories
   )
-  attachWindowDiagnostics(window, runtimeLogger, diagnostics, () => [
-    join(mamRoot, 'executors', 'pi'),
-    ...localSettings.get().executorBindings.map((binding) => binding.configRoot)
-  ])
   const initialRepository = configuredStateRepository(localSettings)
   let activeProjectDirectory =
     initialRepository?.projectDirectory ??
@@ -148,7 +156,7 @@ function createMainWindow(): void {
     query: service,
     catalog: profiles,
     settings: localSettings,
-    executor: new PiRpcAdapter(),
+    executor: new PiRpcAdapter(undefined, undefined, undefined, logDirectory),
     enabledExecutorKinds: ['pi-rpc'],
     resources: new AttemptResourceMaterializer(
       join(app.getPath('userData'), 'mam', 'attempt-resources')

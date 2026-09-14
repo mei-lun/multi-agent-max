@@ -45,6 +45,7 @@ export async function preparePiRpcInvocation(input: {
   systemPrompt: string
   credentialValues: Readonly<Record<string, string>>
   applicationApi?: PiApplicationApiBridgeEndpoint
+  logDirectory?: string
 }): Promise<PiRpcInvocation> {
   const snapshot = EffectiveRoleConfigSnapshotSchema.parse(input.snapshot)
   const binding = LocalExecutorBindingSchema.parse(input.executorBinding)
@@ -75,7 +76,9 @@ export async function preparePiRpcInvocation(input: {
   const manifestPath = join(agentDirectory, 'mam-invocation-manifest.json')
   const launcherPath = join(agentDirectory, 'mam-pi-launcher.mjs')
   const applicationApiExtensionPath = join(agentDirectory, 'mam-application-api-extension.mjs')
-  const rpcLogPath = join(invocationDirectory, 'rpc.jsonl')
+  const rpcLogPath = input.logDirectory
+    ? join(resolve(input.logDirectory), 'invocations', basename(invocationDirectory), 'rpc.jsonl')
+    : join(invocationDirectory, 'rpc.jsonl')
   const bridgeTools = piBridgeTools(snapshot)
   const args = piArguments(
     snapshot,

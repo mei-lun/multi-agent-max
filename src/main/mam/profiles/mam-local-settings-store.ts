@@ -1,5 +1,13 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import {
+  accessSync,
+  constants,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  writeFileSync
+} from 'node:fs'
+import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import {
   MamLocalSettingsSchema,
@@ -19,12 +27,24 @@ export class MamLocalSettingsStore {
   }
 
   get(): MamLocalSettings {
-    if (!existsSync(this.path)) return defaultMamLocalSettings(this.bindingIdentity)
-    return MamLocalSettingsSchema.parse(JSON.parse(readFileSync(this.path, 'utf8')))
+    const settings = existsSync(this.path)
+      ? MamLocalSettingsSchema.parse(JSON.parse(readFileSync(this.path, 'utf8')))
+      : defaultMamLocalSettings(this.bindingIdentity)
+    return {
+      ...settings,
+      logDirectory: settings.logDirectory ?? join(dirname(this.path), 'diagnostics')
+    }
   }
 
   save(input: unknown): MamLocalSettings {
     const settings = MamLocalSettingsSchema.parse(input)
+    if (settings.logDirectory) {
+      if (!isAbsolute(settings.logDirectory))
+        throw new Error('Log directory must be an absolute path')
+      settings.logDirectory = resolve(settings.logDirectory)
+      mkdirSync(settings.logDirectory, { recursive: true, mode: 0o700 })
+      accessSync(settings.logDirectory, constants.W_OK)
+    }
     mkdirSync(dirname(this.path), { recursive: true, mode: 0o700 })
     const temporaryPath = `${this.path}.${process.pid}.${randomUUID()}.tmp`
     writeFileSync(temporaryPath, `${JSON.stringify(settings, null, 2)}\n`, {

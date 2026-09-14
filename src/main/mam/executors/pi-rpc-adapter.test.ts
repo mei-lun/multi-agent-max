@@ -22,6 +22,27 @@ afterEach(async () => {
 })
 
 describe('PiRpcAdapter', () => {
+  it('writes RPC logs to the configured directory while keeping invocation configuration in its binding', async () => {
+    const fixture = await createFixture()
+    const binding = executorBinding(fixture.root)
+    const logDirectory = join(fixture.root, 'custom logs')
+    const adapter = new PiRpcAdapter(
+      () => new ControllablePiClient(null),
+      () => '2026-09-14T12:00:00Z',
+      readyPreflight(),
+      logDirectory
+    )
+    const execution = await adapter.execute(executionInput(fixture))
+    expect(execution.invocation.rpcLogPath.startsWith(join(logDirectory, 'invocations'))).toBe(true)
+    expect(
+      execution.invocation.invocationDirectory.startsWith(join(binding.configRoot, 'invocations'))
+    ).toBe(true)
+    expect(await readFile(execution.invocation.rpcLogPath, 'utf8')).toContain(
+      'mam.invocation_start'
+    )
+    expect(await readFile(execution.invocation.modelsPath, 'utf8')).toContain('provider.custom')
+  })
+
   it.each([
     ['Request timed out.', 'executor_timeout'],
     ['Provider rejected request plainCredentialForRegression123', 'executor_process_failed']

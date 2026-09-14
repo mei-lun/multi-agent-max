@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -35,7 +35,20 @@ describe('desktop diagnostic capture', () => {
     const window = Object.assign(new EventEmitter(), { webContents: new EventEmitter() })
     const eventsPath = join(root, 'diagnostics', 'events.json')
     const diagnostics = new DiagnosticsRecorder(eventsPath)
-    attachWindowDiagnostics(window as unknown as BrowserWindow, logger, diagnostics, () => [])
+    const brokenDirectory = join(root, 'broken logs')
+    const oldDirectory = join(root, 'old logs')
+    mkdirSync(brokenDirectory)
+    mkdirSync(oldDirectory)
+    writeFileSync(join(brokenDirectory, 'events.json'), '[')
+    writeFileSync(
+      join(oldDirectory, 'events.json'),
+      JSON.stringify([{ at: '2026-09-12T00:00:00Z' }])
+    )
+    attachWindowDiagnostics(window as unknown as BrowserWindow, logger, diagnostics, () => [], [
+      brokenDirectory,
+      oldDirectory
+    ])
+    expect(JSON.parse(readFileSync(join(oldDirectory, 'events.json'), 'utf8'))).toEqual([])
     window.webContents.emit('console-message', {
       level: 'error',
       message: 'TypeError: broken\n at App.tsx:42',

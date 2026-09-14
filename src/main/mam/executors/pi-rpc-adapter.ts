@@ -73,7 +73,8 @@ export class PiRpcAdapter {
   constructor(
     private readonly createClient: PiClientFactory = (options) => new RpcClient(options),
     private readonly now: () => string = () => new Date().toISOString(),
-    private readonly preflight = new ExecutorLocalPreflight()
+    private readonly preflight = new ExecutorLocalPreflight(),
+    private readonly logDirectory?: string
   ) {}
 
   async execute(input: {
@@ -103,6 +104,7 @@ export class PiRpcAdapter {
       const invocation = await preparePiRpcInvocation({
         ...input,
         executorBinding: input.binding,
+        ...(this.logDirectory ? { logDirectory: this.logDirectory } : {}),
         ...(applicationApi ? { applicationApi } : {})
       })
       const logger = new PiRpcLogWriter(

@@ -41,6 +41,7 @@ import {
   MAM_SELECT_ATTEMPT_CHANNEL,
   MAM_SUBMIT_REVIEW_CHANNEL,
   MAM_SELECT_PROJECT_CHANNEL,
+  MAM_SELECT_LOG_DIRECTORY_CHANNEL,
   MAM_GET_DESIGN_DRAFT_CHANNEL,
   MAM_SELECT_DESIGN_MODEL_CHANNEL,
   MAM_SEND_DESIGN_MESSAGE_CHANNEL,
@@ -53,6 +54,7 @@ import {
 } from '../../shared/mam/application-api'
 import { assertTrustedRenderer } from './trusted-renderer-ipc'
 import { registerMamResourceIpc, type MamResourceOperations } from './mam-resource-ipc'
+import { selectLogDirectoryDialog } from '../mam/diagnostics/desktop-diagnostic-dialogs'
 
 export function registerMamIpc(
   window: BrowserWindow,
@@ -77,6 +79,10 @@ export function registerMamIpc(
   handle(MAM_GET_UI_SNAPSHOT_CHANNEL, (event) => {
     assertTrustedRenderer(event, window)
     return service.getSnapshot()
+  })
+  handle(MAM_SELECT_LOG_DIRECTORY_CHANNEL, (event) => {
+    assertTrustedRenderer(event, window)
+    return selectLogDirectoryDialog(window, service.getSnapshot().localSettings.logDirectory)
   })
   handle(MAM_GET_DESIGN_DRAFT_CHANNEL, (event) => {
     assertTrustedRenderer(event, window)
@@ -252,6 +258,7 @@ export function registerMamIpc(
     ipcMain.removeHandler(MAM_APPLY_DESIGN_PROPOSAL_CHANNEL)
     ipcMain.removeHandler(MAM_GET_ATTEMPT_DIFF_CHANNEL)
     ipcMain.removeHandler(MAM_SELECT_PROJECT_CHANNEL)
+    ipcMain.removeHandler(MAM_SELECT_LOG_DIRECTORY_CHANNEL)
     ipcMain.removeHandler(MAM_ASSIGN_TASK_CHANNEL)
     ipcMain.removeHandler(MAM_REASSIGN_TASK_CHANNEL)
     ipcMain.removeHandler(MAM_CANCEL_WORKFLOW_RUN_CHANNEL)

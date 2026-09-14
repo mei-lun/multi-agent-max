@@ -44,6 +44,7 @@ import {
   MAM_SAVE_PROFILE_CHANNEL,
   MAM_SELECT_ATTEMPT_CHANNEL,
   MAM_SELECT_PROJECT_CHANNEL,
+  MAM_SELECT_LOG_DIRECTORY_CHANNEL,
   MAM_SUBMIT_REVIEW_CHANNEL,
   type MamRendererApi
 } from '../shared/mam/application-api'
@@ -57,6 +58,9 @@ const api: MamRendererApi = Object.freeze({
   },
   async selectProject() {
     return ipcRenderer.invoke(MAM_SELECT_PROJECT_CHANNEL)
+  },
+  async selectLogDirectory() {
+    return ipcRenderer.invoke(MAM_SELECT_LOG_DIRECTORY_CHANNEL)
   },
   async assignTask(input) {
     return ipcRenderer.invoke(MAM_ASSIGN_TASK_CHANNEL, input)

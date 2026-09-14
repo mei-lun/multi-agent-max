@@ -8,6 +8,8 @@ import { mamUiSnapshotFixture } from './mam-renderer-snapshot-fixture'
 describe('MAM Resources and Settings pages', () => {
   it('renders actionable versioned resources and machine-local configuration', () => {
     const snapshot = mamUiSnapshotFixture()
+    snapshot.localSettings.logDirectory =
+      '/Users/test/Library/Application Support/multi-agent-max/mam/diagnostics'
     snapshot.skills.push({
       schemaVersion: '1.0.0',
       id: 'skill.release',
@@ -64,6 +66,9 @@ describe('MAM Resources and Settings pages', () => {
     expect(resources).toContain('Skill Registry')
     expect(resources).toContain('New version')
     expect(settings).toContain('Git executable')
+    expect(settings).toContain('Log directory')
+    expect(settings).toContain('Choose log directory')
+    expect(settings).toContain(snapshot.localSettings.logDirectory)
     expect(settings).toContain('Add model connection')
     expect(settings).toContain('Advanced profile setup')
     expect(settings).toContain('Machine-local bindings')

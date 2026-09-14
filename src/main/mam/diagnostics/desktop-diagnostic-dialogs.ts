@@ -5,6 +5,18 @@ import type { DiagnosticsRecorder } from './diagnostics-recorder'
 import { selectExecutionActivityEvents } from './execution-activity-export-selection'
 import { safeFileName } from './safe-file-name'
 
+export async function selectLogDirectoryDialog(
+  window: BrowserWindow,
+  directory?: string
+): Promise<string | undefined> {
+  const result = await dialog.showOpenDialog(window, {
+    title: 'Choose log directory',
+    ...(directory ? { defaultPath: directory } : {}),
+    properties: ['openDirectory', 'createDirectory']
+  })
+  return result.canceled ? undefined : result.filePaths[0]
+}
+
 export function exportDiagnosticsDialog(
   window: BrowserWindow,
   diagnostics: DiagnosticsRecorder

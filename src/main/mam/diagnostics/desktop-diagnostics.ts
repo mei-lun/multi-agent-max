@@ -4,18 +4,22 @@ import { diagnosticError } from './diagnostic-error'
 import { DesktopRuntimeLogger } from './desktop-runtime-logger'
 import type { DiagnosticsRecorder } from './diagnostics-recorder'
 import { LOG_CLEANUP_INTERVAL_MS, prunePiRpcLogs } from './log-retention'
+import { prunePreviousLogDirectory } from './log-directories'
 
 let cleanupTimer: NodeJS.Timeout | undefined
 
-export function startDesktopLogging(mamRoot: string): DesktopRuntimeLogger {
-  const logger = new DesktopRuntimeLogger(join(mamRoot, 'diagnostics', 'runtime.jsonl'))
+export function startDesktopLogging(
+  mamRoot: string,
+  logDirectory = join(mamRoot, 'diagnostics')
+): DesktopRuntimeLogger {
+  const logger = new DesktopRuntimeLogger(join(logDirectory, 'runtime.jsonl'))
   const stopHeartbeat = logger.startHeartbeat()
   logger.record('main', 'app_start', {
     version: app.getVersion(),
     platform: process.platform,
     arch: process.arch,
     versions: process.versions,
-    diagnosticsDirectory: join(mamRoot, 'diagnostics')
+    diagnosticsDirectory: logDirectory
   })
   process.on('uncaughtExceptionMonitor', (error, origin) => {
     logger.record('main', 'uncaught_exception', { origin, error: diagnosticError(error) })
@@ -38,7 +42,8 @@ export function attachWindowDiagnostics(
   window: BrowserWindow,
   logger: DesktopRuntimeLogger,
   diagnostics: DiagnosticsRecorder,
-  configRoots: () => readonly string[]
+  configRoots: () => readonly string[],
+  previousLogDirectories: readonly string[] = []
 ): void {
   const cleanup = (): void => {
     try {
@@ -47,6 +52,13 @@ export function attachWindowDiagnostics(
       prunePiRpcLogs(configRoots())
     } catch (error) {
       logger.record('logs', 'cleanup_failed', { error: diagnosticError(error) })
+    }
+    for (const directory of previousLogDirectories) {
+      try {
+        prunePreviousLogDirectory(directory)
+      } catch (error) {
+        logger.record('logs', 'cleanup_failed', { directory, error: diagnosticError(error) })
+      }
     }
   }
   cleanup()

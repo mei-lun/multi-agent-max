@@ -1,4 +1,4 @@
-import { Save } from 'lucide-react'
+import { FolderOpen, Save } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { MamSaveLocalSettingsInput } from '../../../../shared/mam/application-command'
 import {
@@ -13,6 +13,8 @@ import { Textarea } from '../../components/ui/textarea'
 import { MamLocalProfileBindings } from './MamLocalProfileBindings'
 import { MamWorkflowLabeledField } from './MamWorkflowFieldControls'
 import { MamProfileCheckbox } from './MamProfileFieldControls'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../../components/ui/tooltip'
+import { getMamRendererApi } from '../../renderer-api'
 
 export function MamLocalSettingsEditor({
   settings,
@@ -30,6 +32,7 @@ export function MamLocalSettingsEditor({
   const [draft, setDraft] = useState(settings)
   const [source, setSource] = useState(JSON.stringify(settings, null, 2))
   const [error, setError] = useState<string>()
+  const [choosingLogDirectory, setChoosingLogDirectory] = useState(false)
   useEffect(() => {
     setDraft(settings)
     setSource(JSON.stringify(settings, null, 2))
@@ -54,6 +57,18 @@ export function MamLocalSettingsEditor({
       await onSave({ settings: draft })
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
+    }
+  }
+  const chooseLogDirectory = async (): Promise<void> => {
+    setError(undefined)
+    setChoosingLogDirectory(true)
+    try {
+      const directory = await getMamRendererApi().selectLogDirectory()
+      if (directory) update({ ...draft, logDirectory: directory })
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setChoosingLogDirectory(false)
     }
   }
   return (
@@ -93,6 +108,35 @@ export function MamLocalSettingsEditor({
           update({ ...draft, collaborationMode: local ? 'local' : 'distributed' })
         }
       />
+      <MamWorkflowLabeledField
+        label="Log directory"
+        description="Changes take effect after restarting the application."
+      >
+        <div className="flex min-w-0 items-center gap-2">
+          <Input
+            aria-label="Log directory"
+            className="min-w-0 flex-1 font-mono"
+            value={draft.logDirectory ?? ''}
+            disabled={pending || choosingLogDirectory}
+            onChange={(event) => update({ ...draft, logDirectory: event.target.value })}
+          />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                className="shrink-0"
+                aria-label="Choose log directory"
+                disabled={pending || choosingLogDirectory}
+                onClick={() => void chooseLogDirectory()}
+              >
+                <FolderOpen />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Choose log directory</TooltipContent>
+          </Tooltip>
+        </div>
+      </MamWorkflowLabeledField>
       {projectDirectory && (
         <p className="text-xs text-muted-foreground">
           Attached now: <span className="font-mono">{projectDirectory}</span>
@@ -112,14 +156,18 @@ export function MamLocalSettingsEditor({
             aria-invalid={Boolean(error)}
             onChange={(event) => setSource(event.target.value)}
           />
-          {error && <p className="text-xs text-destructive">{error}</p>}
           <Button variant="outline" size="xs" onClick={applyJson}>
             Apply local JSON
           </Button>
         </div>
       </details>
+      {error && (
+        <p role="alert" className="break-words text-xs text-destructive">
+          {error}
+        </p>
+      )}
       <div className="flex justify-end">
-        <Button size="sm" disabled={pending} onClick={() => void save()}>
+        <Button size="sm" disabled={pending || choosingLogDirectory} onClick={() => void save()}>
           <Save /> Save local settings
         </Button>
       </div>

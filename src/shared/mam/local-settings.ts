@@ -11,6 +11,7 @@ export const MamLocalSettingsSchema = z
     gitExecutable: z.string().min(1),
     collaborationMode: z.enum(['distributed', 'local']).default('distributed'),
     defaultProjectDirectory: z.string().min(1).optional(),
+    logDirectory: z.string().trim().min(1).optional(),
     participatingRoleProfileIds: z.array(MamEntityIdSchema).optional(),
     automaticWorkflowRunIds: z.array(MamEntityIdSchema).optional(),
     executorBindings: z.array(LocalExecutorBindingSchema),

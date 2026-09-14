@@ -254,6 +254,10 @@ export const ZH_CN_UI_MESSAGES: Readonly<Record<string, string>> = {
   'Used for native project and mam-state commands; Git 2.25 is the baseline.':
     '用于本机项目和 mam-state 命令；最低支持 Git 2.25。',
   'Default project directory': '默认项目目录',
+  'Log directory': '日志目录',
+  'Choose log directory': '选择日志文件夹',
+  'Changes take effect after restarting the application.': '修改将在重启应用后生效。',
+  'Log directory must be an absolute path': '日志目录必须是绝对路径',
   'Choose a directory': '选择目录',
   'Attached now:': '当前已连接：',
   'Executor, secret, Skill, and Knowledge bindings': '执行器、密钥、技能和知识绑定',

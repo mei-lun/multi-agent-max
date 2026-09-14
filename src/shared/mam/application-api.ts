@@ -44,6 +44,7 @@ import type {
 export const MAM_GET_UI_SNAPSHOT_CHANNEL = 'mam:get-ui-snapshot'
 export const MAM_GET_ATTEMPT_DIFF_CHANNEL = 'mam:get-attempt-diff'
 export const MAM_SELECT_PROJECT_CHANNEL = 'mam:select-project'
+export const MAM_SELECT_LOG_DIRECTORY_CHANNEL = 'mam:select-log-directory'
 export const MAM_ASSIGN_TASK_CHANNEL = 'mam:assign-task'
 export const MAM_REASSIGN_TASK_CHANNEL = 'mam:reassign-task'
 export const MAM_RECOVER_ATTEMPT_CHANNEL = 'mam:recover-attempt'
@@ -91,6 +92,7 @@ export type MamRendererApi = Readonly<{
   getUiSnapshot(): Promise<MamUiSnapshot>
   getAttemptDiff(input: MamGetAttemptDiffInput): Promise<MamAttemptDiff>
   selectProject(): Promise<MamUiSnapshot | undefined>
+  selectLogDirectory(): Promise<string | undefined>
   assignTask(input: MamAssignTaskInput): Promise<MamUiSnapshot>
   reassignTask(input: MamReassignTaskInput): Promise<MamUiSnapshot>
   recoverAttempt(input: MamRecoverAttemptInput): Promise<MamUiSnapshot>
