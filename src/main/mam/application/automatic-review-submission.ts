@@ -236,20 +236,64 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value))
 }
 
-export function publishAutomaticReviewSubmission(input: {
-  request: MamSubmitReviewInput | undefined
-  repository: GitStateRepository
-  schedulerId: string
-  nextCommandId(): string
-  now(): string
-}): boolean {
-  if (!input.request) return false
-  submitReviewAndAggregate({
-    request: input.request,
-    repository: input.repository,
-    schedulerId: input.schedulerId,
-    nextCommandId: input.nextCommandId,
-    now: input.now
-  })
-  return true
+type AutomaticReviewPublisher = typeof submitReviewAndAggregate
+
+export function publishAutomaticReviewSubmission(
+  input: {
+    request: MamSubmitReviewInput | undefined
+    repository: GitStateRepository
+    schedulerId: string
+    nextCommandId(): string
+    now(): string
+  },
+  publish: AutomaticReviewPublisher = submitReviewAndAggregate
+): 'not_applicable' | 'submitted' | 'superseded' {
+  if (!input.request) return 'not_applicable'
+  const initialState = automaticReviewPublicationState(input.repository, input.request)
+  if (initialState !== 'current') return initialState
+  try {
+    publish({
+      request: input.request,
+      repository: input.repository,
+      schedulerId: input.schedulerId,
+      nextCommandId: input.nextCommandId,
+      now: input.now
+    })
+    return automaticReviewPublicationState(input.repository, input.request) === 'superseded'
+      ? 'superseded'
+      : 'submitted'
+  } catch (error) {
+    const latestState = automaticReviewPublicationState(input.repository, input.request)
+    if (latestState !== 'current') return latestState
+    if (errorCode(error) === 'stale_review_attempt') return 'superseded'
+    throw error
+  }
+}
+
+function automaticReviewPublicationState(
+  repository: GitStateRepository,
+  request: MamSubmitReviewInput
+): 'current' | 'submitted' | 'superseded' {
+  const projection = repository.rebuild(request.workflowRunId)
+  const reviewTask = projection.reviewTasks[request.reviewerTaskId]
+  if (!reviewTask) return 'current'
+  const subject = reviewTask.subject
+  const targetTask = projection.tasks[subject.taskId]
+  const targetAttempt = projection.attempts[subject.attemptId]
+  const alreadyAggregated = Object.values(projection.reviewAggregations ?? {}).some(
+    (aggregation) =>
+      aggregation.reviewNodeId === reviewTask.reviewNodeId &&
+      JSON.stringify(aggregation.subject) === JSON.stringify(subject)
+  )
+  const subjectIsCurrent =
+    targetTask?.selectedAttemptId === subject.attemptId && targetAttempt?.status === 'submitted'
+  if (!subjectIsCurrent) return 'superseded'
+  if (alreadyAggregated) return 'submitted'
+  return targetTask.status === 'in_review' ? 'current' : 'superseded'
+}
+
+function errorCode(error: unknown): string | undefined {
+  return error && typeof error === 'object' && 'code' in error && typeof error.code === 'string'
+    ? error.code
+    : undefined
 }

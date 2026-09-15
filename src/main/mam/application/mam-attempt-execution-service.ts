@@ -33,6 +33,7 @@ import type { ExecutorKind } from '../../../shared/mam/domain/execution-profile'
 import type { MamAttemptExecutionServiceOptions } from './mam-attempt-execution-service-options'
 import { schedulerEnvelope } from './scheduler-envelope'
 import { resolveAttemptStartIdentity } from './attempt-start-identity'
+import { LocalTaskExecutionRegistry } from './local-task-execution-registry'
 
 export class MamAttemptExecutionService {
   private readonly query: MamUiQueryService
@@ -50,6 +51,7 @@ export class MamAttemptExecutionService {
   private onStateChanged: () => void
   private readonly preflight: ExecutorLocalPreflight
   private readonly enabledExecutorKinds: ReadonlySet<ExecutorKind> | undefined
+  private readonly localTaskExecutions = new LocalTaskExecutionRegistry<MamUiSnapshot>()
   private repository: GitStateRepository | undefined
 
   constructor(input: MamAttemptExecutionServiceOptions) {
@@ -68,55 +70,59 @@ export class MamAttemptExecutionService {
     this.createId = input.createId ?? ((kind) => `${kind}.${randomUUID().replaceAll('-', '')}`)
     this.onStateChanged = input.onStateChanged ?? (() => undefined)
     this.preflight = input.preflight ?? new ExecutorLocalPreflight()
-    this.enabledExecutorKinds = input.enabledExecutorKinds
-      ? new Set(input.enabledExecutorKinds)
-      : undefined
+    this.enabledExecutorKinds = input.enabledExecutorKinds && new Set(input.enabledExecutorKinds)
   }
 
   setRepository(repository: GitStateRepository): void {
     this.repository = repository
   }
 
-  setOnStateChanged(onStateChanged: () => void): void {
-    this.onStateChanged = onStateChanged
-  }
-
   async start(input: unknown): Promise<MamUiSnapshot> {
     const parsed = MamStartAttemptInputSchema.parse(input)
-    const prepared = await this.prepare(parsed.workflowRunId, parsed.taskId)
-    try {
-      this.publishStart(prepared)
-    } catch (error) {
-      if (prepared.task.mergeConflictTask) {
-        this.conflictWorktrees().abandon({
-          repositoryPath: this.requireRepository().projectDirectory,
-          integrationRoot: this.workspaceRoot,
-          remoteName: this.requireRepository().remote,
-          task: prepared.task.mergeConflictTask
-        })
-      } else {
-        this.worktrees().abandon(this.requireRepository().projectDirectory, prepared.worktree)
-      }
-      throw error
-    }
-    launchPreparedAttempt(
-      {
-        prepared,
-        executor: this.executor,
-        artifacts: this.artifacts,
-        worktrees: this.worktrees(),
-        conflicts: this.conflictWorktrees(),
-        git: createGitCommandClient(this.settings.get().gitExecutable),
-        repository: this.requireRepository(),
-        diagnostics: this.diagnostics,
-        schedulerId: this.schedulerId,
-        now: this.now,
-        createId: this.createId,
-        onActivityChanged: this.onStateChanged
-      },
-      this.onStateChanged
+    const key = [this.requireRepository().stateDirectory, parsed.workflowRunId, parsed.taskId].join(
+      '\0'
     )
-    return this.query.getSnapshot()
+    return this.localTaskExecutions.getOrCreate(key, async () => {
+      let prepared: PreparedAttempt | undefined
+      try {
+        prepared = await this.prepare(parsed.workflowRunId, parsed.taskId)
+        this.publishStart(prepared)
+      } catch (error) {
+        this.localTaskExecutions.release(key)
+        if (prepared?.task.mergeConflictTask) {
+          this.conflictWorktrees().abandon({
+            repositoryPath: this.requireRepository().projectDirectory,
+            integrationRoot: this.workspaceRoot,
+            remoteName: this.requireRepository().remote,
+            task: prepared.task.mergeConflictTask
+          })
+        } else if (prepared) {
+          this.worktrees().abandon(this.requireRepository().projectDirectory, prepared.worktree)
+        }
+        throw error
+      }
+      launchPreparedAttempt(
+        {
+          prepared,
+          executor: this.executor,
+          artifacts: this.artifacts,
+          worktrees: this.worktrees(),
+          conflicts: this.conflictWorktrees(),
+          git: createGitCommandClient(this.settings.get().gitExecutable),
+          repository: this.requireRepository(),
+          diagnostics: this.diagnostics,
+          schedulerId: this.schedulerId,
+          now: this.now,
+          createId: this.createId,
+          onActivityChanged: this.onStateChanged
+        },
+        () => {
+          this.localTaskExecutions.release(key)
+          this.onStateChanged()
+        }
+      )
+      return this.query.getSnapshot()
+    })
   }
 
   private async prepare(workflowRunId: string, taskId: string): Promise<PreparedAttempt> {

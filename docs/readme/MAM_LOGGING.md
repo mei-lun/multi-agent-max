@@ -8,8 +8,8 @@
 
 | 文件 | 内容 |
 | --- | --- |
-| `runtime.jsonl` | 应用版本和运行时版本、窗口异常、前端 warning/error、未处理异常、IPC 开始/结束/失败、自动调度启动失败 |
-| `events.json` | Run/Task/Attempt/Invocation 关联的执行事件、模型与接口、工作目录、失败堆栈、工具活动及用量 |
+| `runtime.jsonl` | 应用版本和运行时版本、窗口异常、前端 warning/error、未处理异常、IPC 开始/结束/失败 |
+| `events.json` | Run/Task/Attempt/Invocation 关联的执行事件、模型与接口、工作目录、失败堆栈、过期自动 Review、工具活动及用量 |
 | `invocations/<Invocation ID 的 SHA-256>/rpc.jsonl` | Pi 命令、压缩事件及 stderr；首条 `mam.invocation_start` 记录原始关联 ID 和日志路径 |
 
 Pi 的配置和会话仍放在内置或自定义 Executor 的 `configRoot`，日志目录可单独指定。`runtime.jsonl` 的 `app_start` 记录实际诊断目录。开发模式的 userData 通常位于 Windows `%APPDATA%/multi-agent-max`、macOS `~/Library/Application Support/multi-agent-max`；打包版本名称可能不同。

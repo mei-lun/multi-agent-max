@@ -12,7 +12,6 @@ import { createGitCommandClient } from './mam/state-store/git-command-client'
 import { DiagnosticsRecorder } from './mam/diagnostics/diagnostics-recorder'
 import { MamWorkflowRunCommandService } from './mam/application/mam-workflow-run-command-service'
 import { MamAttemptExecutionService } from './mam/application/mam-attempt-execution-service'
-import { attachAutomaticWorkflow } from './mam/application/mam-automatic-workflow-runtime'
 import { AttemptResourceMaterializer } from './mam/profiles/attempt-resource-materializer'
 import { LocalArtifactStore } from './mam/artifacts/local-artifact-store'
 import { AttemptArtifactValidator } from './mam/application/attempt-artifact-validator'
@@ -166,17 +165,12 @@ function createMainWindow(): void {
     ),
     diagnostics,
     workspaceRoot: join(app.getPath('userData'), 'mam', 'attempt-worktrees'),
+    onStateChanged: notifySnapshotChanged,
     secretValues,
     ...(initialRepository ? { repository: initialRepository } : {})
   })
-  const automaticRunner = attachAutomaticWorkflow({
-    runtimeLogger,
-    attempts,
-    commands,
-    workflowRuns,
-    ...(initialRepository ? { repository: initialRepository } : {}),
-    notifySnapshotChanged
-  })
+  commands.setOnStateChanged(notifySnapshotChanged)
+  workflowRuns.setOnStateChanged(notifySnapshotChanged)
   const attemptInspection = new MamAttemptInspectionService(initialRepository, () =>
     createGitCommandClient(localSettings.get().gitExecutable)
   )
@@ -214,8 +208,6 @@ function createMainWindow(): void {
       commands.setRepository(repository)
       workflowRuns.setRepository(repository)
       attempts.setRepository(repository)
-      automaticRunner.setRepository(repository)
-      automaticRunner.notify()
       attemptInspection.setRepository(repository)
       mergeQueue.setRepository(repository)
       return service.getSnapshot()

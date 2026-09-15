@@ -215,6 +215,62 @@ describe('MAM Attempt execution with real Git state', () => {
     expect(Object.values(replacement.reviewPanels)).toHaveLength(2)
   })
 
+  it('retires an old Review panel when a later concurrent result is submitted', async () => {
+    const fixture = createAttemptExecutionAcceptanceFixture()
+    fixtures.push(fixture)
+    const releaseFirst = completionSignal()
+    const releaseSecond = completionSignal()
+    const firstCompleted = completionSignal()
+    const secondCompleted = completionSignal()
+    const firstService = executionService(
+      fixture,
+      sequentialIds('first'),
+      firstCompleted.resolve,
+      async (input) => {
+        await releaseFirst.promise
+        return fakeExecution(input)
+      }
+    )
+    const secondService = executionService(
+      fixture,
+      sequentialIds('second'),
+      secondCompleted.resolve,
+      async (input) => {
+        await releaseSecond.promise
+        return fakeExecution(input)
+      }
+    )
+
+    await firstService.start({ workflowRunId: fixture.bundle.run.id, taskId: fixture.taskId })
+    const firstAttemptId = fixture.repository
+      .rebuild(fixture.bundle.run.id)
+      .tasks[fixture.taskId]!.knownAttemptIds.at(-1)!
+    await secondService.start({ workflowRunId: fixture.bundle.run.id, taskId: fixture.taskId })
+    const secondAttemptId = fixture.repository
+      .rebuild(fixture.bundle.run.id)
+      .tasks[fixture.taskId]!.knownAttemptIds.at(-1)!
+
+    releaseFirst.resolve()
+    await firstCompleted.promise
+    submitReviewDecision(fixture, firstAttemptId, 'approved', sequentialIds('review'))
+    const oldReviewId = Object.values(fixture.repository.rebuild(fixture.bundle.run.id).reviews)[0]!
+      .id
+
+    releaseSecond.resolve()
+    await secondCompleted.promise
+    const projection = fixture.repository.rebuild(fixture.bundle.run.id)
+    expect(projection.tasks[fixture.taskId]).toMatchObject({
+      status: 'in_review',
+      selectedAttemptId: secondAttemptId,
+      reviewPanelId: expect.stringContaining(secondAttemptId)
+    })
+    expect(projection.reviewValidity[oldReviewId]).toEqual({
+      status: 'invalidated',
+      invalidatedByAttemptId: secondAttemptId
+    })
+    expect(Object.values(projection.reviewPanels)).toHaveLength(2)
+  })
+
   it('reuses approved Review evidence across repeated clean restarts', async () => {
     const fixture = createAttemptExecutionAcceptanceFixture()
     fixtures.push(fixture)
@@ -383,6 +439,41 @@ describe('MAM Attempt execution with real Git state', () => {
       service.start({ workflowRunId: fixture.bundle.run.id, taskId: fixture.taskId })
     ).rejects.toThrow('executor_not_enabled:codex-cli')
     expect(fixture.repository.rebuild(fixture.bundle.run.id).attempts).toEqual({})
+  })
+
+  it('coalesces duplicate starts for the same Task within one application process', async () => {
+    const fixture = createAttemptExecutionAcceptanceFixture()
+    fixtures.push(fixture)
+    const releaseExecution = completionSignal()
+    const execute = vi.fn(async (input: StructuredExecutorInput) => {
+      await releaseExecution.promise
+      return fakeExecution(input)
+    })
+    const service = executionService(fixture, sequentialIds(), vi.fn(), execute)
+
+    const firstStart = service.start({
+      workflowRunId: fixture.bundle.run.id,
+      taskId: fixture.taskId
+    })
+    const duplicateStart = service.start({
+      workflowRunId: fixture.bundle.run.id,
+      taskId: fixture.taskId
+    })
+    const [firstSnapshot, duplicateSnapshot] = await Promise.all([firstStart, duplicateStart])
+
+    const running = fixture.repository.rebuild(fixture.bundle.run.id)
+    expect(running.tasks[fixture.taskId]?.activeAttemptIds).toHaveLength(1)
+    expect(running.tasks[fixture.taskId]?.knownAttemptIds).toHaveLength(1)
+    expect(firstSnapshot.runs[0]?.attempts).toHaveLength(1)
+    expect(duplicateSnapshot.runs[0]?.attempts).toHaveLength(1)
+    await vi.waitFor(() => expect(execute).toHaveBeenCalledOnce())
+
+    releaseExecution.resolve()
+    await vi.waitFor(() => {
+      expect(fixture.repository.rebuild(fixture.bundle.run.id).tasks[fixture.taskId]?.status).toBe(
+        'in_review'
+      )
+    })
   })
 })
 
@@ -625,12 +716,12 @@ function startReviewerAttempt(
   })
 }
 
-function sequentialIds(): (kind: string) => string {
+function sequentialIds(scope?: string): (kind: string) => string {
   const counts = new Map<string, number>()
   return (kind) => {
     const next = (counts.get(kind) ?? 0) + 1
     counts.set(kind, next)
-    return `${kind}.${String(next)}`
+    return `${kind}.${scope ? `${scope}.` : ''}${String(next)}`
   }
 }
 

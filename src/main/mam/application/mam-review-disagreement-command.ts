@@ -5,6 +5,7 @@ import type { GitStateRepository } from '../state-store/git-state-repository'
 import { publishMergeReadinessIfEligible } from './merge-readiness-publisher'
 import { advanceDeterministicNodes } from './deterministic-node-advancement'
 import { boundedReviewStatus } from '../review/review-revision-limit'
+import { advanceReadyReviewPanel } from './review-panel-advancement'
 
 export class MamReviewDisagreementCommandError extends Error {
   constructor(
@@ -64,6 +65,15 @@ export function resolveReviewDisagreementAndPublishMerge(input: {
       repository: input.repository,
       workflowRunId: request.workflowRunId,
       taskId: aggregation.subject.taskId,
+      schedulerId: input.schedulerId,
+      commandId: input.nextCommandId(),
+      issuedAt: input.now()
+    })
+    advanceReadyReviewPanel({
+      repository: input.repository,
+      workflowRunId: request.workflowRunId,
+      sourceTaskId: aggregation.subject.taskId,
+      sourceNodeId: aggregation.reviewNodeId,
       schedulerId: input.schedulerId,
       commandId: input.nextCommandId(),
       issuedAt: input.now()

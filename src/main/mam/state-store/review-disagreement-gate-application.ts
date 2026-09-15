@@ -24,8 +24,9 @@ export function applyReviewDisagreementStatus(input: {
       'Review aggregation target Task is unavailable'
     )
   }
+  const { reviewPanelId: _reviewPanelId, ...taskWithoutReviewPanel } = task
   input.tasks[aggregation.subject.taskId] = {
-    ...task,
+    ...taskWithoutReviewPanel,
     status: input.event.option,
     lastEventId: input.event.eventId
   }

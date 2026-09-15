@@ -64,8 +64,19 @@ describe('Review Scheduler event flow', () => {
         }
       })
     ).events[0]!
+    projection = {
+      ...projection,
+      tasks: {
+        ...projection.tasks,
+        [subject.taskId]: {
+          ...projection.tasks[subject.taskId]!,
+          reviewPanelId: `review.node.${subject.attemptId}`
+        }
+      }
+    }
     projection = applyEvent(projection, aggregationEvent)
     expect(projection.tasks['task.implementation']?.status).toBe('approved')
+    expect(projection.tasks['task.implementation']).not.toHaveProperty('reviewPanelId')
     expect(projection.reviewAggregations[aggregation.id]).toEqual(aggregation)
 
     const nextAttempt = kernel.execute(
@@ -117,6 +128,38 @@ describe('Review Scheduler event flow', () => {
       )
     ).toThrow(expect.objectContaining({ code: 'review_target_required' }))
   })
+
+  it('accepts the selected submitted subject while another concurrent Attempt is running', () => {
+    const projection = reviewProjection()
+    const implementation = projection.tasks[subject.taskId]!
+    const concurrentAttemptId = 'attempt.implementation.concurrent'
+    const concurrent = {
+      ...projection,
+      tasks: {
+        ...projection.tasks,
+        [subject.taskId]: {
+          ...implementation,
+          activeAttemptIds: [concurrentAttemptId],
+          knownAttemptIds: [...implementation.knownAttemptIds, concurrentAttemptId]
+        }
+      },
+      attempts: {
+        ...projection.attempts,
+        [concurrentAttemptId]: {
+          taskId: subject.taskId,
+          status: 'running' as const,
+          roleInstanceId: 'role-instance.developer.concurrent',
+          executorInvocationId: 'invocation.developer.concurrent',
+          effectiveConfigHash: 'f'.repeat(64),
+          lastEventId: 'event.start.concurrent'
+        }
+      }
+    }
+
+    expect(applyEvent(concurrent, reviewEvent(concurrent))).toMatchObject({
+      reviews: { 'review.decision.a': { subject } }
+    })
+  })
 })
 
 function reviewProjection(): WorkflowRunProjection {
@@ -124,7 +167,7 @@ function reviewProjection(): WorkflowRunProjection {
   return {
     ...empty,
     tasks: {
-      'task.implementation': taskProjection('submitted', 'role.developer', [subject.attemptId]),
+      'task.implementation': taskProjection('in_review', 'role.developer', [subject.attemptId]),
       'task.review.a': taskProjection('running', 'role.reviewer', ['attempt.review.a'])
     },
     attempts: {
@@ -149,7 +192,7 @@ function reviewProjection(): WorkflowRunProjection {
 }
 
 function taskProjection(
-  status: 'submitted' | 'running',
+  status: 'in_review' | 'running',
   roleProfileId: string,
   attemptIds: string[]
 ) {
@@ -160,10 +203,22 @@ function taskProjection(
     assignedByUserId: 'user.owner',
     activeAttemptIds: status === 'running' ? attemptIds : [],
     knownAttemptIds: attemptIds,
+    ...(status === 'in_review' ? { selectedAttemptId: attemptIds.at(-1)! } : {}),
     reviewIds: [],
     executionWarnings: [],
     lastEventId: `event.${status}`
   }
+}
+
+function reviewEvent(projection: WorkflowRunProjection) {
+  return new SchedulerKernel().execute(
+    recordReviewCommand(reviewDecision(subject)),
+    schedulerContextFromProjection(projection, {
+      schedulerId: 'scheduler.1',
+      taskId: 'task.review.a',
+      taskDefinition: reviewTaskDefinition(subject)
+    })
+  ).events[0]!
 }
 
 function reviewTaskDefinition(reviewTarget: ReviewSubject) {

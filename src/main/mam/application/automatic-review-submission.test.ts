@@ -1,6 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { ValidatedAttemptArtifacts } from './attempt-artifact-validator'
-import { automaticReviewSubmission } from './automatic-review-submission'
+import {
+  automaticReviewSubmission,
+  publishAutomaticReviewSubmission
+} from './automatic-review-submission'
 import type { PreparedAttempt } from './mam-attempt-execution-types'
 
 describe('automatic Review submission', () => {
@@ -131,6 +134,181 @@ describe('automatic Review submission', () => {
       status: 'changes_requested',
       findings: [{ category: 'validation' }, { category: 'security' }]
     })
+  })
+
+  it('supersedes an automatic Review after its subject has been replaced', () => {
+    const request = automaticReviewSubmission(
+      preparedReview(),
+      validatedReview({ status: 'approved', summary: 'The old result is valid.', findings: [] })
+    )
+    const repository = {
+      rebuild: () => ({
+        reviewTasks: {
+          'review-task.1': {
+            subject: { taskId: 'task.source', attemptId: 'attempt.old' }
+          }
+        },
+        tasks: {
+          'task.source': {
+            status: 'running',
+            selectedAttemptId: 'attempt.old',
+            knownAttemptIds: ['attempt.old', 'attempt.new']
+          }
+        },
+        attempts: {
+          'attempt.old': { status: 'submitted' },
+          'attempt.new': { status: 'running' }
+        },
+        reviewAggregations: {}
+      })
+    }
+
+    expect(
+      publishAutomaticReviewSubmission({
+        request,
+        repository: repository as never,
+        schedulerId: 'scheduler.desktop',
+        nextCommandId: () => 'command.review',
+        now: () => '2026-09-14T08:00:00Z'
+      })
+    ).toBe('superseded')
+  })
+
+  it('does not supersede a later Review gate that shares the same subject', () => {
+    const request = automaticReviewSubmission(
+      preparedReview(),
+      validatedReview({ status: 'approved', summary: 'The result is valid.', findings: [] })
+    )
+    const subject = { taskId: 'task.source', attemptId: 'attempt.source' }
+    const repository = {
+      rebuild: () => ({
+        reviewTasks: {
+          'review-task.1': { reviewNodeId: 'review.second', subject }
+        },
+        tasks: {
+          'task.source': {
+            status: 'in_review',
+            selectedAttemptId: 'attempt.source',
+            knownAttemptIds: ['attempt.source']
+          }
+        },
+        attempts: { 'attempt.source': { status: 'submitted' } },
+        reviewAggregations: {
+          'aggregation.first': { reviewNodeId: 'review.first', subject }
+        }
+      })
+    }
+
+    const publish = vi.fn()
+    expect(
+      publishAutomaticReviewSubmission(
+        {
+          request,
+          repository: repository as never,
+          schedulerId: 'scheduler.desktop',
+          nextCommandId: () => 'command.review',
+          now: () => '2026-09-14T08:00:00Z'
+        },
+        publish
+      )
+    ).toBe('submitted')
+    expect(publish).toHaveBeenCalledOnce()
+  })
+
+  it('rechecks the frozen subject after an aggregation publication race', () => {
+    const request = automaticReviewSubmission(
+      preparedReview(),
+      validatedReview({ status: 'approved', summary: 'The result is valid.', findings: [] })
+    )
+    const subject = { taskId: 'task.source', attemptId: 'attempt.source' }
+    let replaced = false
+    const repository = {
+      rebuild: () => ({
+        reviewTasks: { 'review-task.1': { reviewNodeId: 'review.current', subject } },
+        tasks: {
+          'task.source': replaced
+            ? {
+                status: 'submitted',
+                selectedAttemptId: 'attempt.replacement',
+                knownAttemptIds: ['attempt.source', 'attempt.replacement']
+              }
+            : {
+                status: 'in_review',
+                selectedAttemptId: 'attempt.source',
+                knownAttemptIds: ['attempt.source']
+              }
+        },
+        attempts: {
+          'attempt.source': { status: 'submitted' },
+          'attempt.replacement': { status: 'submitted' }
+        },
+        reviewAggregations: {}
+      })
+    }
+    const publish = () => {
+      replaced = true
+      throw Object.assign(new Error('Task is no longer collecting Reviews'), {
+        code: 'review_not_collecting'
+      })
+    }
+
+    expect(
+      publishAutomaticReviewSubmission(
+        {
+          request,
+          repository: repository as never,
+          schedulerId: 'scheduler.desktop',
+          nextCommandId: () => 'command.review',
+          now: () => '2026-09-14T08:00:00Z'
+        },
+        publish
+      )
+    ).toBe('superseded')
+  })
+
+  it('rechecks the frozen subject after a non-throwing publication race', () => {
+    const request = automaticReviewSubmission(
+      preparedReview(),
+      validatedReview({ status: 'approved', summary: 'The result is valid.', findings: [] })
+    )
+    const subject = { taskId: 'task.source', attemptId: 'attempt.source' }
+    let replaced = false
+    const repository = {
+      rebuild: () => ({
+        reviewTasks: { 'review-task.1': { reviewNodeId: 'review.current', subject } },
+        tasks: {
+          'task.source': {
+            status: replaced ? 'submitted' : 'in_review',
+            selectedAttemptId: replaced ? 'attempt.replacement' : 'attempt.source',
+            knownAttemptIds: replaced
+              ? ['attempt.source', 'attempt.replacement']
+              : ['attempt.source']
+          }
+        },
+        attempts: {
+          'attempt.source': { status: 'submitted' },
+          'attempt.replacement': { status: 'submitted' }
+        },
+        reviewAggregations: replaced
+          ? { 'aggregation.old': { reviewNodeId: 'review.current', subject } }
+          : {}
+      })
+    }
+
+    expect(
+      publishAutomaticReviewSubmission(
+        {
+          request,
+          repository: repository as never,
+          schedulerId: 'scheduler.desktop',
+          nextCommandId: () => 'command.review',
+          now: () => '2026-09-14T08:00:00Z'
+        },
+        () => {
+          replaced = true
+        }
+      )
+    ).toBe('superseded')
   })
 })
 

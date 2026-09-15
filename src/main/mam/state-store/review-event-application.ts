@@ -2,7 +2,7 @@ import type { ReviewDecision } from '../../../shared/mam/domain/review'
 import type { SchedulerEvent } from '../../../shared/mam/scheduler-protocol'
 import type { AttemptProjection, TaskProjection } from './git-state-projection'
 
-type ReviewValidity = Readonly<{
+export type ReviewValidity = Readonly<{
   status: 'valid' | 'invalidated'
   invalidatedByAttemptId?: string
 }>
@@ -60,9 +60,9 @@ export function applyReviewRecordedEvent(input: {
     event.review.subject.attemptId,
     event.review.subject.taskId
   )
-  const latestTargetAttemptId = targetTask.knownAttemptIds.at(-1)
   if (
-    latestTargetAttemptId !== event.review.subject.attemptId ||
+    targetTask.status !== 'in_review' ||
+    targetTask.selectedAttemptId !== event.review.subject.attemptId ||
     targetAttempt.status !== 'submitted'
   ) {
     fail('stale_review_attempt', 'Review subject is not the latest submitted Attempt')

@@ -45,8 +45,9 @@ export function applyReviewAggregationEvent(input: {
   const status = event.aggregation.requiresHumanDecision
     ? 'in_review'
     : event.aggregation.proposedStatus
+  const { reviewPanelId: _reviewPanelId, ...taskWithoutReviewPanel } = task
   tasks[event.taskId] = {
-    ...task,
+    ...(event.aggregation.requiresHumanDecision ? task : taskWithoutReviewPanel),
     status,
     lastEventId: event.eventId
   }

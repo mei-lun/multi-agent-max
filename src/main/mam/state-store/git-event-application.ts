@@ -152,7 +152,14 @@ export function applyEvent(
       break
     }
     case 'attempt_result_submitted': {
-      applyAttemptResultSubmitted({ event, tasks, attempts, mergeQueueEntries })
+      applyAttemptResultSubmitted({
+        event,
+        tasks,
+        attempts,
+        reviews,
+        reviewValidity,
+        mergeQueueEntries
+      })
       break
     }
     case 'dynamic_tasks_created': {

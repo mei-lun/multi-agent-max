@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -21,6 +21,7 @@ import {
   type GitCommandClient
 } from './git-command-client'
 import { GitStateRepository } from './git-state-repository'
+import { SchedulerKernel } from '../scheduler/kernel'
 
 const temporaryDirectories: string[] = []
 
@@ -529,6 +530,63 @@ describe('GitStateRepository with real Git clones', () => {
     })
     repositoryA.alignToRemote()
     expect(repositoryA.rebuild('run.git').stateHash).toBe(continued.projection.stateHash)
+  })
+
+  it('rejects a semantically invalid event batch before changing Git state', () => {
+    const fixture = createGitFixture()
+    const repository = GitStateRepository.attach(fixture.cloneA, fixture.stateA)
+    const coordinator = new GitCommandRetryCoordinator(repository)
+    const bundle = initializeRun(coordinator)
+    const task = taskId(bundle, 'task-shared')
+    coordinator.executeAndPush({
+      command: assignmentCommand('command.assign.invalid-start', task),
+      schedulerId: 'scheduler.1'
+    })
+    const projection = repository.rebuild('run.git')
+    const summaryPath = join(
+      fixture.stateA,
+      '.workflow',
+      'runs',
+      'run.git',
+      'snapshots',
+      'summary.json'
+    )
+    const commitBefore = repository.currentCommit()
+    const eventsBefore = repository.events.listEvents('run.git')
+    const summaryBefore = readFileSync(summaryPath, 'utf8')
+    const snapshot = effectiveConfigSnapshot(task)
+    const batch = new SchedulerKernel().restorePendingBatch([
+      {
+        schemaVersion: '1.0.0',
+        eventId: 'command.invalid-start:event:1',
+        commandId: 'command.invalid-start',
+        createdAt: '2026-09-14T08:00:00Z',
+        workflowRunId: 'run.git',
+        schedulerId: 'scheduler.1',
+        parentRevision: projection.revision,
+        type: 'attempt_started',
+        taskId: task,
+        attemptId: snapshot.attemptId,
+        roleInstanceId: 'role-instance.a',
+        executorInvocationId: 'executor-invocation.a',
+        effectiveConfigSnapshotId: snapshot.id,
+        effectiveConfigHash: snapshot.contentHash
+      }
+    ])
+
+    expect(() =>
+      repository.appendAndCommit({
+        workflowRunId: 'run.git',
+        batch,
+        expectedRevision: projection.revision,
+        expectedParentCommit: commitBefore,
+        effectiveConfigSnapshot: snapshot
+      })
+    ).toThrow(expect.objectContaining({ code: 'invalid_transition' }))
+    expect(repository.currentCommit()).toBe(commitBefore)
+    expect(repository.events.listEvents('run.git')).toEqual(eventsBefore)
+    expect(readFileSync(summaryPath, 'utf8')).toBe(summaryBefore)
+    expect(repository.loadEffectiveConfigSnapshot('run.git', snapshot.attemptId)).toBeUndefined()
   })
 })
 

@@ -70,6 +70,7 @@ describe('Review disagreement resolution projection', () => {
             assignedByUserId: 'user.owner',
             activeAttemptIds: [],
             knownAttemptIds: [aggregation.subject.attemptId],
+            reviewPanelId: `review.${aggregation.subject.attemptId}`,
             reviewIds: [],
             executionWarnings: [],
             lastEventId: 'event.aggregation'
@@ -81,6 +82,7 @@ describe('Review disagreement resolution projection', () => {
     )
     expect(resolvedReviewStatus(aggregation, projection)).toBe('approved')
     expect(projection.tasks[aggregation.subject.taskId]?.status).toBe('approved')
+    expect(projection.tasks[aggregation.subject.taskId]).not.toHaveProperty('reviewPanelId')
     expect(reviewDisagreementResolution(aggregation, projection)).toMatchObject({
       aggregationId: aggregation.id,
       sourceDecisionIds: aggregation.sourceDecisionIds,

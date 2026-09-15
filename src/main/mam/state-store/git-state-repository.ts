@@ -184,6 +184,10 @@ export class GitStateRepository {
     if (this.currentCommit() !== input.expectedParentCommit) {
       throw new GitStateRepositoryError('parent_commit_mismatch', 'state commit is stale')
     }
+    replayWorkflowRun(input.workflowRunId, [
+      ...this.events.listEvents(input.workflowRunId),
+      ...input.batch.events
+    ])
     try {
       this.runBundles.validateAndWrite({
         workflowRunId: input.workflowRunId,

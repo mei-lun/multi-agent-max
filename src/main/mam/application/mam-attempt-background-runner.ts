@@ -130,16 +130,20 @@ export async function runPreparedAttempt(input: PreparedAttemptRunnerInput): Pro
       status: 'result_submitted',
       submittedCommit: authoritative.system.submittedCommit
     })
-    if (
-      publishAutomaticReviewSubmission({
-        request: automaticReview,
-        repository: input.repository,
-        schedulerId: input.schedulerId,
-        nextCommandId: () => input.createId('command'),
-        now: input.now
-      })
-    ) {
+    const reviewPublication = publishAutomaticReviewSubmission({
+      request: automaticReview,
+      repository: input.repository,
+      schedulerId: input.schedulerId,
+      nextCommandId: () => input.createId('command'),
+      now: input.now
+    })
+    if (reviewPublication === 'submitted') {
       record(input, 'scheduler', { status: 'automatic_review_submitted' })
+    } else if (reviewPublication === 'superseded') {
+      record(input, 'scheduler', {
+        status: 'automatic_review_superseded',
+        subjectAttemptId: prepared.task.reviewTask?.subject.attemptId
+      })
     }
     if (prepared.task.mergeConflictTask) {
       recordCost(input, execution.usage)
