@@ -19,6 +19,24 @@ afterEach(() => {
 })
 
 describe('AttemptWorktreeManager', () => {
+  it('fetches a pinned integration commit from the configured target branch', () => {
+    const fixture = createRemoteIntegrationProject()
+    const manager = new AttemptWorktreeManager()
+
+    const prepared = manager.prepare({
+      repositoryPath: fixture.worker,
+      workspaceRoot: fixture.worktrees,
+      remoteName: 'origin',
+      attemptId: 'attempt.integrated',
+      baseRef: fixture.integrationCommit,
+      baseBranch: 'develop'
+    })
+
+    expect(prepared.baseCommit).toBe(fixture.integrationCommit)
+    expect(git(prepared.path, ['show', 'HEAD:design.md'])).toBe('integrated design')
+    expect(manager.abandon(fixture.worker, prepared)).toBe(true)
+  })
+
   it('keeps an Attempt branch local when the repository has no remote', () => {
     const fixture = createLocalProject()
     const manager = new AttemptWorktreeManager()
@@ -146,6 +164,34 @@ function createLocalProject(): { root: string; project: string; worktrees: strin
   git(project, ['add', 'README.md'])
   git(project, ['commit', '-m', 'base'])
   return { root, project, worktrees: join(root, 'worktrees') }
+}
+
+function createRemoteIntegrationProject(): {
+  worker: string
+  worktrees: string
+  integrationCommit: string
+} {
+  const root = mkdtempSync(join(tmpdir(), 'mam-attempt-integration-'))
+  temporaryDirectories.push(root)
+  const origin = join(root, 'origin.git')
+  const integrator = join(root, 'integrator')
+  const worker = join(root, 'worker')
+  git(root, ['init', '--bare', origin])
+  git(root, ['clone', origin, integrator])
+  git(integrator, ['config', 'user.name', 'MAM Integration Test'])
+  git(integrator, ['config', 'user.email', 'mam-integration-test@example.invalid'])
+  writeFileSync(join(integrator, 'README.md'), '# base\n')
+  git(integrator, ['add', 'README.md'])
+  git(integrator, ['commit', '-m', 'base'])
+  git(integrator, ['push', 'origin', 'HEAD:main'])
+  git(root, ['clone', '--branch', 'main', origin, worker])
+  git(integrator, ['checkout', '-b', 'develop'])
+  writeFileSync(join(integrator, 'design.md'), 'integrated design\n')
+  git(integrator, ['add', 'design.md'])
+  git(integrator, ['commit', '-m', 'integrate design'])
+  const integrationCommit = git(integrator, ['rev-parse', 'HEAD'])
+  git(integrator, ['push', 'origin', 'develop'])
+  return { worker, worktrees: join(root, 'worktrees'), integrationCommit }
 }
 
 function git(directory: string, args: readonly string[]): string {

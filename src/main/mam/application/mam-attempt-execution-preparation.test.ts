@@ -70,4 +70,81 @@ describe('Review Attempt prompt', () => {
     })
     expect(attemptExecutionPrompt(task, 'mam/review')).not.toContain('criteriaResults')
   })
+
+  it('includes the reviewed Artifact source in a Review prompt', () => {
+    const task = resolveExecutableTask(
+      {
+        definition: {
+          nodes: [
+            { id: 'author', type: 'role_task' },
+            { id: 'review.web', type: 'review_gate' }
+          ],
+          edges: [{ from: 'author', to: 'review.web' }]
+        },
+        taskCatalog: [
+          {
+            id: 'task.author',
+            nodeId: 'author',
+            outputContracts: [{ artifactType: 'artifact.delivery', format: 'markdown' }]
+          }
+        ]
+      } as unknown as WorkflowRunBundle,
+      {
+        tasks: {
+          'task.author': {
+            knownAttemptIds: ['attempt.author'],
+            selectedAttemptId: 'attempt.author'
+          }
+        },
+        attempts: {
+          'attempt.author': {
+            status: 'submitted',
+            result: {
+              artifacts: [
+                {
+                  type: 'artifact.delivery',
+                  contentRef: 'workspace:docs/delivery.md',
+                  sha256: 'b'.repeat(64)
+                }
+              ],
+              system: { submittedCommit: 'a'.repeat(40) }
+            }
+          }
+        },
+        dynamicTasks: {},
+        reviewTasks: {
+          'review-task.one': {
+            id: 'review-task.one',
+            reviewNodeId: 'review.web',
+            subject: { submittedCommit: 'a'.repeat(40) },
+            inputArtifacts: [
+              {
+                artifactId: 'artifact.delivery',
+                version: 1,
+                contentHash: '0'.repeat(64)
+              }
+            ],
+            outputContracts: [
+              {
+                schemaVersion: '1.0.0',
+                artifactType: 'artifact.review',
+                format: 'markdown',
+                required: true,
+                maxBytes: 10_000,
+                requiredSections: ['summary']
+              }
+            ]
+          }
+        },
+        mergeConflictTasks: {},
+        mergeQueueEntries: {},
+        resolvedConditions: {}
+      } as unknown as WorkflowRunProjection,
+      'review-task.one',
+      'ready'
+    )
+
+    expect(attemptExecutionPrompt(task, 'mam/review')).toContain('docs/delivery.md')
+    expect(attemptExecutionPrompt(task, 'mam/review')).toContain('attempt.author')
+  })
 })

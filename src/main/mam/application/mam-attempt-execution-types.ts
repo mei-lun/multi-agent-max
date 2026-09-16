@@ -10,6 +10,23 @@ import type { McpLocalConnection } from '../../../shared/mam/domain/resource-pro
 import type { ResolvedAttemptConfig } from '../profiles/attempt-config-resolver'
 import type { ReviewTaskDefinition } from '../../../shared/mam/domain/review'
 
+export type AttemptInputArtifactContext = Readonly<{
+  artifactType: string
+  source: 'workflow' | 'external'
+  expectedHash: string
+  producerNodeId?: string
+  producerTaskId?: string
+  producerAttemptId?: string
+  sourceCommit?: string
+  contentLocations: readonly string[]
+}>
+
+export type AttemptIntegrationBase = Readonly<{
+  mergeNodeId: string
+  targetBranch: string
+  mergeCommit: string
+}>
+
 export type ExecutorRouter = Readonly<{
   execute(input: StructuredExecutorInput): Promise<StructuredExecutorResult>
 }>
@@ -22,6 +39,9 @@ export type ExecutableAttemptTask = Readonly<{
   outputContracts: StaticTaskDefinition['outputContracts']
   workspaceMode: 'none' | 'read' | 'write'
   baseRef: string
+  baseBranch?: string
+  inputArtifactContext?: readonly AttemptInputArtifactContext[]
+  integrationBase?: AttemptIntegrationBase
   nodeType?: StaticTaskDefinition['nodeType']
   reviewTask?: ReviewTaskDefinition
   mergeConflictTask?: MergeConflictTaskDefinition

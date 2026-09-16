@@ -541,6 +541,8 @@ interface AttemptResult {
 
 正式输入输出、Task Plan、Review、Approval、GitChange 和 merge result 必须进入 Git。大型原始日志、trace、截图和临时二进制可以只保存在本机，但 Git 中必须记录摘要、hash、大小、producer、retention 和 availability；任何后续节点必需读取的内容不得只存在本机。
 
+角色到角色的正式文件交接不得依赖共享聊天或未合并的 Attempt 分支。若后续 `role_task` 声明消费上游 `role_task` 的 Artifact，生产节点必须使用写工作区，经过有效 Review，并由 Workflow 配置的 `git_merge.targetBranch` 完成集成；消费节点必须位于该 `git_merge` 之后。Scheduler 启动消费 Attempt 时按 Git ancestry 选择该合并节点唯一包含其他成功合并的终端 `mergeCommit` 作为 `baseCommit`，不得用机器时间推断集成顺序，并向角色注入经过校验的 Artifact 类型、相对路径或 glob、hash、生产节点、Attempt 和来源 commit。没有完成集成或存在多个不唯一集成基线时拒绝启动。首期动态子任务不能在同一 `dynamic_tasks` 节点内直接消费兄弟任务的文件 Artifact；Task Plan 必须拒绝该结构，改由静态 Workflow 节点表达 Review 与 `git_merge` 边界。
+
 权威 Attempt、进入 Git 的 Artifact 及其元数据永久保留；本地诊断对象按显式 retention 清理。审核默认打开最新 Attempt，也可以从时间线只读打开旧 Attempt；代码比较使用 base/submitted commit 的 Git diff。首期不实现 Artifact 与 Artifact 的专用并排比较界面。
 
 ### 7.4 Review 语义
@@ -639,6 +641,8 @@ interface GitChange {
 
 task branch 属于 Task/Attempt，不属于 Role。一个角色可以执行多个任务，不会共享固定角色分支。
 
+入口任务继续从显式初始基线创建 Attempt。存在已完成上游 `git_merge` 的下游任务从该节点记录的不可变 `mergeCommit` 创建 Attempt；分布式 clone 在本地缺少该对象时，只 fetch Workflow 配置的目标分支并仍固定到记录的 commit，而不是读取启动瞬间可能继续移动的分支头。返工 Attempt 继续优先以上一次 `submittedCommit` 为基线。
+
 ### 9.2 提交和审核顺序
 
 1. 执行角色完成代码和测试。
@@ -647,6 +651,7 @@ task branch 属于 Task/Attempt，不属于 Role。一个角色可以执行多�
 4. Task 进入 `submitted`。
 5. Review 节点审核确定的 commit SHA。
 6. Review 通过后进入工作流定义的后续节点或 merge queue。
+7. 后续角色需要消费该 Task 文件产物时，只有对应 `git_merge` 成功后才能 ready，并从已记录的集成 commit 启动。
 
 Review 通过后如果 task branch 出现新 commit，原 Review 失效并回到审核节点。
 
@@ -823,7 +828,7 @@ Local Knowledge Binding
 | Resources        | 管理 Skill Registry、MCP Server Profile 和 Knowledge Base Profile                                                     |
 | Settings         | 管理 Executor、Provider/Endpoint、Model Profile、本机 secret/local bindings、Git 和默认目录                           |
 
-Design Assistant 是定义设计入口，不是独立 Agent Session，也不是 Workflow 权威状态。对话草稿以未加密 JSON 保存在本机，不写入 Git；模型只能引用当前已注册的 Executor、Model、Skill、MCP Server 和 Knowledge Base。Design Assistant 必须支持多轮头脑风暴：每轮最多提出一个只涉及业务意图的必要问题；澄清充分后提供二至三个有实质差异且包含取舍的方案；按角色与职责、工作流与交接、审核/失败/验证三个以上部分给出结构化建议。方案比较、设计分段和风险提示都是可选的协作信息，不要求用户逐项确认；用户可以在认为合适时直接确认当前完整替换方案。模型不得伪造方案选择或确认；若用户主动选择方案或提出修改，助手应记录并持续更新草稿。模型还应指出当前方案的缺陷并记录显式假设；未解决的问题和缺陷应在界面中清晰提示，但不阻止人工确认。每次模型响应仍必须生成一份完整替换方案，并以一个可编译的标准 Role/Workflow 模板作为保底。Design Assistant 不自动读取项目文件、文档或 Git 历史，也不启动外部 Visual Companion 或浏览器服务。解析、引用和 Workflow 编译错误必须进入有界自动修复，耗尽后持久化错误和草稿；只有实际编译错误或基线版本已过期时阻止创建，其他提示允许用户稍后修改或恢复标准模板。新建设计创建全新的完整 Role Profile 和 Workflow Definition；优化设计必须选择当前活动 Workflow 作为基线，保留稳定 Workflow ID，并创建尚未占用的下一版本，既有版本和已固定版本的 Run 保持不变。优化设计可复用现有 Role Profile，只在方案确有需要时创建新的完整 Role Profile。模型生成的每个可执行节点必须固定一个角色。确认操作不得创建 Workflow Run、Task、Attempt、Review 或 Merge Queue 项；用户仍需在 Workflows 页面人工启动 Run，运行 Task 时系统直接使用节点固定角色。
+Design Assistant 是定义设计入口，不是独立 Agent Session，也不是 Workflow 权威状态。对话草稿以未加密 JSON 保存在本机，不写入 Git；模型只能引用当前已注册的 Executor、Model、Skill、MCP Server 和 Knowledge Base。Design Assistant 必须支持多轮头脑风暴：每轮最多提出一个只涉及业务意图的必要问题；澄清充分后提供二至三个有实质差异且包含取舍的方案；按角色与职责、工作流与交接、审核/失败/验证三个以上部分给出结构化建议。方案比较、设计分段和风险提示都是可选的协作信息，不要求用户逐项确认；用户可以在认为合适时直接确认当前完整替换方案。模型不得伪造方案选择或确认；若用户主动选择方案或提出修改，助手应记录并持续更新草稿。模型还应指出当前方案的缺陷并记录显式假设；未解决的问题和缺陷应在界面中清晰提示，但不阻止人工确认。每次模型响应仍必须生成一份完整替换方案，并以一个可编译的标准 Role/Workflow 模板作为保底。任何 `role_task` 产出的正式文件若被后续 `role_task` 消费，Design Assistant 必须生成“生产节点（写工作区）→ Review → Workflow 指定目标分支的 `git_merge` → 消费节点”的交接路径，并让消费节点显式声明对应 Artifact 输入；不得生成依赖共享聊天或孤立 Attempt 分支的直接角色交接。提案校验必须把缺少该交接边界、非写入生产节点或同类型多生产者视为错误。Design Assistant 不自动读取项目文件、文档或 Git 历史，也不启动外部 Visual Companion 或浏览器服务。解析、引用和 Workflow 编译错误必须进入有界自动修复，耗尽后持久化错误和草稿；只有实际编译错误或基线版本已过期时阻止创建，其他提示允许用户稍后修改或恢复标准模板。新建设计创建全新的完整 Role Profile 和 Workflow Definition；优化设计必须选择当前活动 Workflow 作为基线，保留稳定 Workflow ID，并创建尚未占用的下一版本，既有版本和已固定版本的 Run 保持不变。优化设计可复用现有 Role Profile，只在方案确有需要时创建新的完整 Role Profile。模型生成的每个可执行节点必须固定一个角色。确认操作不得创建 Workflow Run、Task、Attempt、Review 或 Merge Queue 项；用户仍需在 Workflows 页面人工启动 Run，运行 Task 时系统直接使用节点固定角色。
 
 同一程序窗口可以启动多个 Role Instance；也允许多个本地进程分别选择不同角色。
 

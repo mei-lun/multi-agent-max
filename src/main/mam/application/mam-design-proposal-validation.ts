@@ -13,9 +13,8 @@ import {
   designExecutorResourceCapabilities,
   supportedDesignProviderProtocols
 } from './mam-design-execution-bindings'
-import { validateMamDesignDelivery } from './mam-design-delivery-validation'
 import { validateMamDesignWorkflowIdentity } from './mam-design-workflow-identity-validation'
-import { validateMamDesignMergeCommands } from './mam-design-merge-validation'
+import { validateMamDesignWorkflow } from './mam-design-workflow-validation'
 
 export function createMamDesignProposal(input: {
   roles: readonly RoleProfile[]
@@ -73,8 +72,7 @@ export function validateMamDesignProposal(input: {
     input.workflowRevision ? input.profiles : undefined,
     issues
   )
-  issues.push(...validateMamDesignMergeCommands(input.workflow))
-  issues.push(...validateMamDesignDelivery(input.workflow))
+  issues.push(...validateMamDesignWorkflow(input.workflow))
   try {
     compileWorkflow(input.workflow)
   } catch (cause) {

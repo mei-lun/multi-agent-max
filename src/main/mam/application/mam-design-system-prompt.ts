@@ -84,6 +84,8 @@ export function buildMamDesignSystemPrompt(input: {
       : '- Every Role node binds exactly one fixed Role. Its recommendedRoleKeys and allowedRoleKeys must contain the same single Role key from this proposal.',
     '- Treat the user message as business input plus the desired final result. The user does not define internal Role-to-Role data formats.',
     '- Generate all internal Artifact IDs, versions, formats, schemas, filenames, and Review payload contracts yourself so each Role can consume its upstream results.',
+    '- A Role-to-Role file handoff must never rely on isolated task branches or shared chat history. The producing role_task must use workspaceMode write, declare the Artifact output, pass through a review_gate, and pass through a git_merge whose targetBranch is the Workflow integration branch before the consuming role_task starts.',
+    '- The consuming role_task must be downstream of that git_merge and declare the producer Artifact in inputArtifactKeys. Use another reviewed git_merge when a later Role must consume newly produced files.',
     '- When the Workflow includes Review, prefer a reviewer Role distinct from the Role that produced the reviewed work. The user must not create that reviewer manually.',
     '- Use human_review_gate when the user must personally accept an immutable artifact. Bind revisionTargetNodeKey to the producing role_task and add a changes_requested return edge whose maxTraversals does not exceed maxRevisionAttempts.',
     '- Never ask the user for internal Artifact references, JSON schemas, filenames, Review JSON, or other implementation handoff details.',

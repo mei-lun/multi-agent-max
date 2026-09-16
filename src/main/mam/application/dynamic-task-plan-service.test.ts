@@ -109,4 +109,27 @@ describe('dynamic Task Plan service', () => {
       })
     ).toThrow(expect.objectContaining({ code: 'dynamic_task_id_collision' }))
   })
+
+  it('rejects sibling Artifact handoffs that cannot cross a Workflow merge boundary', () => {
+    const fixture = dynamicPlanFixture()
+    const artifactType = fixture.plan.tasks[0]!.outputContracts[0]!.artifactType
+
+    expect(() =>
+      materializeDynamicTaskPlan({
+        ...fixture,
+        plan: {
+          ...fixture.plan,
+          tasks: [
+            fixture.plan.tasks[0]!,
+            {
+              ...fixture.plan.tasks[1]!,
+              inputArtifacts: [
+                { artifactId: artifactType, version: 1, contentHash: '0'.repeat(64) }
+              ]
+            }
+          ]
+        }
+      })
+    ).toThrow(expect.objectContaining({ code: 'dynamic_role_handoff_unsupported' }))
+  })
 })

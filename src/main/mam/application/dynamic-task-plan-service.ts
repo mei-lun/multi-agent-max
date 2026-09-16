@@ -42,6 +42,7 @@ export function materializeDynamicTaskPlan(input: {
     fail('dynamic_task_limit_exceeded', 'Task Plan exceeds the Workflow node task limit')
   }
   assertPlanGraph(plan)
+  assertNoSiblingArtifactHandoffs(plan)
   assertPlanRoles(plan, input.bundle)
   const planHash = profileContentHash(plan)
   if (input.planArtifact.contentHash !== planHash) {
@@ -155,6 +156,21 @@ function assertPlanRoles(plan: TaskPlan, bundle: WorkflowRunBundle): void {
     if (task.recommendedRoleProfileIds.some((roleId) => !allowed.has(roleId))) {
       fail('dynamic_role_recommendation_denied', 'Recommended Role is outside the Task allowlist')
     }
+  }
+}
+
+function assertNoSiblingArtifactHandoffs(plan: TaskPlan): void {
+  const outputs = new Set(
+    plan.tasks.flatMap((task) => task.outputContracts.map((contract) => contract.artifactType))
+  )
+  const input = plan.tasks
+    .flatMap((task) => task.inputArtifacts)
+    .find((artifact) => outputs.has(artifact.artifactId))
+  if (input) {
+    fail(
+      'dynamic_role_handoff_unsupported',
+      `Dynamic Tasks cannot consume sibling Artifact ${input.artifactId} without a Workflow Review and git_merge boundary`
+    )
   }
 }
 

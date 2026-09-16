@@ -8,17 +8,27 @@ import type { AttemptWorktree } from './attempt-worktree-manager'
 import { automaticReviewArtifactContract } from './automatic-review-contract'
 import type { MamLocalSettings } from '../../../shared/mam/local-settings'
 import type { ResolvedAttemptConfig } from '../profiles/attempt-config-resolver'
+import { resolveAttemptHandoffContext } from './attempt-handoff-context'
 
 export function resolveExecutableTask(
   bundle: WorkflowRunBundle,
   projection: WorkflowRunProjection,
   taskId: string,
-  taskStatus: string
+  taskStatus: string,
+  isCommitAncestor?: (targetBranch: string, ancestor: string, descendant: string) => boolean
 ): ExecutableAttemptTask {
   const staticTask = bundle.taskCatalog.find((candidate) => candidate.id === taskId)
   if (staticTask) {
     const node = bundle.definition.nodes.find((candidate) => candidate.id === staticTask.nodeId)!
     const workspaceMode = node.type === 'role_task' ? node.workspaceMode : 'write'
+    const handoff = resolveAttemptHandoffContext({
+      bundle,
+      projection,
+      nodeId: staticTask.nodeId,
+      inputArtifacts: staticTask.inputArtifacts,
+      requireIntegratedRoleInputs: node.type === 'role_task',
+      ...(isCommitAncestor ? { isCommitAncestor } : {})
+    })
     const latestAttemptId = projection.tasks[taskId]?.knownAttemptIds.at(-1)
     const reviewedAttemptId = latestAttemptId
       ? projection.attempts[latestAttemptId]?.previousAttemptId
@@ -31,29 +41,54 @@ export function resolveExecutableTask(
           decision.subject.attemptId === reviewedAttemptId
       )
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0]?.feedback
+    const revisionBase =
+      taskStatus === 'changes_requested' && projection.tasks[taskId]?.submittedCommit
+        ? projection.tasks[taskId]!.submittedCommit!
+        : undefined
     return {
       ...staticTask,
       workspaceMode,
-      baseRef:
-        taskStatus === 'changes_requested' && projection.tasks[taskId]?.submittedCommit
-          ? projection.tasks[taskId]!.submittedCommit!
-          : 'HEAD',
+      baseRef: revisionBase ?? handoff.integrationBase?.mergeCommit ?? 'HEAD',
+      ...(!revisionBase && handoff.integrationBase
+        ? {
+            baseBranch: handoff.integrationBase.targetBranch,
+            integrationBase: handoff.integrationBase
+          }
+        : {}),
+      inputArtifactContext: handoff.inputArtifacts,
       ...(revisionFeedback ? { revisionFeedback } : {})
     }
   }
   const dynamicTask = projection.dynamicTasks[taskId]
-  if (dynamicTask) return { ...dynamicTask, workspaceMode: 'write', baseRef: 'HEAD' }
+  if (dynamicTask) {
+    return {
+      ...dynamicTask,
+      workspaceMode: 'write',
+      baseRef: 'HEAD'
+    }
+  }
   const reviewTask = projection.reviewTasks[taskId]
   if (reviewTask) {
     // Review result shape is an internal MAM contract, including for Runs frozen
     // before the current automatic Review schema was introduced.
     const outputContracts = reviewTask.outputContracts.map(automaticReviewArtifactContract)
+    const inputArtifactContext = reviewTask.inputArtifacts?.length
+      ? resolveAttemptHandoffContext({
+          bundle,
+          projection,
+          nodeId: reviewTask.reviewNodeId,
+          inputArtifacts: reviewTask.inputArtifacts,
+          requireIntegratedRoleInputs: false,
+          ...(isCommitAncestor ? { isCommitAncestor } : {})
+        }).inputArtifacts
+      : []
     return {
       ...reviewTask,
       outputContracts,
       nodeId: reviewTask.reviewNodeId,
       workspaceMode: 'read',
       baseRef: reviewTask.subject.submittedCommit ?? 'HEAD',
+      inputArtifactContext,
       reviewTask
     }
   }
@@ -144,6 +179,17 @@ export function attemptExecutionPrompt(task: ExecutableAttemptTask, branch: stri
     task.specification,
     '',
     `Workspace branch: ${branch}`,
+    ...(task.integrationBase
+      ? [
+          `Integrated base: ${task.integrationBase.targetBranch}@${task.integrationBase.mergeCommit} (Workflow node ${task.integrationBase.mergeNodeId}).`
+        ]
+      : []),
+    ...(task.inputArtifactContext?.length
+      ? [
+          `Verified input artifact manifest: ${JSON.stringify(task.inputArtifactContext)}`,
+          "Use the listed relative paths or glob patterns from the workspace. Do not rely on another Role's chat history or isolated task branch."
+        ]
+      : []),
     'Leave intended file changes in the workspace; MAM creates the Attempt commit and publishes it to a configured remote when distributed mode is enabled.',
     'Complete each output contract in the workspace. For code changes, MAM captures the Git diff. For file outputs, create a relative file whose name includes the artifact type.',
     'For Markdown outputs, each required section heading must include its configured section identifier.',

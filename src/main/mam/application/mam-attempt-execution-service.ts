@@ -8,7 +8,6 @@ import type { ProfileCatalog } from '../profiles/profile-catalog'
 import type { DiagnosticsRecorder } from '../diagnostics/diagnostics-recorder'
 import { ExecutorLocalPreflight } from '../executors/executor-local-preflight'
 import type { GitStateRepository } from '../state-store/git-state-repository'
-import { GitCommandRetryCoordinator } from '../state-store/git-command-retry-coordinator'
 import { createGitCommandClient } from '../state-store/git-command-client'
 import type { AttemptArtifactValidator } from './attempt-artifact-validator'
 import { AttemptWorktreeManager } from './attempt-worktree-manager'
@@ -31,9 +30,11 @@ import { profileContentHash } from '../profiles/profile-content-hash'
 import { ConflictResolutionWorktreeManager } from './conflict-resolution-worktree-manager'
 import type { ExecutorKind } from '../../../shared/mam/domain/execution-profile'
 import type { MamAttemptExecutionServiceOptions } from './mam-attempt-execution-service-options'
-import { schedulerEnvelope } from './scheduler-envelope'
 import { resolveAttemptStartIdentity } from './attempt-start-identity'
 import { LocalTaskExecutionRegistry } from './local-task-execution-registry'
+import { createIntegrationAncestryResolver } from './attempt-integration-ancestry'
+import { recordAttemptExecutionState } from './attempt-execution-diagnostics'
+import { publishAttemptStart } from './attempt-start-publisher'
 
 export class MamAttemptExecutionService {
   private readonly query: MamUiQueryService
@@ -173,7 +174,18 @@ export class MamAttemptExecutionService {
     const preflight = this.preflight.check(profile, binding)
     if (!preflight.ok) throw new Error(preflight.issues.map((issue) => issue.message).join('; '))
     const attemptId = attemptIdentity.attemptId
-    const task = resolveExecutableTask(bundle, projection, taskId, projectedTask.status)
+    const git = createGitCommandClient(settings.gitExecutable)
+    const task = resolveExecutableTask(
+      bundle,
+      projection,
+      taskId,
+      projectedTask.status,
+      createIntegrationAncestryResolver({
+        git,
+        repositoryPath: repository.projectDirectory,
+        remoteName: repository.remote
+      })
+    )
     const createdAt = this.now()
     const resolved = await new AttemptConfigResolver(this.catalog).resolve({
       workflowRunId,
@@ -216,7 +228,8 @@ export class MamAttemptExecutionService {
           workspaceRoot: this.workspaceRoot,
           remoteName: repository.remote,
           attemptId,
-          baseRef: task.baseRef
+          baseRef: task.baseRef,
+          ...(task.baseBranch ? { baseBranch: task.baseBranch } : {})
         })
     const roleInstanceId = this.createId('role-instance')
     const executorInvocationId = this.createId('executor-invocation')
@@ -247,31 +260,12 @@ export class MamAttemptExecutionService {
   }
 
   private publishStart(prepared: PreparedAttempt): void {
-    const coordinator = new GitCommandRetryCoordinator(this.requireRepository())
-    const issuedAt = this.now()
-    coordinator.executeAndPush({
-      command: {
-        ...schedulerEnvelope(prepared, this.createId('command'), issuedAt, this.schedulerId),
-        type: 'announce_execution',
-        claimId: this.createId('claim'),
-        attemptId: prepared.attemptId,
-        ...(prepared.previousAttemptId ? { previousAttemptId: prepared.previousAttemptId } : {}),
-        executorInstanceId: this.createId('executor-instance')
-      },
-      schedulerId: this.schedulerId
-    })
-    coordinator.executeAndPush({
-      command: {
-        ...schedulerEnvelope(prepared, this.createId('command'), issuedAt, this.schedulerId),
-        type: 'start_attempt',
-        attemptId: prepared.attemptId,
-        roleInstanceId: prepared.roleInstanceId,
-        executorInvocationId: prepared.executorInvocationId,
-        effectiveConfigSnapshotId: prepared.snapshot.id,
-        effectiveConfigHash: prepared.snapshot.contentHash
-      },
+    publishAttemptStart({
+      repository: this.requireRepository(),
+      prepared,
       schedulerId: this.schedulerId,
-      effectiveConfigSnapshot: prepared.snapshot
+      issuedAt: this.now(),
+      createId: this.createId
     })
     this.record(prepared, 'scheduler', { status: 'attempt_started' })
   }
@@ -291,14 +285,12 @@ export class MamAttemptExecutionService {
     kind: 'scheduler' | 'executor',
     payload: Readonly<Record<string, unknown>>
   ): void {
-    this.diagnostics.record({
-      at: this.now(),
-      workflowRunId: prepared.workflowRunId,
-      nodeId: prepared.nodeId,
-      roleInstanceId: prepared.roleInstanceId,
-      executorInvocationId: prepared.executorInvocationId,
+    recordAttemptExecutionState({
+      diagnostics: this.diagnostics,
+      prepared,
       kind,
-      payload
+      payload,
+      at: this.now()
     })
   }
 

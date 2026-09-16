@@ -74,6 +74,10 @@ describe('MAM Design standard template', () => {
     expect(prompt).toContain('git_merge to develop')
     expect(prompt).toContain('git_merge from the integrated revision to main')
     expect(prompt).toContain(
+      'A Role-to-Role file handoff must never rely on isolated task branches'
+    )
+    expect(prompt).toContain('downstream of that git_merge')
+    expect(prompt).toContain(
       'Never put prose, review criteria, or confirmation text in validations'
     )
     expect(prompt).toContain('"preferredExecutionBinding"')

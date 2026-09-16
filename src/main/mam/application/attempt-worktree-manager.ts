@@ -35,12 +35,18 @@ export class AttemptWorktreeManager {
     remoteName: string | undefined
     attemptId: string
     baseRef: string
+    baseBranch?: string
   }): AttemptWorktree {
     assertInput(input)
     const path = workspacePath(input.workspaceRoot, input.attemptId)
     if (existsSync(path)) throw new Error('Attempt worktree path already exists')
     mkdirSync(input.workspaceRoot, { recursive: true })
-    const baseCommit = this.resolveBaseCommit(input.repositoryPath, input.remoteName, input.baseRef)
+    const baseCommit = this.resolveBaseCommit(
+      input.repositoryPath,
+      input.remoteName,
+      input.baseRef,
+      input.baseBranch
+    )
     const branch = attemptBranchName(input.attemptId)
     this.git.run(input.repositoryPath, ['check-ref-format', `refs/heads/${branch}`])
     this.git.run(input.repositoryPath, ['worktree', 'add', '-b', branch, path, baseCommit])
@@ -101,7 +107,8 @@ export class AttemptWorktreeManager {
   private resolveBaseCommit(
     repositoryPath: string,
     remoteName: string | undefined,
-    baseRef: string
+    baseRef: string,
+    baseBranch: string | undefined
   ): string {
     const revision = `${baseRef}^{commit}`
     if (this.git.succeeds(repositoryPath, ['rev-parse', '--verify', revision])) {
@@ -117,6 +124,22 @@ export class AttemptWorktreeManager {
       throw new AttemptWorktreeError(
         'attempt_base_unavailable',
         `Attempt base ref ${baseRef} is unavailable in the local repository`
+      )
+    }
+    if (baseBranch) {
+      this.git.run(repositoryPath, ['check-ref-format', `refs/heads/${baseBranch}`])
+      this.git.run(repositoryPath, [
+        'fetch',
+        '--no-tags',
+        remoteName,
+        `+refs/heads/${baseBranch}:refs/remotes/${remoteName}/${baseBranch}`
+      ])
+      if (this.git.succeeds(repositoryPath, ['rev-parse', '--verify', revision])) {
+        return this.git.run(repositoryPath, ['rev-parse', '--verify', revision])
+      }
+      throw new AttemptWorktreeError(
+        'attempt_integration_base_unavailable',
+        `Integrated base ${baseRef} is unavailable after fetching ${remoteName}/${baseBranch}`
       )
     }
     this.git.run(repositoryPath, [
@@ -200,6 +223,7 @@ function assertInput(input: {
   workspaceRoot: string
   remoteName: string | undefined
   baseRef: string
+  baseBranch?: string
 }): void {
   if (!isAbsolute(input.repositoryPath) || !isAbsolute(input.workspaceRoot)) {
     throw new Error('Repository and Attempt workspace paths must be absolute')
