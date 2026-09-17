@@ -123,7 +123,7 @@ describe('MamMyRolePage', () => {
     expect(markup).toContain('aria-label="Filter Roles by Workflow"')
     expect(markup).not.toContain('Assigned by')
     expect(markup).toContain('2 concurrent execution warnings')
-    expect(markup).toContain('Run Task')
+    expect(markup).toContain('Claim and run')
     expect(markup).toContain('Available implementation')
     expect(markup).toContain('Fixed role assignment')
     expect(markup).not.toContain('Assign to Builder')

@@ -262,6 +262,7 @@ Workflow Definition 是带版本的执行图。每个可执行角色节点引用
 | `role_task`          | 生成绑定节点固定角色的普通 Task                  |
 | `dynamic_tasks`      | 根据结构化任务计划创建多个固定角色 Task          |
 | `review_gate`        | 生成绑定节点固定审核角色的一个或多个 Review Task |
+| `review_aggregate`   | 确定性汇总一个或多个 Review Gate 的审核结论      |
 | `approval_gate`      | 等待用户人工决定                                 |
 | `human_review_gate`  | 人工审阅不可变产物、沟通返工要求并决定是否放行   |
 | `condition`          | 根据结构化输出选择路径                           |
@@ -331,8 +332,8 @@ WorkflowRun
   -> NodeRun[]
       -> Task[]
           -> FixedRoleBinding
-          -> ExecutionClaimNotice[]
-          -> Attempt[]
+          -> TaskClaim?
+          -> DeliveredAttempt[]
               -> RoleInstance
               -> ExecutorInvocation
               -> ArtifactVersion[]
@@ -344,8 +345,9 @@ WorkflowRun
 
 - `Task`：由工作流节点固定角色并等待执行的工作单元。
 - `FixedRoleBinding`：Task 从 Workflow Definition 继承的唯一 Role Profile；启动时可记录内部激活事件，但不是用户可选择的派发。
-- `ExecutionClaimNotice`：某个临时 Agent 实例声明正在执行 Task 的非排他提示，不授予执行资格，也不充当并发锁。
-- `Attempt`：一次不可覆盖的执行尝试。
+- `TaskClaim`：授予一个实例执行具体 Task 的排他权威记录；Claim 固定沿用节点角色，不绑定设备，也不包含本地 Attempt 或 Executor 句柄。
+- `LocalExecutionDraft`：只保存在执行机器上的可恢复执行草稿，包含 Pi session、worktree、冻结配置和失败重试，不进入 `mam-state`。
+- `DeliveredAttempt`：本地草稿产生合法 Result、Artifact 和 commit 后一次性发布的不可变正式交付；只有正式交付属于 Workflow Attempt 历史。
 - `RoleInstance`：Role Profile 在某个 Attempt 中的配置快照。
 - `ExecutorInvocation`：某个 Attempt 内部的结构化进程/RPC 调用及 opaque handle，不是独立产品对象。
 - `ArtifactVersion`：跨节点传递的正式结果。
@@ -369,29 +371,34 @@ interface TaskRoleBinding {
 拒绝。更换节点角色只能保存新的 Workflow Definition 版本并创建新的 Run；历史 Run、
 Attempt、Role Instance 和 Effective Config Snapshot 始终保持不变。
 
-### 5.4 Execution Claim 是绑定实例的非排他提示
+### 5.4 Task Claim 是 Task 级排他执行权
 
 ```ts
-interface ExecutionClaimNotice {
+interface TaskClaim {
   claimId: string
-  workflowRunId: string
   taskId: string
   roleProfileId: string
-  executorInstanceId: string
-  attemptId: string
-  announcedAt: string
-  lastObservedAt?: string
+  roleProfileVersion: number
+  claimantInstanceId: string
+  generation: number
+  status: 'active' | 'released' | 'completed' | 'taken_over'
+  claimedAt: string
   releasedAt?: string
-  revision: string
+  completedAt?: string
+  takenOverAt?: string
+  takeoverReason?: string
 }
 ```
 
-Claim 只解决可见性问题：
+Claim 只在具体 Task 范围内排他，不限制同一 Role 或不同 Role 并行执行其他 Task：
 
-- 当另一 Agent 已经声明执行同一 Task 时，UI 和 CLI 显示明确 warning。
-- 同一机器或多台机器上的多个 Agent 可以看到当前活跃的执行提示。
+- 一个 Task 同时最多有一个 `active` Claim；其他实例正常领取时返回 `task_already_claimed`。
+- Claim 的 Role 只能来自 Workflow 节点固定绑定；Claim 不能改派角色，也不恢复 Device Registry。
+- 用户可以填写非空原因并显式强制接管。接管原子地封存旧 Claim、递增 generation 并签发新 Claim。
+- 旧领取者恢复联网后，任何携带旧 generation 的交付或审核命令都返回 `stale_claim`，不得污染状态。
+- Claim 不依赖机器心跳，也不自动过期；失联实例通过人工强制接管解锁。
 
-Task 的执行角色只来自 Workflow 节点的固定绑定。用户点击“运行任务”时，系统使用该角色完成预检和内部激活后直接创建 Attempt。Claim 不排他、不拒绝第二个 Attempt、不产生 fencing token，也不能改变角色绑定。实现可以 best-effort 刷新 `lastObservedAt`，只用于把提示显示为 active/stale；刷新失败不能阻止、终止或接管 Attempt。如果仍发生重复执行，系统保留所有 Attempt、发出 warning，并要求用户选择后续采用的 Attempt，不能静默覆盖历史。
+Claim 只记录 Task、固定 Role、领取实例和 generation，不记录本地 Attempt ID、Role Instance ID、Executor Invocation ID、Pi session、worktree 或模型进度。领取后创建的 `LocalExecutionDraft` 只保存在本机；Provider 超时和本地重试继续复用同一草稿，不创建共享 Attempt。只有结构化结果、Artifact Contract 和 Git commit 全部通过校验，且 Claim generation 仍有效时，Scheduler 才通过一个原子 Event Batch 发布正式 Attempt 并完成 Claim。
 
 ## 6. 角色参与和任务执行
 
@@ -412,9 +419,9 @@ mam join --run run-20260727-001 --role role.merge-coordinator
 3. 验证 Workflow Run 和 Role Profile 是否存在。
 4. 在本机解析该角色的 Executor Profile、CLI、模型和 secret references。
 5. 计算节点固定为该角色且依赖已满足的任务。
-6. Scheduler 默认选择依赖已满足且固定角色的 Task，直接使用节点绑定角色创建 Attempt，并写入非排他的 claim notice。如果已有活跃提示，记录 warning；用户可以在 UI 中人工重试或接管。
-7. 创建 Attempt、Role Instance、worktree 或只读工作区。
-8. 启动对应 Adapter。
+6. Scheduler 默认选择依赖已满足且固定角色的 Task，并为该 Task 获取排他 Claim；已有 active Claim 时拒绝普通启动，用户可以显式强制接管。
+7. 在本机创建或恢复 `LocalExecutionDraft`、Role Instance、worktree 或只读工作区，不向 `mam-state` 写入 Attempt。
+8. 启动对应 Adapter；成功校验后一次性发布 Formal Delivery 和正式 Attempt。
 
 如果角色同时有多个可执行任务，UI 显示任务列表；CLI 默认选择 `priority`、`readyAt`、`taskId` 排序后的第一项，也允许通过 `--task` 显式选择。
 
@@ -429,7 +436,7 @@ mam join --run run-20260727-001 --role role.merge-coordinator
 
 ### 6.3 同一角色的并发
 
-同一 Role Profile 可以由多个 Agent 实例同时执行不同 Task。产品不使用 `maxParallelClaims` 作为排他控制，也不承诺一个 Task 只有一个 Claim；固定角色绑定和执行提示共同帮助用户识别执行状态。
+同一 Role Profile 可以由多个 Agent 实例同时执行不同 Task；不同 Role 也可以并行执行各自的 Task。排他 Claim 只作用于 Task ID，不使用 `maxParallelClaims` 限制 Role 总并发。需要多个开发角色处理同一大功能时，Workflow 必须把子功能建模为不同静态或动态 Task；需要多个角色审核同一交付时，使用独立 Review Task 并通过 `review_aggregate` 汇总。
 
 ## 7. 工作流执行语义
 
@@ -460,20 +467,20 @@ created
 
 用户认为理解摘要仍不准确时，可以填写补充意见要求继续澄清；角色收到补充意见后继续提问或重新提交摘要，Task 保持暂停。详细交互、状态与验收场景见 [`HUMAN_REVIEW_AND_CLARIFICATION_DESIGN.md`](./readme/HUMAN_REVIEW_AND_CLARIFICATION_DESIGN.md)。
 
-沟通是 `Workflow Run -> Node Run -> Task -> Attempt` 下的权威记录，不建立独立 Session 产品。一个逻辑 Attempt 可以由多个 Executor Invocation segment 组成；它们共享固定 Role、Effective Config Snapshot、worktree 和消息记录。Adapter 内部 continuation/session handle 不是产品权威对象，进程无法原地继续时以新 segment 注入完整记录，不得换 Executor、Provider 或 Model。
+任务尚未正式交付时，沟通属于 `LocalExecutionDraft` 本地记录，不建立独立 Session 产品，也不把临时对话写入 `mam-state`。一个 Draft 可以由多个 Executor Invocation segment 组成；它们共享预分配 Attempt ID、固定 Role、Effective Config Snapshot、worktree 和消息记录。Adapter 内部 continuation/session handle 不是产品权威对象，进程无法原地继续时以新 segment 注入已有本地记录，不得换 Executor、Provider 或 Model。正式 approval、human review 和分歧决定仍写入 Git 权威事件。
 
-### 7.2 Attempt 规则
+### 7.2 Local Execution Draft 与正式 Attempt 规则
 
-- 每次执行都创建新 Attempt。
-- 返工、进程崩溃后重新执行、Executor 重启后无法恢复 invocation、审核后产生新 commit，均创建新 Attempt。
-- Attempt 启动前必须持久化 `EffectiveRoleConfigSnapshot` 及其 hash；快照不得包含 secret value。
+- Task 取得 Claim 后先创建本机 `LocalExecutionDraft`；普通执行、Provider 重试、请求超时后的继续和进程重启恢复都复用同一 Draft 及其预分配 Attempt ID。
+- Draft 启动前在本地持久化 `EffectiveRoleConfigSnapshot` 及其 hash；快照不得包含 secret value，正式交付前不得写入共享 `mam-state`。
+- Provider 单次请求期限按剩余活动预算自动限制在 60 至 300 秒；Pi agent-level 自动重试最多一次。上游更早返回超时时，Draft 进入 `waiting_for_resume`，用户可以继续、从头重置本地草稿或丢弃并释放 Claim。
 - Executor 必须产生符合统一 JSON Schema 的结果对象；缺失或校验失败时 Attempt 不能进入 `submitted`。
 - 已提交的 Artifact 和 commit SHA 不可修改。
-- 新 Attempt 通过 `previousAttemptId` 形成 lineage。
-- 工作流推进只读取当前有效 Attempt；历史 Attempt 永久可查。
-- timeout 或进程退出不等于外部命令未执行。对于无法确认的非幂等副作用，Task 进入 `needs_reconciliation`，等待查询或人工处理，不自动重试。
-- 用户完成人工核对并填写原因后，可以把原 Attempt 标记为 blocked 并创建唯一的 `recovery_planned` Attempt；同一 Task 的新恢复计划会封存旧计划，其他并发 Attempt 成功提交也会封存尚未启动的恢复计划。后续人工启动必须复用唯一计划的 Attempt ID 和 `previousAttemptId`，不能另建一个脱离恢复链路的 Attempt。
-- Attempt 被恢复或进入 `needs_reconciliation` 后，其迟到的 Executor progress/result 必须被拒绝；Task 处于 `needs_attention` 时，其他并发 Executor 也不能用迟到事件覆盖人工核对状态。
+- 只有 Result、Artifact、commit 和 Claim generation 全部校验通过后，才以一个权威批次创建正式 Attempt、保存 Effective Config、更新 `currentDeliveryAttemptId` 并完成 Claim。本地失败或放弃的 Draft 不进入正式 Attempt 历史。
+- Review 要求返工后产生的新正式交付通过 `previousDeliveredAttemptId` 形成 lineage；只有 `lineageKind: revision` 消耗返工次数，基础设施失败、Provider 超时、Draft 重置、强制接管和恢复继续均不计数。
+- 工作流推进只读取显式的 `currentDeliveryAttemptId`；`deliveredAttemptIds` 仅用于正式交付历史，任何路径都不得回退到历史数组末尾。
+- timeout 或进程退出不等于外部命令未执行。对于无法确认的非幂等副作用，Task 进入 `needs_attention`，等待查询或人工处理，不自动继续；共享状态只记录阻塞事实，不发布本地 Draft 的临时 Attempt 或 Invocation ID。
+- Claim 被接管后，旧领取者的迟到交付、Review 或 Artifact 发布必须按 generation 拒绝；基于旧正式交付启动的下游 Draft 在上游产生新 revision 后返回 `stale_input_lineage`。
 
 ### 7.2.1 清理 Run 与复用已完成成果
 
@@ -610,7 +617,7 @@ Snapshot 是可删除并通过 events 重建的缓存。Event 是 append-only �
 4. 生成事件并提交到本地 state worktree。
 5. 有 remote 时 push `mam-state`；本地模式保留本地提交。
 6. 仅 distributed 模式在 non-fast-forward 时丢弃本次未发布状态提交，更新远端状态并重新校验同一幂等命令。
-7. 同一 Task 的多个 claim notice 都可以提交和 replay；projection 产生 `concurrent_execution_warning`，但不拒绝命令。
+7. 同一 Task 只能投影一个 active Claim；并发领取在最新 projection 上重新校验，失败方返回 `task_already_claimed`。强制接管递增 generation，旧 generation 的后续命令返回 `stale_claim`。
 
 状态事件使用稳定 `commandId` 做幂等控制。Git 冲突和业务状态冲突必须分别报告。
 
@@ -820,7 +827,7 @@ Local Knowledge Binding
 | Design Assistant | 选择已有 Model Profile，通过本地保存的对话草稿生成、检查和人工确认全新定义，或优化现有 Workflow 的下一版本            |
 | Workflows        | 编辑节点、边、Artifact、角色绑定、动态任务、循环保护和合并策略                                                        |
 | Runs             | 查看图状态、ready tasks、节点固定角色、执行提示、attempts、成本和阻塞原因；使用固定角色直接运行或恢复中断执行         |
-| My Role          | 选择本机参与角色，查看工作流固定给该角色的任务；启动前显示重复执行 warning，不提供 Task 角色选择或改派                |
+| My Role          | 选择本机参与角色，查看工作流固定给该角色的任务；显示 active Claim，支持领取、释放和强制接管，不提供 Task 角色选择或改派 |
 | Task             | 查看输入、结构化执行事件、Artifact、Git diff、提交、Attempt 时间线和返工记录；默认打开最新 Attempt，历史 Attempt 只读 |
 | Reviews          | 提交结构化审核结果，处理多 Reviewer 分歧                                                                              |
 | 待我处理         | 按确定性优先级集中处理人工审核、角色问题批次、返工沟通和 Run 级阻塞问题；在独立 Dialog 中批量回答并确认恢复           |
@@ -877,7 +884,7 @@ Roles、Resources 和 Settings 页面必须默认提供面向普通用户的字�
 | `src/shared/mam/runtime-capabilities.ts`                               | capability preflight                                                | 删除 jcode、Claude、container 和设备能力                                                                                   |
 | `src/shared/mam/scheduler-protocol.ts`                                 | Command/Event envelope、幂等与 actor                                | 删除 device actor 和 lease rejection；增加固定角色激活、execution notice、Attempt result、dynamic task 和 merge events     |
 | `src/main/mam/workflow/workflow-compiler.ts`                           | YAML/JSON 解析、图校验、Artifact 校验、plan hash                    | 扩展节点类型和有界循环；现实现只接受 DAG                                                                                   |
-| `src/main/mam/scheduler/kernel.ts`                                     | 命令校验、权威事件生成、Artifact hash 检查                          | 删除设备派发和设备 lease；增加固定角色校验、非排他执行提示、Attempt result 和 merge authority                              |
+| `src/main/mam/scheduler/kernel.ts`                                     | 命令校验、权威事件生成、Artifact hash 检查                          | 删除设备派发和设备 lease；增加固定角色校验、Task Claim generation fencing、Formal Delivery 和 merge authority              |
 | `src/main/mam/state-store/append-only-event-store.ts`                  | event path 校验、replay 和 snapshot rebuild                         | `R2`：补真正批次原子性和并发 writer，再挂载到独立 `mam-state` worktree                                                     |
 | `src/main/mam/state-store/` 中的 `github-*` 文件                       | Git commit、projection、replay、冲突检测                            | 重命名为 provider-neutral `git-*`；改为独立状态分支和 CAS retry                                                            |
 | `src/main/mam/application/` 中的 `mam-*` 文件                          | use-case 边界、projection、Artifact 提交和执行协调                  | 按新状态机组装；删除所有 device dispatch/recovery 调用                                                                     |
@@ -955,7 +962,7 @@ jcode、Claude Code 和其他额外 Agent 接入
 设备身份、manual device dispatch API、device-bound recovery 语义
 ```
 
-`src/main/mam/devices/lease-manager.ts` 不作为 Claim Manager 复制；Claim 已确认是非排他提示，不需要 lease、续约或 fencing。只允许以 `R3/T` 提取 stale 时间计算和重复执行测试模式。`recovery-coordinator.ts` 只提取幂等判断、未知副作用进入 `needs_reconciliation` 的规则和相应测试，不复制本地 Map/JSON 权威实现。`manual-dispatch.ts` 不复制；Task 角色由 Workflow 节点固定，运行时不得恢复设备派发、人工选角或角色改派语义。
+`src/main/mam/devices/lease-manager.ts` 不作为 Claim Manager 复制；新的 Task Claim 不依赖 Device Registry、heartbeat、续约或自动过期，但必须由 Scheduler Kernel 通过 generation fencing 保证一个 Task 最多一个 active Claim，并支持填写原因的显式强制接管。`recovery-coordinator.ts` 只提取幂等判断、未知副作用进入人工核对的规则和相应测试，不复制本地 Map/JSON 权威实现。`manual-dispatch.ts` 不复制；Task 角色由 Workflow 节点固定，运行时不得恢复设备派发、人工选角或角色改派语义。
 
 不复制并不等于立即从当前仓库删除；新程序只建立允许复制清单，不再承担旧仓库的持续裁剪工作。
 
@@ -1052,18 +1059,18 @@ Renderer、CLI 和 Executor Bridge 都调用 Application API，不能直接操�
 - 删除设备和容器字段。
 - 将 Executor、Provider、Model 和 Role binding 拆成独立、可复用、带版本的配置对象。
 - 增加 Skill、MCP 和 Knowledge Base Profile 及角色级资源选择 schema。
-- 增加固定节点角色绑定、非排他 ExecutionClaimNotice、Attempt result、dynamic tasks 和 merge events。
+- 增加固定节点角色绑定、排他 TaskClaim、Formal Delivery、Attempt result、dynamic tasks 和 merge events。
 - 扩展 Workflow Compiler。
 
 验收：任意名称角色和复杂工作流可编译；无固定角色 ID；Executor 与 Model 可按角色组合；角色只能引用已注册的 Skill、MCP 和 Knowledge Base；所有循环有边界。
 
-### M2：Git 权威状态、固定角色激活和执行提示
+### M2：Git 权威状态、固定角色激活和排他领取
 
 - 建立 `mam-state` hidden worktree。
 - 迁移 append-only store、reducer、projection 和 CAS retry。
-- 实现 `listForRole`、固定角色自动激活、execution notice、重复执行 warning 和 Attempt recovery。
+- 实现 `listForRole`、固定角色自动激活、Task Claim、generation fencing、强制接管和 Local Execution Draft recovery。
 
-验收：同一机器两个进程和两个独立 clone 的事件都可收敛；同一 Task 并发启动时两个 Attempt 都保留并显示 warning，不伪装成排他锁。
+验收：同一机器两个进程和两个独立 clone 的事件都可收敛；同一 Task 只能有一个 active Claim，普通重复领取被拒绝，强制接管后旧 generation 的交付被拒绝；本地失败重试不产生共享 Attempt。
 
 ### M3：工作区与 Codex/Grok CLI
 
@@ -1139,18 +1146,19 @@ Workflow/Kernel schema 由主 Agent 先冻结，其他 Agent 不并行修改 sha
 - 修改 Skill、MCP 或 Knowledge Base Profile 后，已经运行的 Attempt 继续使用原快照，新 Attempt 使用新版本。
 - 同一 Role Profile 在多个节点复用。
 - 一个 Review 节点固定一个 Reviewer Role Profile；需要不同 Reviewer Role 时使用多个 Review 节点。
+- 多个 Review 节点可以审核同一份不可变 Formal Delivery，并通过无 Role 的 `review_aggregate` 系统节点按稳定 slot、quorum 和分歧策略确定性汇总；完成顺序不得改变结果。
 - 工作流包含并行、join、condition、review、approval、dynamic tasks、有界返工和 git merge。
 - 可视化编辑器可以创建、连接、检查并 round-trip 上述节点及循环上限；源码编辑只是高级入口。
 - Design Assistant 使用已有 Model Profile，通过可恢复的本地多轮对话进行单问题澄清、二至三个方案比较和至少三个设计部分的结构化建议，同时指出并修复工作流缺陷；方案选择、章节确认和缺陷提示服务于协作但不构成逐步门禁，用户可在认为合适时直接确认完整替换草稿；不自动读取项目文件/Git 历史，不启动外部可视化服务；实际解析、引用、编译错误或过期基线仍必须阻止创建；最终生成全新角色和工作流，或基于所选现有工作流生成同一 ID 的下一版本；每个可执行节点固定一个角色；确认后只增加定义版本且不产生 Run、Task 或 Attempt，既有 Run 继续固定原版本。
 - Role 不继承；产品没有 Session override、Executor/Model fallback 或独立 Agent Session 创建入口。
 
-### 18.2 固定角色、执行提示与多实例
+### 18.2 固定角色、Task Claim 与多实例
 
 - 同一机器同时运行至少 3 个角色实例。
 - 同一机器同一角色可以并行执行不同任务。
 - 每个可执行节点在 Workflow Definition 中固定且只固定一个 Role；Task 直接继承该角色，自动启动或人工重试时不得再次要求选择角色。
 - 运行中不得把 Task 改派给其他 Role；`reassign_task` 必须返回 `workflow_role_binding_fixed`。更换角色只能创建新 Workflow Definition 版本和新 Run，历史 Attempt 不变。
-- 两个独立 clone 启动同一 Task 时都可以创建独立 Attempt，但两端都显示并记录 `concurrent_execution_warning`，全部历史不得覆盖。
+- 两个独立 clone 普通领取同一 Task 时只能有一个成功；另一端显示 active Claim 并拒绝启动。用户可以填写原因强制接管，接管后旧 generation 的迟到交付必须被拒绝。
 - 任意机器只需 clone、同步状态、选择 run 和 role，不需要预先注册设备。
 - 本机缺少 Executor 时任务保持固定角色且可重试，不自动 fallback，也不写成任务失败。
 
@@ -1161,6 +1169,7 @@ Workflow/Kernel schema 由主 Agent 先冻结，其他 Agent 不并行修改 sha
 - Pi RPC 真实 Provider 和统一结果协议 smoke test。
 - Codex CLI 使用两个不同 Provider/Model 的并发隔离 smoke test。
 - Pi RPC 使用两个不同 Provider/Model 的并发隔离 smoke test。
+- Pi Provider 请求 timeout 至少为 60 秒且不超过剩余 Attempt 活动预算；上游超时后同一 Local Execution Draft 可以复用 Pi session、worktree、冻结配置和预分配 Attempt ID 继续执行。
 - 不支持 custom endpoint 或 model override 的 CLI 在 preflight 阶段返回明确兼容性错误。
 - abort、resume、事件流、错误、usage unknown/partial/full 均能归一化。
 - 每个 Executor 最终都产生合法的标准 Attempt Result；字段 correlation 或 Artifact hash 不匹配时拒绝提交。
@@ -1181,15 +1190,15 @@ Workflow/Kernel schema 由主 Agent 先冻结，其他 Agent 不并行修改 sha
 
 ### 18.5 Git 和合并
 
-- 每个写任务使用独立 branch/worktree。
+- 每个写任务的 Local Execution Draft 使用独立 branch/worktree；只有正式交付才把 Attempt、Result、Artifact 和 commit 写入共享权威状态。
 - submitted commit 不可变；新 commit 使 Review 失效。
 - `mam-state` 与 task/develop 分支相互独立。
 - 两个 clone 并发追加不同事件后可以完整 replay。
-- 同一 Task 的重复 execution notice 和 Attempt 都可 replay，并产生 warning；过期 revision 和冲突状态不会静默覆盖。
+- 同一 Task 的 Claim、释放、接管和 Formal Delivery 都可 replay；一个 Task 最多有一个 active Claim，过期 generation、过期 input lineage 和冲突状态不会静默覆盖。
 - 正式输入输出及后续节点依赖的 Artifact 可从 Git 重建；本地大型日志缺失时显示 unavailable，不破坏 replay。
 - merge queue 按 `(mergeReadyAt, taskId)` 串行执行；新 commit 清除旧 ready 状态。
 - 调度者角色可以解决冲突，但不能绕过目标分支和验证策略。
-- Task/Review UI 默认显示最新 Attempt，并可从时间线只读查看历史 Attempt；代码比较使用 Git diff，不要求 Artifact 双栏比较入口。
+- Task/Review UI 默认显示 `currentDeliveryAttemptId` 指向的正式交付，并可从时间线只读查看历史 Formal Revision；本地失败 Draft 只进入诊断视图，代码比较使用 Git diff，不要求 Artifact 双栏比较入口。
 
 ### 18.6 安全与恢复
 
@@ -1198,8 +1207,8 @@ Workflow/Kernel schema 由主 Agent 先冻结，其他 Agent 不并行修改 sha
 - 日志、Artifact 和 events 不包含明文 secret。
 - 未授权资源不能通过 MAM Bridge/Gateway 使用；无 OS sandbox 时不宣称阻止 Agent 读取操作系统用户本来可读的任意文件。
 - 删除 snapshot 和本地 UI cache 后可从 events 重建一致状态。
-- 进程崩溃后创建新 Attempt，历史 Attempt 保留；无法判断非幂等副作用是否发生时进入 `needs_reconciliation`，不得自动重试。
-- 人工核对完成后创建的 `recovery_planned` Attempt 必须能被实际启动并保留正确 lineage；Executor 报错不能让权威状态永久停留在 running。
+- Provider timeout、Pi 进程重启和应用重启优先恢复同一个 Local Execution Draft，不创建共享 Attempt；无法判断非幂等副作用是否发生时进入 `needs_attention`，不得自动继续。
+- 用户从头重置或丢弃未交付 Draft 时，必须清理其本地 worktree、session、资源物化和未发布分支；强制接管后旧机器不能发布迟到结果。
 - 清理并重启同版本、同输入的 Workflow 时，已提交且 Git 证据仍可验证的静态任务和对应已通过审核可由权威复用事件恢复；来源 lineage 必须可追踪，Approval gate 和不安全成果不得自动复用。
 - 产品构建和测试不依赖 Docker、SSH、jcode、Claude、Linear/Jira 或 hosted provider API。
 - macOS 的安装、构建、启动和核心 E2E 全部通过；Linux/Windows 仅记录后续兼容工作，不属于首期通过条件。
@@ -1211,7 +1220,7 @@ Workflow/Kernel schema 由主 Agent 先冻结，其他 Agent 不并行修改 sha
 - `MAM_SKILLS_CUT_PLAN.md`：继续作为 Skills 文件识别和迁移来源，但最终 Runtime 目标仅为 Codex CLI、Grok CLI 和 Pi RPC。
 - `design-v1.md`：保留 Role Profile、Executor/Provider/Model 分离和资源隔离原则；删除 Role 继承、Session override、fallback 和独立 Session 产品。
 - `design-v2-workflow.md`：继续提供任意工作流、Artifact、Review、审批和返工原则。
-- `design-v3-distributed-workflow.md`：只保留 Git 共享状态、多本地 Scheduler 和冲突检测思想；删除设备派发、Device Registry、设备 heartbeat、排他 lease 和人工选角，改为工作流固定角色与非排他执行提示。
+- `design-v3-distributed-workflow.md`：只保留 Git 共享状态、多本地 Scheduler 和冲突检测思想；删除设备派发、Device Registry、设备 heartbeat、自动 lease 续约和人工选角，改为工作流固定角色、Task 级排他 Claim 与显式强制接管。
 - `design-v4-pi-runtime.md`：只保留 Pi RPC、Role materialization、事件和 usage 归一化；删除容器、Pi 专属 Extension、Session override 和多 Runtime 扩张目标。
 - 本文档中的决定与旧文档冲突时，以本文档为准。
 
@@ -1220,7 +1229,7 @@ Workflow/Kernel schema 由主 Agent 先冻结，其他 Agent 不并行修改 sha
 1. 新建独立程序，选择性复制当前项目，不再继续大规模裁剪 Orca。
 2. Role Profile 和 Workflow Definition 都由用户自由定义，任何具体角色名称都只是示例。
 3. 每个可执行工作流节点固定一个角色，不绑定设备；机器只是临时运行 Agent 的位置。
-4. 运行 Task 时直接使用节点固定角色，不提供运行时选角或改派；Execution Claim 只显示非排他的重复执行提示。
+4. 运行 Task 时直接使用节点固定角色，不提供运行时选角或改派；Task Claim 对具体 Task 排他，普通重复领取被拒绝，用户可以填写原因强制接管。
 5. 调度者是用户可配置的工作流角色；Scheduler Kernel 是确定性基础设施。
 6. 代码、审核、合并只是可配置工作流节点，不是固定流程。
 7. 共享状态使用独立 `mam-state` Git 分支和 append-only events。

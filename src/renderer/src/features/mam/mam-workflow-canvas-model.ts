@@ -13,6 +13,7 @@ export const workflowNodeTypes: WorkflowNode['type'][] = [
   'role_task',
   'dynamic_tasks',
   'review_gate',
+  'review_aggregate',
   'approval_gate',
   'human_review_gate',
   'condition',
@@ -123,6 +124,18 @@ export function createWorkflowNode(
       inputs: [placeholderInput],
       reportContract: output,
       minimumDecisions: 1,
+      maxRevisionAttempts: 3
+    }
+  }
+  if (type === 'review_aggregate') {
+    return {
+      id,
+      type,
+      reviewNodeIds: ['review-a', 'review-b'],
+      producerNodeId: 'producer',
+      revisionTargetNodeId: 'producer',
+      totalQuorum: 2,
+      disagreementPolicy: 'human_decision',
       maxRevisionAttempts: 3
     }
   }

@@ -39,12 +39,14 @@ export class GitEffectiveConfigStore {
     batch: KernelEventBatch
     snapshot?: EffectiveRoleConfigSnapshot
   }): void {
-    const startEvents = input.batch.events.filter((event) => event.type === 'attempt_started')
+    const startEvents = input.batch.events.filter(
+      (event) => event.type === 'attempt_started' || event.type === 'task_delivery_recorded'
+    )
     if (startEvents.length === 0) return this.validateWithoutStartEvent(input)
     if (startEvents.length !== 1 || !input.snapshot) {
       fail(
         'effective_config_snapshot_required',
-        'attempt_started must commit one Effective Config snapshot'
+        'Attempt creation must commit one Effective Config snapshot'
       )
     }
     const event = startEvents[0]!
@@ -59,7 +61,7 @@ export class GitEffectiveConfigStore {
     ) {
       fail(
         'effective_config_binding_mismatch',
-        'Effective Config snapshot does not match attempt_started authority fields'
+        'Effective Config snapshot does not match Attempt authority fields'
       )
     }
     this.writeImmutable(input.workflowRunId, snapshot)
@@ -74,7 +76,7 @@ export class GitEffectiveConfigStore {
     if (input.batch.events.length > 0) {
       fail(
         'unexpected_effective_config_snapshot',
-        'Effective Config snapshot requires an attempt_started event'
+        'Effective Config snapshot requires an Attempt creation event'
       )
     }
     const existing = this.load(input.workflowRunId, input.snapshot.attemptId)

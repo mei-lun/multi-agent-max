@@ -190,6 +190,8 @@ export function MamMyRolePage({
                                 (attempt.status === 'announced' || attempt.status === 'running')
                             )
                             .map((attempt) => attempt.id)}
+                          {...(task.activeClaim ? { activeClaim: task.activeClaim } : {})}
+                          localClaimantInstanceId={`claimant.${snapshot.localSettings.bindingIdentity}`}
                           pending={pending}
                           onStart={onStartAttempt}
                         />
@@ -226,6 +228,8 @@ export function MamMyRolePage({
                     <MamStartAttemptDialog
                       input={{ workflowRunId: run.run.id, taskId: task.id }}
                       activeAttemptIds={[]}
+                      {...(task.activeClaim ? { activeClaim: task.activeClaim } : {})}
+                      localClaimantInstanceId={`claimant.${snapshot.localSettings.bindingIdentity}`}
                       pending={pending}
                       onStart={async (input) => {
                         await onAssignTask({

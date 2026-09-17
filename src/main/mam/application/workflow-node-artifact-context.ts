@@ -3,6 +3,7 @@ import { posix as posixPath } from 'node:path'
 import type { ArtifactContract } from '../../../shared/mam/domain/artifact'
 import type { WorkflowRunBundle } from '../../../shared/mam/domain/run-bundle'
 import type { WorkflowRunProjection } from '../state-store/git-state-projection'
+import { currentTaskDeliveryAttemptId } from './current-task-delivery'
 import { decodeArtifactContent } from '../artifacts/artifact-content-validator'
 
 export function readUpstreamArtifacts(input: {
@@ -40,7 +41,7 @@ export function readUpstreamArtifacts(input: {
     )
     for (const definition of [...taskDefinitions, ...dynamicDefinitions]) {
       const task = input.projection.tasks[definition.id]
-      const attemptId = task?.selectedAttemptId ?? task?.knownAttemptIds.at(-1)
+      const attemptId = currentTaskDeliveryAttemptId(task, input.projection.attempts)
       const attempt = attemptId ? input.projection.attempts[attemptId] : undefined
       if (!attempt?.result || attempt.result.status !== 'submitted') continue
       for (const claim of attempt.result.artifacts) {

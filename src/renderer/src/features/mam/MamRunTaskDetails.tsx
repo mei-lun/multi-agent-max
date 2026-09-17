@@ -23,6 +23,7 @@ export function MamRunTaskDetails({
   task,
   attempts,
   pending,
+  localClaimantInstanceId,
   onAssignTask,
   onStartAttempt,
   onRecoverAttempt,
@@ -33,6 +34,7 @@ export function MamRunTaskDetails({
   task: Task
   attempts: readonly Attempt[]
   pending: boolean
+  localClaimantInstanceId: string
   onAssignTask(input: MamAssignTaskInput): Promise<void>
   onStartAttempt(input: MamStartAttemptInput): Promise<void>
   onRecoverAttempt(input: MamRecoverAttemptInput): Promise<void>
@@ -51,6 +53,7 @@ export function MamRunTaskDetails({
         task={task}
         activeAttemptIds={activeAttemptIds}
         pending={pending}
+        localClaimantInstanceId={localClaimantInstanceId}
         onAssignTask={onAssignTask}
         onStartAttempt={onStartAttempt}
       />
@@ -117,6 +120,7 @@ function TaskAction({
   task,
   activeAttemptIds,
   pending,
+  localClaimantInstanceId,
   onAssignTask,
   onStartAttempt
 }: Readonly<{
@@ -124,6 +128,7 @@ function TaskAction({
   task: Task
   activeAttemptIds: readonly string[]
   pending: boolean
+  localClaimantInstanceId: string
   onAssignTask(input: MamAssignTaskInput): Promise<void>
   onStartAttempt(input: MamStartAttemptInput): Promise<void>
 }>) {
@@ -150,6 +155,8 @@ function TaskAction({
           <MamStartAttemptDialog
             input={{ workflowRunId: run.run.id, taskId: task.id }}
             activeAttemptIds={activeAttemptIds}
+            {...(task.activeClaim ? { activeClaim: task.activeClaim } : {})}
+            localClaimantInstanceId={localClaimantInstanceId}
             pending={pending}
             onStart={async (input) => {
               await onAssignTask({
@@ -177,6 +184,8 @@ function TaskAction({
           <MamStartAttemptDialog
             input={{ workflowRunId: run.run.id, taskId: task.id }}
             activeAttemptIds={activeAttemptIds}
+            {...(task.activeClaim ? { activeClaim: task.activeClaim } : {})}
+            localClaimantInstanceId={localClaimantInstanceId}
             pending={pending}
             onStart={onStartAttempt}
           />

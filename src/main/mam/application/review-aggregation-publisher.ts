@@ -1,7 +1,7 @@
 import type { ReviewSubject } from '../../../shared/mam/domain/review'
 import type { SchedulerCommand } from '../../../shared/mam/scheduler-protocol'
-import { ReviewAggregationPolicy } from '../review/review-aggregation-policy'
-import { boundedReviewStatus } from '../review/review-revision-limit'
+import { calculateReviewAggregation } from '../review/review-aggregation-calculator'
+import { countFormalRevisions } from '../review/review-revision-counter'
 import { GitCommandRetryCoordinator } from '../state-store/git-command-retry-coordinator'
 import type { GitStateRepository } from '../state-store/git-state-repository'
 
@@ -39,18 +39,15 @@ export function publishReviewAggregationIfReady(input: {
         left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id)
     )
   if (decisions.length < reviewNode.minimumDecisions) return false
-  const aggregation = new ReviewAggregationPolicy(() => input.issuedAt).aggregate(
-    decisions
-  ).aggregation
-  const targetAttemptCount = projection.tasks[input.subject.taskId]?.knownAttemptIds.length ?? 1
-  const boundedAggregation = {
-    ...aggregation,
-    proposedStatus: boundedReviewStatus({
-      status: aggregation.proposedStatus,
-      attemptCount: targetAttemptCount,
-      maxRevisionAttempts: reviewNode.maxRevisionAttempts
-    })
-  }
+  const aggregation = calculateReviewAggregation({
+    decisions,
+    createdAt: input.issuedAt,
+    formalRevisionNumber: countFormalRevisions({
+      attemptId: input.subject.attemptId,
+      attempts: projection.attempts
+    }),
+    maxRevisionAttempts: reviewNode.maxRevisionAttempts
+  })
   const command: Extract<SchedulerCommand, { type: 'record_review_aggregation' }> = {
     schemaVersion: '1.0.0',
     commandId: input.commandId,
@@ -59,7 +56,7 @@ export function publishReviewAggregationIfReady(input: {
     taskId: input.subject.taskId,
     actor: { kind: 'scheduler', schedulerId: input.schedulerId },
     type: 'record_review_aggregation',
-    aggregation: boundedAggregation
+    aggregation
   }
   new GitCommandRetryCoordinator(input.repository).executeAndPush({
     command,

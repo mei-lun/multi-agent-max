@@ -22,20 +22,19 @@ import { MamDesignConversation } from './MamDesignConversation'
 import { MamDesignProposalPanel } from './MamDesignProposalPanel'
 import { MamDesignRecoveryCard } from './MamDesignRecoveryCard'
 import { MamWorkflowEditor } from './MamWorkflowEditor'
-import { useMamDesignAssistant } from './use-mam-design-assistant'
+import type { MamDesignAssistantState } from './use-mam-design-assistant'
 
 const NEW_WORKFLOW_TARGET = '__new_workflow__'
 
 export function MamDesignPage({
   snapshot,
-  onApplied,
+  design,
   onOpenSettings
 }: Readonly<{
   snapshot: MamUiSnapshot
-  onApplied(): void
+  design: MamDesignAssistantState
   onOpenSettings(): void
 }>): React.JSX.Element {
-  const design = useMamDesignAssistant(onApplied)
   const [editingWorkflow, setEditingWorkflow] = useState(false)
   const models = designModels(snapshot)
   const selectedModelId = models.some((model) => model.id === design.draft?.selectedModelProfileId)
@@ -131,7 +130,7 @@ export function MamDesignPage({
           }
         />
         <NewDesignDialog
-          disabled={pending}
+          disabled={design.creatingTemplate || design.applying}
           hasContent={draft.messages.length > 0 || Boolean(draft.proposal)}
           onReset={() => design.reset(activeModelId)}
         />
@@ -284,8 +283,8 @@ function NewDesignDialog({
 }
 
 async function updateRole(
-  updateProposal: ReturnType<typeof useMamDesignAssistant>['updateProposal'],
-  draft: NonNullable<ReturnType<typeof useMamDesignAssistant>['draft']>,
+  updateProposal: MamDesignAssistantState['updateProposal'],
+  draft: NonNullable<MamDesignAssistantState['draft']>,
   role: RoleProfile
 ): Promise<void> {
   const proposal = draft.proposal!

@@ -36,6 +36,7 @@ export function useMamDesignAssistant(onApplied: () => void): MamDesignAssistant
   const [applying, setApplying] = useState(false)
   const [error, setError] = useState<string>()
   const requestId = useRef<string | undefined>(undefined)
+  const pendingRequestIds = useRef(new Set<string>())
   const mounted = useRef(true)
   const acceptDraft = useCallback((value: unknown) => {
     if (mounted.current) setDraft(MamDesignDraftSchema.parse(value))
@@ -71,10 +72,12 @@ export function useMamDesignAssistant(onApplied: () => void): MamDesignAssistant
   )
   const sendMessage = useCallback(
     async (message: string, modelProfileId: string, decision?: MamDesignBrainstormDecision) => {
+      if (requestId.current) return
       setSending(true)
       setError(undefined)
       const id = `design-request.${crypto.randomUUID().replaceAll('-', '')}`
       requestId.current = id
+      pendingRequestIds.current.add(id)
       setDraft((current) =>
         current
           ? {
@@ -94,20 +97,24 @@ export function useMamDesignAssistant(onApplied: () => void): MamDesignAssistant
           : current
       )
       try {
-        acceptDraft(
-          await getMamRendererApi().sendDesignMessage({
-            requestId: id,
-            modelProfileId,
-            message,
-            ...(decision ? { decision } : {})
-          })
-        )
+        const response = await getMamRendererApi().sendDesignMessage({
+          requestId: id,
+          modelProfileId,
+          message,
+          ...(decision ? { decision } : {})
+        })
+        if (requestId.current === id) acceptDraft(response)
       } catch (cause) {
-        if (mounted.current) setError(errorMessage(cause))
-        await refresh()
+        if (requestId.current === id) {
+          if (mounted.current) setError(errorMessage(cause))
+          await refresh()
+        }
       } finally {
-        requestId.current = undefined
-        if (mounted.current) setSending(false)
+        pendingRequestIds.current.delete(id)
+        if (requestId.current === id) {
+          requestId.current = undefined
+          if (mounted.current) setSending(false)
+        }
       }
     },
     [acceptDraft, refresh]
@@ -119,6 +126,8 @@ export function useMamDesignAssistant(onApplied: () => void): MamDesignAssistant
   const reset = useCallback(
     async (modelProfileId?: string, workflowId?: string) => {
       setError(undefined)
+      const discardedRequestId = requestId.current
+      if (discardedRequestId) requestId.current = undefined
       try {
         acceptDraft(
           await getMamRendererApi().resetDesignDraft({
@@ -126,8 +135,15 @@ export function useMamDesignAssistant(onApplied: () => void): MamDesignAssistant
             ...(workflowId ? { workflowId } : {})
           })
         )
+        if (mounted.current) setSending(false)
       } catch (cause) {
+        if (discardedRequestId && pendingRequestIds.current.has(discardedRequestId)) {
+          requestId.current = discardedRequestId
+        } else if (mounted.current) {
+          setSending(false)
+        }
         if (mounted.current) setError(errorMessage(cause))
+        await refresh()
         throw cause
       }
     },
@@ -148,18 +164,26 @@ export function useMamDesignAssistant(onApplied: () => void): MamDesignAssistant
     [acceptDraft]
   )
   const retryGeneration = useCallback(async () => {
+    if (requestId.current) return
     setSending(true)
     setError(undefined)
     const id = `design-retry.${crypto.randomUUID().replaceAll('-', '')}`
     requestId.current = id
+    pendingRequestIds.current.add(id)
     try {
-      acceptDraft(await getMamRendererApi().retryDesignGeneration({ requestId: id }))
+      const response = await getMamRendererApi().retryDesignGeneration({ requestId: id })
+      if (requestId.current === id) acceptDraft(response)
     } catch (cause) {
-      if (mounted.current) setError(errorMessage(cause))
-      await refresh()
+      if (requestId.current === id) {
+        if (mounted.current) setError(errorMessage(cause))
+        await refresh()
+      }
     } finally {
-      requestId.current = undefined
-      if (mounted.current) setSending(false)
+      pendingRequestIds.current.delete(id)
+      if (requestId.current === id) {
+        requestId.current = undefined
+        if (mounted.current) setSending(false)
+      }
     }
   }, [acceptDraft, refresh])
   const updateProposal = useCallback(

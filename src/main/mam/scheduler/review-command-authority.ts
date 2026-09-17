@@ -1,6 +1,6 @@
-import type { ReviewDecision } from '../../../shared/mam/domain/review'
+import type { ReviewDecision, ReviewSubject } from '../../../shared/mam/domain/review'
 import type { SchedulerCommand } from '../../../shared/mam/scheduler-protocol'
-import { ReviewAggregationPolicy } from '../review/review-aggregation-policy'
+import { calculateReviewAggregation } from '../review/review-aggregation-calculator'
 import { createReviewTasks } from '../review/review-fan-out-service'
 import type { SchedulerKernelContext, SchedulerTaskContext } from './scheduler-command-authority'
 import { SchedulerCommandRejectedError } from './scheduler-command-rejection'
@@ -21,9 +21,12 @@ export function assertReviewAggregationAuthority(
   if (decisions.length < (task.minimumReviewDecisions ?? 1)) {
     reject('review_quorum_unmet', 'Review aggregation does not meet the configured quorum')
   }
-  const expected = new ReviewAggregationPolicy(() => command.aggregation.createdAt).aggregate(
-    decisions as ReviewDecision[]
-  ).aggregation
+  const expected = calculateReviewAggregation({
+    decisions: decisions as ReviewDecision[],
+    createdAt: command.aggregation.createdAt,
+    formalRevisionNumber: task.formalRevisionNumber ?? 0,
+    maxRevisionAttempts: task.maxRevisionAttempts ?? Number.MAX_SAFE_INTEGER
+  })
   if (JSON.stringify(expected) !== JSON.stringify(command.aggregation)) {
     reject('review_aggregation_mismatch', 'Review aggregation is not deterministic')
   }
@@ -54,6 +57,37 @@ export function assertReviewPanelAuthority(
     subject: command.subject,
     ...(context.existingTaskIds ? { existingTaskIds: context.existingTaskIds } : {})
   })
+}
+
+export function assertReviewDecisionBinding(input: {
+  review: ReviewDecision | undefined
+  workflowRunId: string
+  reviewerTaskId: string
+  reviewerAttemptId: string
+  reviewerRoleInstanceId: string
+  reviewTarget: ReviewSubject | undefined
+  reviewNodeId: string | undefined
+}): void {
+  if (!input.reviewNodeId) {
+    if (input.review && !input.reviewTarget) {
+      reject('review_target_required', 'Reviewer Task has no Review subject')
+    }
+    if (input.review) reject('review_not_expected', 'Non-Reviewer Task cannot attach a Review')
+    return
+  }
+  if (!input.reviewTarget) reject('review_target_required', 'Reviewer Task has no Review subject')
+  const review = input.review
+  if (!review) reject('review_required', 'Reviewer Delivery requires a Review decision')
+  if (
+    review.workflowRunId !== input.workflowRunId ||
+    review.reviewerTaskId !== input.reviewerTaskId ||
+    review.reviewerAttemptId !== input.reviewerAttemptId ||
+    review.reviewerRoleInstanceId !== input.reviewerRoleInstanceId ||
+    review.reviewNodeId !== input.reviewNodeId ||
+    JSON.stringify(review.subject) !== JSON.stringify(input.reviewTarget)
+  ) {
+    reject('review_binding_mismatch', 'Review is not bound to its Reviewer Task and subject')
+  }
 }
 
 function assertScheduler(command: SchedulerCommand, schedulerId: string): void {

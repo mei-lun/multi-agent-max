@@ -97,6 +97,37 @@ describe('MAM Design Assistant recovery', () => {
     await expect(pending).rejects.toMatchObject({ code: 'design_request_cancelled' })
     expect(service.getDraft().recovery).toBeUndefined()
   })
+
+  it('does not persist a late successful response after an intentional cancellation', async () => {
+    let resolveRequest: ((response: Response) => void) | undefined
+    const service = createService(
+      () => minimalProposal(),
+      async () =>
+        new Promise<Response>((resolve) => {
+          resolveRequest = resolve
+        })
+    )
+    const pending = service.sendMessage({
+      requestId: 'design-request.cancelled-late',
+      modelProfileId: 'model.designer',
+      message: 'Create a writing workflow.'
+    })
+
+    service.cancel({ requestId: 'design-request.cancelled-late' })
+    resolveRequest!(
+      new Response(
+        JSON.stringify({ choices: [{ message: { content: JSON.stringify(minimalProposal()) } }] }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      )
+    )
+
+    await expect(pending).rejects.toMatchObject({ code: 'design_request_cancelled' })
+    expect(service.getDraft()).toMatchObject({
+      messages: [expect.objectContaining({ role: 'user' })]
+    })
+    expect(service.getDraft().messages).toHaveLength(1)
+    expect(service.getDraft().recovery).toBeUndefined()
+  })
 })
 
 function createService(

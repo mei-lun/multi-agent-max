@@ -1,6 +1,7 @@
 import type { SchedulerCommand } from '../../../shared/mam/scheduler-protocol'
 import type { WorkflowRunBundle } from '../../../shared/mam/domain/run-bundle'
 import type { WorkflowRunProjection } from '../state-store/git-state-projection'
+import { currentTaskDeliveryAttemptId } from './current-task-delivery'
 import type { GitStateRepository } from '../state-store/git-state-repository'
 import { GitCommandRetryCoordinator } from '../state-store/git-command-retry-coordinator'
 import { attemptBranchName } from './attempt-worktree-manager'
@@ -173,7 +174,7 @@ function findReusableTask(
   for (const source of sources) {
     const definition = source.bundle.taskCatalog.find((task) => task.nodeId === nodeId)
     const task = definition ? source.projection.tasks[definition.id] : undefined
-    const attemptId = task?.selectedAttemptId ?? task?.knownAttemptIds.at(-1)
+    const attemptId = currentTaskDeliveryAttemptId(task, source.projection.attempts)
     const attempt = attemptId ? source.projection.attempts[attemptId] : undefined
     const commit = attempt?.result?.system.submittedCommit
     if (

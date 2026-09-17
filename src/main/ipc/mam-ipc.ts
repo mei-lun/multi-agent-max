@@ -55,6 +55,7 @@ import {
 import { assertTrustedRenderer } from './trusted-renderer-ipc'
 import { registerMamResourceIpc, type MamResourceOperations } from './mam-resource-ipc'
 import { selectLogDirectoryDialog } from '../mam/diagnostics/desktop-diagnostic-dialogs'
+import { registerMamClaimIpc } from './mam-claim-ipc'
 
 export function registerMamIpc(
   window: BrowserWindow,
@@ -75,6 +76,7 @@ export function registerMamIpc(
   runtimeLogger?: DesktopRuntimeLogger
 ): () => void {
   const handle = mamIpcRequestHandler(runtimeLogger)
+  registerMamClaimIpc(window, commands, handle)
 
   handle(MAM_GET_UI_SNAPSHOT_CHANNEL, (event) => {
     assertTrustedRenderer(event, window)

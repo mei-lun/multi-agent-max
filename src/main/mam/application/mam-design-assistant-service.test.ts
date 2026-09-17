@@ -330,6 +330,37 @@ describe('MAM Design Assistant service', () => {
     expect(refreshed.proposal?.issues).toEqual([])
     expect(refreshed.recovery).toEqual(persisted.recovery)
   })
+
+  it('discards an active generation without allowing its late result to replace the new draft', async () => {
+    let resolveRequest: ((response: Response) => void) | undefined
+    const { service } = createServiceFixture(
+      [modelResponse()],
+      async () =>
+        new Promise<Response>((resolve) => {
+          resolveRequest = resolve
+        })
+    )
+    const originalDraftId = service.getDraft().id
+    const pending = service.sendMessage({
+      requestId: 'design-request.discarded',
+      modelProfileId: 'model.designer',
+      message: 'Create a writing workflow.'
+    })
+
+    expect(resolveRequest).toBeTypeOf('function')
+    const resetDraft = service.reset({ modelProfileId: 'model.designer' })
+    expect(resetDraft.id).not.toBe(originalDraftId)
+
+    resolveRequest!(
+      new Response(
+        JSON.stringify({ choices: [{ message: { content: JSON.stringify(modelResponse()) } }] }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      )
+    )
+
+    await expect(pending).rejects.toMatchObject({ code: 'design_request_cancelled' })
+    expect(service.getDraft()).toMatchObject({ id: resetDraft.id, messages: [] })
+  })
 })
 
 async function completeBrainstorm(
@@ -396,7 +427,10 @@ function brainstormSections() {
   ]
 }
 
-function createServiceFixture(responses: unknown[] = completeBrainstormResponses()): {
+function createServiceFixture(
+  responses: unknown[] = completeBrainstormResponses(),
+  fetcher?: (url: string, init: RequestInit) => Promise<Response>
+): {
   drafts: MamDesignDraftStore
   profiles: ProfileCatalog
   service: MamDesignAssistantService
@@ -406,14 +440,17 @@ function createServiceFixture(responses: unknown[] = completeBrainstormResponses
   const profiles = new ProfileCatalog(join(root, 'catalog'))
   seedExecutionProfiles(profiles)
   let responseIndex = 0
-  const gateway = new MamDesignModelGateway(async () => {
-    const response = responses[Math.min(responseIndex, responses.length - 1)]
-    responseIndex += 1
-    return new Response(
-      JSON.stringify({ choices: [{ message: { content: JSON.stringify(response) } }] }),
-      { status: 200, headers: { 'content-type': 'application/json' } }
-    )
-  })
+  const gateway = new MamDesignModelGateway(
+    fetcher ??
+      (async () => {
+        const response = responses[Math.min(responseIndex, responses.length - 1)]
+        responseIndex += 1
+        return new Response(
+          JSON.stringify({ choices: [{ message: { content: JSON.stringify(response) } }] }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        )
+      })
+  )
   const drafts = new MamDesignDraftStore(join(root, 'design-draft.json'), now)
   const service = new MamDesignAssistantService(
     new MamUiQueryService(profiles, undefined, now),

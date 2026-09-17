@@ -76,6 +76,31 @@ export function MamWorkflowSystemNodeFields({
       </div>
     )
   }
+  if (node.type === 'review_aggregate') {
+    return (
+      <div className="space-y-3">
+        <MamWorkflowStringListField
+          label="Review Gate node IDs"
+          values={node.reviewNodeIds}
+          onChange={(reviewNodeIds) => onChange({ ...node, reviewNodeIds })}
+        />
+        <MamWorkflowLabeledField label="Producer node ID">
+          <Input
+            value={node.producerNodeId}
+            onChange={(event) => onChange({ ...node, producerNodeId: event.target.value })}
+          />
+        </MamWorkflowLabeledField>
+        <MamWorkflowLabeledField label="Total quorum">
+          <Input
+            type="number"
+            min={1}
+            value={node.totalQuorum}
+            onChange={(event) => onChange({ ...node, totalQuorum: Number(event.target.value) })}
+          />
+        </MamWorkflowLabeledField>
+      </div>
+    )
+  }
   if (node.type === 'condition') {
     return (
       <div className="space-y-3">

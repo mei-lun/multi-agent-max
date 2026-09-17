@@ -29,7 +29,13 @@ describe('Workflow Run application projection', () => {
     )
     const completed = projectWorkflowRun(
       bundle,
-      { ...empty, tasks: completedTasks },
+      {
+        ...empty,
+        tasks: completedTasks,
+        attempts: {
+          'attempt.1': { taskId: 'task.build-a', status: 'submitted', lastEventId: 'event.result' }
+        }
+      },
       '2026-07-28T03:05:00Z'
     )
     expect(completed.run.status).toBe('completed')
@@ -51,7 +57,13 @@ describe('Workflow Run application projection', () => {
     })
     const empty = emptyWorkflowRunProjection(bundle.run.id)
     const taskId = bundle.taskCatalog[0]!.id
-    const afterTask = { ...empty, tasks: { [taskId]: taskProjection('submitted') } }
+    const afterTask = {
+      ...empty,
+      tasks: { [taskId]: taskProjection('submitted') },
+      attempts: {
+        'attempt.1': { taskId, status: 'submitted' as const, lastEventId: 'event.result' }
+      }
+    }
     const waiting = projectWorkflowRun(bundle, afterTask, '2026-07-28T03:01:00Z')
     expect(waiting.run.status).toBe('waiting_for_approval')
     expect(waiting.nodeRuns.find((node) => node.nodeId === 'approve')?.status).toBe(
@@ -83,6 +95,13 @@ describe('Workflow Run application projection', () => {
       {
         ...emptyWorkflowRunProjection(bundle.run.id),
         tasks: { [buildTask.id]: taskProjection('submitted') },
+        attempts: {
+          'attempt.1': {
+            taskId: buildTask.id,
+            status: 'submitted',
+            lastEventId: 'event.result'
+          }
+        },
         mergeQueueEntries: {
           'merge-entry.build': mergedEntry(bundle.run.id, buildTask.id)
         }
@@ -102,6 +121,7 @@ function taskProjection(status: 'submitted') {
     assignedByUserId: 'user.owner',
     activeAttemptIds: [],
     knownAttemptIds: ['attempt.1'],
+    currentDeliveryAttemptId: 'attempt.1',
     reviewIds: [],
     executionWarnings: [],
     lastEventId: 'event.result'

@@ -1,6 +1,7 @@
 import { ReviewSubjectSchema, type ReviewSubject } from '../../../shared/mam/domain/review'
 import type { WorkflowRunBundle } from '../../../shared/mam/domain/run-bundle'
 import type { WorkflowRunProjection } from '../state-store/git-state-projection'
+import { currentTaskDeliveryAttemptId } from './current-task-delivery'
 import { profileContentHash } from '../profiles/profile-content-hash'
 
 export function latestSubmittedReviewSubject(
@@ -8,7 +9,7 @@ export function latestSubmittedReviewSubject(
   taskId: string
 ): ReviewSubject | undefined {
   const task = projection.tasks[taskId]
-  const attemptId = task?.selectedAttemptId ?? task?.knownAttemptIds.at(-1)
+  const attemptId = currentTaskDeliveryAttemptId(task, projection.attempts)
   const attempt = attemptId ? projection.attempts[attemptId] : undefined
   if (!attemptId || attempt?.status !== 'submitted' || !attempt.result) return undefined
   return ReviewSubjectSchema.parse({

@@ -186,6 +186,47 @@ describe('MAM Design Model gateway', () => {
     expect(requestBodies[1]).toMatchObject({ response_format: { type: 'json_object' } })
   })
 
+  it('propagates a cancellation that happened before a generation attempt started', async () => {
+    const controller = new AbortController()
+    controller.abort('design_discarded')
+    const gateway = new MamDesignModelGateway(async (_url, init) => {
+      expect(init.signal?.aborted).toBe(true)
+      throw new Error('aborted')
+    })
+
+    await expect(
+      gateway.generate({
+        ...gatewayInput('openai-completions'),
+        signal: controller.signal
+      })
+    ).rejects.toMatchObject({ code: 'design_request_cancelled' })
+  })
+
+  it('rejects a late successful response after the request was cancelled', async () => {
+    let resolveRequest: ((response: Response) => void) | undefined
+    const controller = new AbortController()
+    const gateway = new MamDesignModelGateway(
+      async () =>
+        new Promise<Response>((resolve) => {
+          resolveRequest = resolve
+        })
+    )
+    const pending = gateway.generate({
+      ...gatewayInput('openai-completions'),
+      signal: controller.signal
+    })
+
+    controller.abort('cancelled_by_user')
+    resolveRequest!(
+      new Response(
+        JSON.stringify({ choices: [{ message: { content: '{"message":"too late"}' } }] }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      )
+    )
+
+    await expect(pending).rejects.toMatchObject({ code: 'design_request_cancelled' })
+  })
+
   it('removes schema metadata unsupported by provider response formats', () => {
     const serialized = JSON.stringify(designResponseJsonSchema())
 

@@ -22,12 +22,20 @@ afterEach(async () => {
 describe('CodexHeadlessAdapter', () => {
   it('accepts only a structured result file and injects MAM-owned authority and usage', async () => {
     const fixture = await createFixture()
+    let observedTimeoutMs = 0
+    const runner = successfulRunner()
     const adapter = new CodexHeadlessAdapter(
-      successfulRunner(),
+      async (...args) => {
+        observedTimeoutMs = args[1]
+        return runner(...args)
+      },
       () => '2026-07-28T04:01:00Z',
       readyPreflight()
     )
-    const execution = await adapter.execute(executionInput(fixture))
+    const execution = await adapter.execute({
+      ...executionInput(fixture),
+      executionTimeoutMs: 12_345
+    })
 
     expect(execution.result).toMatchObject({
       status: 'submitted',
@@ -51,6 +59,7 @@ describe('CodexHeadlessAdapter', () => {
     expect(execution.invocation.args).toContain('--json')
     expect(execution.invocation.env.MAM_CODEX_PROVIDER_KEY).toBe('secret-value-canary')
     expect(execution.invocation.env.HOME).toBeUndefined()
+    expect(observedTimeoutMs).toBe(12_345)
     expect(await readFile(execution.invocation.schemaPath, 'utf8')).not.toContain(
       'secret-value-canary'
     )

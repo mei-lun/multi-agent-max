@@ -24,6 +24,7 @@ import type { EffectiveRoleConfigSnapshot } from '../../../shared/mam/domain/rol
 import { MamMergeQueueExecutionService } from './mam-merge-queue-execution-service'
 import { createWorkflowRunBundle, createWorkflowRunCommand } from './workflow-run-factory'
 import { reuseCompatibleWorkflowProgress } from './workflow-run-result-reuse'
+import { LocalExecutionDraftStore } from './local-execution-draft-store'
 
 const fixtures: ReturnType<typeof createAttemptExecutionAcceptanceFixture>[] = []
 
@@ -96,7 +97,8 @@ describe('MAM Attempt execution with real Git state', () => {
       workflowRunId: fixture.bundle.run.id,
       taskId: fixture.taskId
     })
-    expect(started.runs[0]?.attempts[0]).toMatchObject({ status: 'running' })
+    expect(started.runs[0]?.attempts).toEqual([])
+    expect(started.runs[0]?.tasks[0]?.activeClaim).toMatchObject({ generation: 1 })
     expect(execute).not.toHaveBeenCalled()
     await completed
     expect(execute).toHaveBeenCalledOnce()
@@ -215,13 +217,12 @@ describe('MAM Attempt execution with real Git state', () => {
     expect(Object.values(replacement.reviewPanels)).toHaveLength(2)
   })
 
-  it('retires an old Review panel when a later concurrent result is submitted', async () => {
+  it('rejects a second claimant while the first Task execution is active', async () => {
     const fixture = createAttemptExecutionAcceptanceFixture()
     fixtures.push(fixture)
     const releaseFirst = completionSignal()
     const releaseSecond = completionSignal()
     const firstCompleted = completionSignal()
-    const secondCompleted = completionSignal()
     const firstService = executionService(
       fixture,
       sequentialIds('first'),
@@ -234,7 +235,7 @@ describe('MAM Attempt execution with real Git state', () => {
     const secondService = executionService(
       fixture,
       sequentialIds('second'),
-      secondCompleted.resolve,
+      vi.fn(),
       async (input) => {
         await releaseSecond.promise
         return fakeExecution(input)
@@ -242,33 +243,21 @@ describe('MAM Attempt execution with real Git state', () => {
     )
 
     await firstService.start({ workflowRunId: fixture.bundle.run.id, taskId: fixture.taskId })
-    const firstAttemptId = fixture.repository
-      .rebuild(fixture.bundle.run.id)
-      .tasks[fixture.taskId]!.knownAttemptIds.at(-1)!
-    await secondService.start({ workflowRunId: fixture.bundle.run.id, taskId: fixture.taskId })
-    const secondAttemptId = fixture.repository
-      .rebuild(fixture.bundle.run.id)
-      .tasks[fixture.taskId]!.knownAttemptIds.at(-1)!
-
+    await expect(
+      secondService.start({ workflowRunId: fixture.bundle.run.id, taskId: fixture.taskId })
+    ).rejects.toThrow('task_already_claimed')
     releaseFirst.resolve()
     await firstCompleted.promise
-    submitReviewDecision(fixture, firstAttemptId, 'approved', sequentialIds('review'))
-    const oldReviewId = Object.values(fixture.repository.rebuild(fixture.bundle.run.id).reviews)[0]!
-      .id
-
-    releaseSecond.resolve()
-    await secondCompleted.promise
+    await vi.waitFor(
+      () =>
+        expect(
+          fixture.repository.rebuild(fixture.bundle.run.id).tasks[fixture.taskId]?.activeClaim
+        ).toBeUndefined(),
+      { timeout: 10_000 }
+    )
     const projection = fixture.repository.rebuild(fixture.bundle.run.id)
-    expect(projection.tasks[fixture.taskId]).toMatchObject({
-      status: 'in_review',
-      selectedAttemptId: secondAttemptId,
-      reviewPanelId: expect.stringContaining(secondAttemptId)
-    })
-    expect(projection.reviewValidity[oldReviewId]).toEqual({
-      status: 'invalidated',
-      invalidatedByAttemptId: secondAttemptId
-    })
-    expect(Object.values(projection.reviewPanels)).toHaveLength(2)
+    expect(projection.tasks[fixture.taskId]?.activeClaim).toBeUndefined()
+    expect(projection.tasks[fixture.taskId]?.knownAttemptIds).toHaveLength(1)
   })
 
   it('reuses approved Review evidence across repeated clean restarts', async () => {
@@ -321,70 +310,103 @@ describe('MAM Attempt execution with real Git state', () => {
     }
   })
 
-  it('records an interrupted Executor, confirms reconciliation, and consumes the planned Attempt', async () => {
+  it('retains a failed local execution without publishing an Attempt', async () => {
     const fixture = createAttemptExecutionAcceptanceFixture()
     fixtures.push(fixture)
     const ids = sequentialIds()
     const interrupted = completionSignal()
-    const started = await executionService(fixture, ids, interrupted.resolve, async () => {
-      throw new Error('executor stopped with api_key=do-not-persist')
-    }).start({ workflowRunId: fixture.bundle.run.id, taskId: fixture.taskId })
-    const interruptedAttemptId = started.runs[0]!.attempts[0]!.id
+    const started = await executionService(
+      fixture,
+      ids,
+      interrupted.resolve,
+      async () => {
+        throw new Error('executor stopped with api_key=do-not-persist')
+      },
+      'claimant.attention'
+    ).start({ workflowRunId: fixture.bundle.run.id, taskId: fixture.taskId })
+    expect(started.runs[0]!.attempts).toEqual([])
     await interrupted.promise
 
-    const needsAttention = fixture.repository.rebuild(fixture.bundle.run.id)
-    expect(needsAttention.tasks[fixture.taskId]).toMatchObject({
-      status: 'needs_attention',
-      activeAttemptIds: []
-    })
-    expect(needsAttention.attempts[interruptedAttemptId]?.status).toBe('needs_reconciliation')
+    const retained = fixture.repository.rebuild(fixture.bundle.run.id)
+    expect(retained.tasks[fixture.taskId]?.activeClaim).toMatchObject({ generation: 1 })
+    expect(retained.attempts).toEqual({})
     expect(
       JSON.stringify(fixture.repository.events.listEvents(fixture.bundle.run.id))
     ).not.toContain('do-not-persist')
-
-    const commands = new MamUiCommandService(
-      fixture.query,
-      {
-        userId: 'user.owner',
-        schedulerId: 'scheduler.desktop',
-        now: () => '2026-07-28T23:06:00Z',
-        createId: ids
-      },
-      fixture.repository
+    const resumed = executionService(
+      fixture,
+      ids,
+      vi.fn(),
+      fakeExecution,
+      'claimant.attention'
     )
-    const recovered = commands.recoverAttempt({
+    await expect(
+      resumed.start({ workflowRunId: fixture.bundle.run.id, taskId: fixture.taskId })
+    ).rejects.toThrow('local_draft_needs_attention')
+    const completed = completionSignal()
+    await executionService(
+      fixture,
+      ids,
+      completed.resolve,
+      fakeExecution,
+      'claimant.attention'
+    ).start({
       workflowRunId: fixture.bundle.run.id,
       taskId: fixture.taskId,
-      previousAttemptId: interruptedAttemptId,
-      resolution: 'start_new_attempt',
-      reason: 'Checked the retained worktree and confirmed that replay is safe.'
-    })
-    const plannedAttempt = recovered.runs[0]!.attempts.find(
-      (attempt) => attempt.status === 'recovery_planned'
-    )!
-    const completed = completionSignal()
-    const replacementStarted = await executionService(fixture, ids, completed.resolve).start({
-      workflowRunId: fixture.bundle.run.id,
-      taskId: fixture.taskId
-    })
-    expect(replacementStarted.runs[0]!.attempts).toHaveLength(2)
-    expect(
-      replacementStarted.runs[0]!.attempts.find((attempt) => attempt.id === plannedAttempt.id)
-    ).toMatchObject({
-      previousAttemptId: interruptedAttemptId,
-      status: 'running'
+      resumeNeedsAttention: true
     })
     await completed.promise
+    expect(
+      fixture.repository.rebuild(fixture.bundle.run.id).tasks[fixture.taskId]
+        ?.currentDeliveryAttemptId
+    ).toBeTruthy()
+  })
 
-    const replacement = fixture.repository.rebuild(fixture.bundle.run.id)
-    expect(replacement.attempts[plannedAttempt.id]).toMatchObject({
-      previousAttemptId: interruptedAttemptId,
-      status: 'submitted'
-    })
-    expect(replacement.tasks[fixture.taskId]).toMatchObject({
-      roleProfileId: 'role.builder',
-      roleProfileVersion: 1
-    })
+  it('restores a retained local Draft after the application service restarts', async () => {
+    const fixture = createAttemptExecutionAcceptanceFixture()
+    fixtures.push(fixture)
+    const ids = sequentialIds('restart')
+    const interrupted = completionSignal()
+    const first = executionService(
+      fixture,
+      ids,
+      interrupted.resolve,
+      async () => {
+        throw Object.assign(new Error('Request timed out.'), { code: 'executor_timeout' })
+      },
+      'claimant.restart'
+    )
+    await first.start({ workflowRunId: fixture.bundle.run.id, taskId: fixture.taskId })
+    await interrupted.promise
+    await vi.waitFor(
+      () =>
+        expect(
+          new LocalExecutionDraftStore(join(fixture.root, 'worktrees', 'drafts'))
+            .listRecoverable()[0]?.state
+        ).toBe('waiting_for_resume'),
+      { timeout: 10_000 }
+    )
+    fixture.settings.save({ ...fixture.settings.get(), executorBindings: [] })
+
+    const completed = completionSignal()
+    const restarted = executionService(
+      fixture,
+      ids,
+      completed.resolve,
+      fakeExecution,
+      'claimant.restart'
+    )
+    await restarted.start({ workflowRunId: fixture.bundle.run.id, taskId: fixture.taskId })
+    await completed.promise
+    await vi.waitFor(
+      () =>
+        expect(
+          fixture.repository.rebuild(fixture.bundle.run.id).tasks[fixture.taskId]
+            ?.currentDeliveryAttemptId
+        ).toBeTruthy(),
+      { timeout: 10_000 }
+    )
+    expect(Object.keys(fixture.repository.rebuild(fixture.bundle.run.id).attempts)).toHaveLength(1)
   })
 
   it('keeps an assigned Task retryable when local Executor preflight fails', async () => {
@@ -462,10 +484,10 @@ describe('MAM Attempt execution with real Git state', () => {
     const [firstSnapshot, duplicateSnapshot] = await Promise.all([firstStart, duplicateStart])
 
     const running = fixture.repository.rebuild(fixture.bundle.run.id)
-    expect(running.tasks[fixture.taskId]?.activeAttemptIds).toHaveLength(1)
-    expect(running.tasks[fixture.taskId]?.knownAttemptIds).toHaveLength(1)
-    expect(firstSnapshot.runs[0]?.attempts).toHaveLength(1)
-    expect(duplicateSnapshot.runs[0]?.attempts).toHaveLength(1)
+    expect(running.tasks[fixture.taskId]?.activeClaim).toMatchObject({ generation: 1 })
+    expect(running.tasks[fixture.taskId]?.knownAttemptIds).toHaveLength(0)
+    expect(firstSnapshot.runs[0]?.attempts).toHaveLength(0)
+    expect(duplicateSnapshot.runs[0]?.attempts).toHaveLength(0)
     await vi.waitFor(() => expect(execute).toHaveBeenCalledOnce())
 
     releaseExecution.resolve()
@@ -570,7 +592,8 @@ function executionService(
   fixture: ReturnType<typeof createAttemptExecutionAcceptanceFixture>,
   createId: (kind: string) => string,
   onStateChanged: () => void,
-  execute: MamAttemptExecutionServiceExecutor['execute'] = fakeExecution
+  execute: MamAttemptExecutionServiceExecutor['execute'] = fakeExecution,
+  claimantInstanceId?: string
 ): MamAttemptExecutionService {
   return new MamAttemptExecutionService({
     query: fixture.query,
@@ -587,6 +610,7 @@ function executionService(
     preflight: successfulCodexPreflight(),
     now: () => '2026-07-28T23:05:00Z',
     createId,
+    ...(claimantInstanceId ? { claimantInstanceId } : {}),
     onStateChanged
   })
 }

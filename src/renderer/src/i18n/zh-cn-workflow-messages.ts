@@ -1,4 +1,6 @@
 export const ZH_CN_WORKFLOW_MESSAGES: Readonly<Record<string, string>> = {
+  'I checked whether the interrupted Role changed anything outside its isolated workspace and want to continue this Draft.':
+    '我已核对中断的角色是否修改过隔离工作区之外的内容，并确认继续此本地草稿。',
   'New Workflow Definition': '新建工作流定义',
   'New Workflow': '新建工作流',
   'Start with a finish node, then build the versioned graph on the visual canvas.':
@@ -201,6 +203,15 @@ export const ZH_CN_WORKFLOW_MESSAGES: Readonly<Record<string, string>> = {
   Starter: '起始模板',
   'Reviewed delivery (recommended)': '审核与交付（推荐）',
   'Blank graph (advanced)': '空白执行图（高级）',
+  'Claimed by': '领取者',
+  at: '时间',
+  'Reason for force takeover': '强制接管原因',
+  'Force takeover reason': '强制接管原因',
+  'Missing local executors, credentials, or required resources stop before a Delivery is published.':
+    '缺少本地执行器、凭证或必需资源时，系统会在发布交付前停止。',
+  'Review Gate node IDs': '审核门节点 ID',
+  'Producer node ID': '生产节点 ID',
+  'Total quorum': '总法定票数',
   'Create Role Profiles before running this Workflow; the graph can still be saved now.':
     '运行此工作流前请先创建角色配置；当前仍可先保存执行图。'
 }

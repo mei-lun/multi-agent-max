@@ -1,6 +1,7 @@
 import type { GitStateRepository } from '../state-store/git-state-repository'
 import { advanceReadyConditions } from './condition-advancement'
 import { advanceReadySystemNodes } from './system-node-advancement'
+import { advanceReadyReviewAggregates } from './review-aggregate-advancement'
 
 export function advanceDeterministicNodes(input: {
   repository: GitStateRepository
@@ -13,9 +14,12 @@ export function advanceDeterministicNodes(input: {
   const systemNodes: string[] = []
   for (;;) {
     const system = advanceReadySystemNodes(input)
+    const reviewAggregates = advanceReadyReviewAggregates(input)
     const resolved = advanceReadyConditions(input)
-    systemNodes.push(...system)
+    systemNodes.push(...system, ...reviewAggregates)
     conditions.push(...resolved)
-    if (system.length === 0 && resolved.length === 0) return { conditions, systemNodes }
+    if (system.length === 0 && reviewAggregates.length === 0 && resolved.length === 0) {
+      return { conditions, systemNodes }
+    }
   }
 }

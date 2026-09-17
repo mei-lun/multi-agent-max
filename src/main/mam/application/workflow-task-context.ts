@@ -7,19 +7,25 @@ import { mergeNodeHasCompleted } from './merge-node-projection'
 import { resolvedReviewStatus } from './review-disagreement-resolution'
 import { latestSubmittedReviewSubject, reachableReviewNodeIds } from './review-route-projection'
 import {
+  hasCurrentDelivery,
   isPassedTaskStatus,
   roleCatalogVersions,
   taskReviewPanel
 } from './workflow-projection-state'
 import { projectWorkflowRoute } from './workflow-route-projection'
+import { currentTaskDeliveryAttemptId } from './current-task-delivery'
+import { workflowInputTaskIds } from './workflow-input-task-ids'
 
 export type TaskContextDefinition = Readonly<{
   initialStatus: 'waiting_dependencies' | 'waiting_role_assignment'
   allowedRoleProfileIds: readonly string[]
   roleCatalogVersions: ReadonlyMap<string, ReadonlySet<number>>
   reviewTarget?: ReviewSubject
-  allowedReviewNodeIds: readonly string[]
+  reviewNodeId?: string
+  allowedReviewNodeIds?: readonly string[]
+  requiredInputTaskIds?: readonly string[]
   minimumReviewDecisions?: number
+  maxRevisionAttempts?: number
   mergeCandidate?: MergeQueueEntry
   mergeResolutionCandidate?: MergeConflictResolution
 }>
@@ -64,6 +70,7 @@ export function taskContextDefinition(
       taskId,
       nodeId: dynamicTask.nodeId,
       allowedRoleProfileIds: dynamicTask.allowedRoleProfileIds,
+      requiredInputTaskIds: dynamicTask.dependencies,
       ready
     })
   }
@@ -92,7 +99,8 @@ export function passedNodeIds(
       ) {
         passed.add(nodeId)
       }
-    } else if (isPassedTaskStatus(status)) passed.add(nodeId)
+    } else if (isPassedTaskStatus(status) && hasCurrentDelivery(projection, task.id))
+      passed.add(nodeId)
   }
   for (const node of bundle.definition.nodes.filter(
     (candidate) => candidate.type === 'review_gate'
@@ -101,12 +109,33 @@ export function passedNodeIds(
       (aggregation) =>
         aggregation.reviewNodeId === node.id &&
         resolvedReviewStatus(aggregation, projection) === 'approved' &&
-        projection.tasks[aggregation.subject.taskId]?.knownAttemptIds.at(-1) ===
-          aggregation.subject.attemptId
+        currentTaskDeliveryAttemptId(
+          projection.tasks[aggregation.subject.taskId],
+          projection.attempts
+        ) === aggregation.subject.attemptId
     )
-    if (approved) passed.add(node.id)
+    const feedsAggregate = bundle.definition.edges.some(
+      (edge) =>
+        edge.from === node.id &&
+        bundle.definition.nodes.some(
+          (candidate) => candidate.id === edge.to && candidate.type === 'review_aggregate'
+        )
+    )
+    const reviewed = Object.values(projection.reviewAggregations).some(
+      (aggregation) => aggregation.reviewNodeId === node.id
+    )
+    if (approved || (feedsAggregate && reviewed)) passed.add(node.id)
   }
   for (const nodeId of Object.keys(projection.resolvedConditions)) passed.add(nodeId)
+  for (const aggregation of Object.values(projection.reviewAggregations)) {
+    if (
+      bundle.definition.nodes.some(
+        (node) => node.id === aggregation.reviewNodeId && node.type === 'review_aggregate'
+      ) &&
+      resolvedReviewStatus(aggregation, projection) === 'approved'
+    )
+      passed.add(aggregation.reviewNodeId)
+  }
   for (const execution of Object.values(projection.systemNodeExecutions)) {
     if (execution.status === 'passed') passed.add(execution.nodeId)
   }
@@ -120,8 +149,11 @@ function reviewableContext(input: {
   taskId: string
   nodeId: string
   allowedRoleProfileIds: readonly string[]
+  requiredInputTaskIds?: readonly string[]
   ready: boolean
 }): TaskContextDefinition {
+  const requiredInputTaskIds =
+    input.requiredInputTaskIds ?? workflowInputTaskIds(input.bundle, input.nodeId)
   const reviewTarget = latestSubmittedReviewSubject(input.projection, input.taskId)
   const panel = taskReviewPanel(input.projection, input.taskId)
   const reviewNode = panel
@@ -134,9 +166,13 @@ function reviewableContext(input: {
     allowedRoleProfileIds: input.allowedRoleProfileIds,
     roleCatalogVersions: roleCatalogVersions(input.bundle),
     allowedReviewNodeIds: reachableReviewNodeIds(input.bundle, input.nodeId),
+    requiredInputTaskIds,
     ...(reviewTarget ? { reviewTarget } : {}),
     ...(reviewNode?.type === 'review_gate'
-      ? { minimumReviewDecisions: reviewNode.minimumDecisions }
+      ? {
+          minimumReviewDecisions: reviewNode.minimumDecisions,
+          maxRevisionAttempts: reviewNode.maxRevisionAttempts
+        }
       : {})
   }
 }
@@ -165,6 +201,8 @@ function generatedTaskContext(
     roleCatalogVersions: roleCatalogVersions(bundle),
     allowedReviewNodeIds: [],
     reviewTarget: reviewTask.subject,
+    reviewNodeId: reviewTask.reviewNodeId,
+    requiredInputTaskIds: [reviewTask.subject.taskId],
     minimumReviewDecisions: reviewNode?.type === 'review_gate' ? reviewNode.minimumDecisions : 1
   }
 }
@@ -215,7 +253,9 @@ function humanReviewPassed(
   projection: WorkflowRunProjection
 ): boolean {
   const taskId = bundle.taskCatalog.find((task) => task.nodeId === node.revisionTargetNodeId)?.id
-  const latestAttemptId = taskId ? projection.tasks[taskId]?.knownAttemptIds.at(-1) : undefined
+  const latestAttemptId = taskId
+    ? currentTaskDeliveryAttemptId(projection.tasks[taskId], projection.attempts)
+    : undefined
   return Object.values(projection.humanReviewDecisions).some(
     (decision) =>
       decision.gateNodeId === node.id &&

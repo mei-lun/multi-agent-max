@@ -6,6 +6,7 @@ import type {
   AttemptIntegrationBase
 } from './mam-attempt-execution-types'
 import { mergeNodeHasCompleted } from './merge-node-projection'
+import { currentTaskDeliveryAttemptId } from './current-task-delivery'
 
 export type AttemptHandoffContext = Readonly<{
   inputArtifacts: readonly AttemptInputArtifactContext[]
@@ -49,7 +50,7 @@ function resolveInputArtifact(
   )
   const candidates = definitions.flatMap((definition) => {
     const task = projection.tasks[definition.id]
-    const attemptId = task?.selectedAttemptId ?? task?.knownAttemptIds.at(-1)
+    const attemptId = currentTaskDeliveryAttemptId(task, projection.attempts)
     const attempt = attemptId ? projection.attempts[attemptId] : undefined
     const claim = attempt?.result?.artifacts.find((item) => item.type === artifact.artifactId)
     const sourceCommit = attempt?.result?.system.submittedCommit

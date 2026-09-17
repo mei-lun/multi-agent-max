@@ -226,7 +226,8 @@ function reviewTaskDefinition(reviewTarget: ReviewSubject) {
     initialStatus: 'waiting_role_assignment' as const,
     allowedRoleProfileIds: ['role.reviewer'],
     roleCatalogVersions: new Map([['role.reviewer', new Set([1])]]),
-    reviewTarget
+    reviewTarget,
+    reviewNodeId: 'review.node'
   }
 }
 

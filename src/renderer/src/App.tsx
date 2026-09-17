@@ -16,7 +16,7 @@ import {
   UserRoundCheck,
   Users
 } from 'lucide-react'
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Button } from './components/ui/button'
 import { Badge } from './components/ui/badge'
 import {
@@ -41,6 +41,7 @@ import { MamWorkflowsPage } from './features/mam/MamWorkflowsPage'
 import { MamHumanAttentionPage } from './features/mam/MamHumanAttentionPage'
 import { useMamSnapshot } from './features/mam/use-mam-snapshot'
 import { useMamLocalCollaboration } from './features/mam/use-mam-local-collaboration'
+import { useMamDesignAssistant } from './features/mam/use-mam-design-assistant'
 import { cn } from './lib/class-name'
 import { LocalizedUiText, useUiLocale, type UiLocale } from './i18n/ui-locale'
 
@@ -64,6 +65,12 @@ export function App(): React.JSX.Element {
   const [integrationRunId, setIntegrationRunId] = useState<string>()
   const [createWorkflowRequested, setCreateWorkflowRequested] = useState(false)
   const state = useMamSnapshot()
+  const handleDesignApplied = useCallback(() => {
+    void state.refresh()
+    setCreateWorkflowRequested(false)
+    setPage('workflows')
+  }, [state.refresh])
+  const design = useMamDesignAssistant(handleDesignApplied)
   const collaborationErrors = useMamLocalCollaboration(state)
   const { locale, setLocale } = useUiLocale()
   const isMac = navigator.userAgent.includes('Mac')
@@ -238,6 +245,7 @@ export function App(): React.JSX.Element {
               <ActivePage
                 page={page}
                 snapshot={state.snapshot}
+                design={design}
                 pending={state.pending}
                 onChooseProject={() => void state.selectProject()}
                 onAssignTask={state.assignTask}
@@ -274,11 +282,6 @@ export function App(): React.JSX.Element {
                 onExportDiagnostics={state.exportDiagnostics}
                 onExportExecutionActivity={state.exportExecutionActivity}
                 onOpenSettings={() => setPage('settings')}
-                onDesignApplied={() => {
-                  void state.refresh()
-                  setCreateWorkflowRequested(false)
-                  setPage('workflows')
-                }}
                 {...(focusedRunId ? { focusedRunId } : {})}
                 {...(integrationRunId ? { integrationRunId } : {})}
                 openNewWorkflow={createWorkflowRequested}
@@ -320,6 +323,7 @@ export function App(): React.JSX.Element {
 function ActivePage({
   page,
   snapshot,
+  design,
   pending,
   onChooseProject,
   onAssignTask,
@@ -356,7 +360,6 @@ function ActivePage({
   onExportDiagnostics,
   onExportExecutionActivity,
   onOpenSettings,
-  onDesignApplied,
   focusedRunId,
   integrationRunId,
   openNewWorkflow,
@@ -369,6 +372,7 @@ function ActivePage({
 }: Readonly<{
   page: Page
   snapshot: NonNullable<ReturnType<typeof useMamSnapshot>['snapshot']>
+  design: ReturnType<typeof useMamDesignAssistant>
   pending: boolean
   onChooseProject(): void
   onAssignTask: ReturnType<typeof useMamSnapshot>['assignTask']
@@ -405,7 +409,6 @@ function ActivePage({
   onExportDiagnostics: ReturnType<typeof useMamSnapshot>['exportDiagnostics']
   onExportExecutionActivity: ReturnType<typeof useMamSnapshot>['exportExecutionActivity']
   onOpenSettings(): void
-  onDesignApplied(): void
   focusedRunId?: string
   integrationRunId?: string
   openNewWorkflow: boolean
@@ -417,13 +420,7 @@ function ActivePage({
   onOpenReviews(): void
 }>): React.JSX.Element {
   if (page === 'design') {
-    return (
-      <MamDesignPage
-        snapshot={snapshot}
-        onApplied={onDesignApplied}
-        onOpenSettings={onOpenSettings}
-      />
-    )
+    return <MamDesignPage snapshot={snapshot} design={design} onOpenSettings={onOpenSettings} />
   }
   if (page === 'roles') {
     return (

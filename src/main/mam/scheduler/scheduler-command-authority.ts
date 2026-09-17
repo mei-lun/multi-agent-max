@@ -2,6 +2,7 @@ import type { SchedulerCommand } from '../../../shared/mam/scheduler-protocol'
 import { materializeDynamicTaskPlan } from '../application/dynamic-task-plan-service'
 import {
   assertReviewAggregationAuthority,
+  assertReviewDecisionBinding,
   assertReviewPanelAuthority
 } from './review-command-authority'
 import { SchedulerCommandRejectedError } from './scheduler-command-rejection'
@@ -21,6 +22,9 @@ import {
 } from './workflow-progress-reuse-command-authority'
 import type { SchedulerKernelContext, SchedulerTaskContext } from './scheduler-kernel-context'
 import { assertHumanAttentionAuthority } from './human-attention-command-authority'
+import { assertTaskClaimAuthority } from './task-claim-command-authority'
+import { assertTaskDeliveryAuthority } from './task-delivery-command-authority'
+import { assertReviewAggregateAuthority } from './review-aggregate-command-authority'
 
 export type {
   AttemptBinding,
@@ -87,8 +91,23 @@ export function assertSchedulerCommandAuthority(
   ) {
     return assertGlobalMergeQueueAuthority(command, context)
   }
-
   const task = requireTask(command, context)
+  if (command.type === 'record_task_delivery') {
+    assertTaskDeliveryAuthority(command, task, context)
+    return
+  }
+  if (command.type === 'record_review_aggregate') {
+    assertReviewAggregateAuthority(command, context)
+    return
+  }
+  if (
+    command.type === 'claim_task' ||
+    command.type === 'release_task_claim' ||
+    command.type === 'force_takeover_task'
+  ) {
+    assertTaskClaimAuthority(command, task, context.schedulerId)
+    return
+  }
   if (command.type === 'resolve_human_review') {
     assertUser(command)
     const gate = context.humanReviewGates?.get(command.gateNodeId)
@@ -229,18 +248,15 @@ export function assertSchedulerCommandAuthority(
     if (command.actor.kind !== 'executor') {
       reject('executor_authority_required', 'review requires an Executor actor')
     }
-    if (!task.reviewTarget) {
-      reject('review_target_required', 'Reviewer Task has no immutable Review subject')
-    }
-    if (
-      command.review.workflowRunId !== command.workflowRunId ||
-      command.review.reviewerTaskId !== command.taskId ||
-      command.review.reviewerAttemptId !== command.attemptId ||
-      command.review.reviewerRoleInstanceId !== command.actor.roleInstanceId ||
-      JSON.stringify(command.review.subject) !== JSON.stringify(task.reviewTarget)
-    ) {
-      reject('review_binding_mismatch', 'review is not bound to the active Executor Attempt')
-    }
+    assertReviewDecisionBinding({
+      review: command.review,
+      workflowRunId: command.workflowRunId,
+      reviewerTaskId: command.taskId,
+      reviewerAttemptId: command.attemptId,
+      reviewerRoleInstanceId: command.actor.roleInstanceId,
+      reviewTarget: task.reviewTarget,
+      reviewNodeId: task.reviewNodeId
+    })
   }
 }
 

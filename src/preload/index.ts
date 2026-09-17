@@ -1,7 +1,10 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import {
   MAM_ASSIGN_TASK_CHANNEL,
+  MAM_CLAIM_TASK_CHANNEL,
+  MAM_FORCE_TAKEOVER_TASK_CHANNEL,
   MAM_REASSIGN_TASK_CHANNEL,
+  MAM_RELEASE_TASK_CLAIM_CHANNEL,
   MAM_CANCEL_WORKFLOW_RUN_CHANNEL,
   MAM_CREATE_WORKFLOW_RUN_CHANNEL,
   MAM_RESTART_WORKFLOW_RUN_CHANNEL,
@@ -67,6 +70,15 @@ const api: MamRendererApi = Object.freeze({
   },
   async reassignTask(input) {
     return ipcRenderer.invoke(MAM_REASSIGN_TASK_CHANNEL, input)
+  },
+  async claimTask(input) {
+    return ipcRenderer.invoke(MAM_CLAIM_TASK_CHANNEL, input)
+  },
+  async releaseTaskClaim(input) {
+    return ipcRenderer.invoke(MAM_RELEASE_TASK_CLAIM_CHANNEL, input)
+  },
+  async forceTakeoverTask(input) {
+    return ipcRenderer.invoke(MAM_FORCE_TAKEOVER_TASK_CHANNEL, input)
   },
   async recoverAttempt(input) {
     return ipcRenderer.invoke(MAM_RECOVER_ATTEMPT_CHANNEL, input)

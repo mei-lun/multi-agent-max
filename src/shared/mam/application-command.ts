@@ -83,7 +83,31 @@ export const MamRecoverAttemptInputSchema = z
 export const MamStartAttemptInputSchema = z
   .object({
     workflowRunId: MamEntityIdSchema,
-    taskId: MamEntityIdSchema
+    taskId: MamEntityIdSchema,
+    resumeNeedsAttention: z.boolean().optional()
+  })
+  .strict()
+
+export const MamClaimTaskInputSchema = z
+  .object({ workflowRunId: MamEntityIdSchema, taskId: MamEntityIdSchema })
+  .strict()
+
+export const MamReleaseTaskClaimInputSchema = z
+  .object({
+    workflowRunId: MamEntityIdSchema,
+    taskId: MamEntityIdSchema,
+    claimId: MamEntityIdSchema,
+    generation: z.number().int().positive()
+  })
+  .strict()
+
+export const MamForceTakeoverTaskInputSchema = z
+  .object({
+    workflowRunId: MamEntityIdSchema,
+    taskId: MamEntityIdSchema,
+    previousClaimId: MamEntityIdSchema,
+    expectedGeneration: z.number().int().positive(),
+    reason: z.string().trim().min(1).max(4000)
   })
   .strict()
 
@@ -214,6 +238,9 @@ export type MamAssignTaskInput = z.infer<typeof MamAssignTaskInputSchema>
 export type MamReassignTaskInput = z.infer<typeof MamReassignTaskInputSchema>
 export type MamRecoverAttemptInput = z.infer<typeof MamRecoverAttemptInputSchema>
 export type MamStartAttemptInput = z.infer<typeof MamStartAttemptInputSchema>
+export type MamClaimTaskInput = z.infer<typeof MamClaimTaskInputSchema>
+export type MamReleaseTaskClaimInput = z.infer<typeof MamReleaseTaskClaimInputSchema>
+export type MamForceTakeoverTaskInput = z.infer<typeof MamForceTakeoverTaskInputSchema>
 export type MamExecuteNextMergeInput = z.infer<typeof MamExecuteNextMergeInputSchema>
 export type MamSaveWorkflowInput = z.infer<typeof MamSaveWorkflowInputSchema>
 export type MamCreateWorkflowRunInput = z.infer<typeof MamCreateWorkflowRunInputSchema>

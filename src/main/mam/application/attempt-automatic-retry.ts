@@ -1,4 +1,5 @@
 import type { GitStateRepository } from '../state-store/git-state-repository'
+import { countFormalRevisions } from '../review/review-revision-counter'
 import type { PreparedAttempt } from './mam-attempt-execution-types'
 
 export function shouldAutomaticallyRetryAttempt(input: {
@@ -11,7 +12,12 @@ export function shouldAutomaticallyRetryAttempt(input: {
   const message = input.error instanceof Error ? input.error.message : String(input.error)
   if (!isRecoverableResultError(message)) return false
   const projection = input.repository.rebuild(input.prepared.workflowRunId)
-  const attemptCount = projection.tasks[input.prepared.taskId]?.knownAttemptIds.length ?? 1
+  const attemptCount = input.prepared.previousAttemptId
+    ? countFormalRevisions({
+        attemptId: input.prepared.previousAttemptId,
+        attempts: projection.attempts
+      }) + 1
+    : 1
   return attemptCount < (input.prepared.retryMaxAttempts ?? 1)
 }
 

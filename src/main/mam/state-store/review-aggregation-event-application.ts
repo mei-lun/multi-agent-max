@@ -1,6 +1,6 @@
 import type { ReviewAggregation, ReviewDecision } from '../../../shared/mam/domain/review'
 import type { SchedulerEvent } from '../../../shared/mam/scheduler-protocol'
-import type { TaskProjection } from './git-state-projection'
+import type { TaskProjection, WorkflowRunProjection } from './git-state-projection'
 
 export class ReviewAggregationEventError extends Error {
   constructor(
@@ -51,6 +51,22 @@ export function applyReviewAggregationEvent(input: {
     status,
     lastEventId: event.eventId
   }
+}
+
+export function applyReviewAggregateProjection(
+  projection: WorkflowRunProjection,
+  event: Extract<SchedulerEvent, { type: 'review_aggregate_recorded' }>
+): WorkflowRunProjection {
+  const tasks = { ...projection.tasks }
+  const aggregations = { ...projection.reviewAggregations }
+  applyReviewAggregationEvent({
+    event: { ...event, type: 'review_aggregation_recorded' },
+    tasks,
+    reviews: projection.reviews,
+    reviewValidity: projection.reviewValidity,
+    aggregations
+  })
+  return { ...projection, tasks, reviewAggregations: aggregations }
 }
 
 function fail(code: string, message: string): never {

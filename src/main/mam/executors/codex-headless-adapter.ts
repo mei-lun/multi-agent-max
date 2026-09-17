@@ -57,6 +57,7 @@ export class CodexHeadlessAdapter {
     credentialValues: Readonly<Record<string, string>>
     authority: AttemptResultAuthority
     onEvent?: ExecutorEventListener
+    executionTimeoutMs?: number
   }): Promise<CodexHeadlessExecutionResult> {
     const preflight = this.preflight.check(input.profile, input.binding)
     if (!preflight.ok) {
@@ -81,7 +82,7 @@ export class CodexHeadlessAdapter {
     })
     const process = await this.processRunner(
       invocation,
-      input.snapshot.budget.maxDurationSeconds * 1000,
+      input.executionTimeoutMs ?? input.snapshot.budget.maxDurationSeconds * 1000,
       (line) => emitParsedLine(line, input.executorInvocationId, this.now(), input.onEvent)
     )
     const parsed = parseCodexJsonl({

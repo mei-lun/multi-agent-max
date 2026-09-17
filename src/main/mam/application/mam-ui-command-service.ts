@@ -36,8 +36,8 @@ import {
   deactivateExecutionProfile,
   deactivateWorkflow as deactivateWorkflowProfile
 } from './profile-deactivation-command'
-import { MamHumanAttentionUiCommands } from './mam-human-attention-ui-commands'
 import { makeMamUiCommandError, MamUiCommandServiceError } from './mam-ui-command-error'
+import { MamTaskClaimUiCommands } from './mam-task-claim-ui-commands'
 
 export { MamUiCommandServiceError } from './mam-ui-command-error'
 
@@ -45,15 +45,15 @@ export type MamUiCommandServiceOptions = Readonly<{
   userId: string
   schedulerId: string
   now?: () => string
-  createId?: (kind: 'command' | 'attempt') => string
+  createId?: (kind: 'command' | 'attempt' | 'claim') => string
   onStateChanged?: () => void
+  claimantInstanceId?: string
 }>
 
-export class MamUiCommandService extends MamHumanAttentionUiCommands {
-  private readonly userId: string
-  private readonly schedulerId: string
+export class MamUiCommandService extends MamTaskClaimUiCommands {
+  private readonly userId: string; private readonly schedulerId: string
   private readonly now: () => string
-  private readonly createId: (kind: 'command' | 'attempt') => string
+  private readonly createId: (kind: 'command' | 'attempt' | 'claim') => string
   private onStateChanged: () => void
   private commands: CommandPublisher | undefined
   private repository: GitStateRepository | undefined
@@ -67,7 +67,7 @@ export class MamUiCommandService extends MamHumanAttentionUiCommands {
     private readonly localSecrets?: MamLocalSecretWriter,
     private readonly modelCatalog = new MamProviderModelCatalogService()
   ) {
-    super()
+    super(query, options)
     this.userId = MamEntityIdSchema.parse(options.userId)
     this.schedulerId = MamEntityIdSchema.parse(options.schedulerId)
     this.now = options.now ?? (() => new Date().toISOString())
@@ -77,6 +77,7 @@ export class MamUiCommandService extends MamHumanAttentionUiCommands {
   }
 
   setRepository(repository: GitStateRepository): void {
+    this.setTaskClaimRepository(repository)
     this.repository = repository
     this.commands = new GitCommandRetryCoordinator(repository)
   }
@@ -322,7 +323,7 @@ export class MamUiCommandService extends MamHumanAttentionUiCommands {
     }
   }
 
-  private nextId(kind: 'command' | 'attempt'): string {
+  private nextId(kind: 'command' | 'attempt' | 'claim'): string {
     return MamEntityIdSchema.parse(this.createId(kind))
   }
 }

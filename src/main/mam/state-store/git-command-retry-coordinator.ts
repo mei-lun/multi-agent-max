@@ -19,6 +19,8 @@ import { projectWorkflowRun, taskContextDefinition } from '../application/workfl
 import { reviewDisagreementGateId } from '../application/review-disagreement-resolution'
 import { createMergeQueueEntry } from '../application/merge-queue-service'
 import { latestSubmittedReviewSubject } from '../application/review-route-projection'
+import { currentTaskDeliveryAttemptId } from '../application/current-task-delivery'
+import { countFormalRevisions } from '../review/review-revision-counter'
 
 export type GitCommandExecutionInput = Readonly<{
   command: SchedulerCommand
@@ -254,7 +256,18 @@ export class GitCommandRetryCoordinator {
                     subject,
                     revisionTargetNodeId: node.revisionTargetNodeId,
                     revisionTargetTaskId: task.id,
-                    attemptCount: projection.tasks[task.id]?.knownAttemptIds.length ?? 0,
+                    attemptCount: currentTaskDeliveryAttemptId(
+                      projection.tasks[task.id],
+                      projection.attempts
+                    )
+                      ? countFormalRevisions({
+                          attemptId: currentTaskDeliveryAttemptId(
+                            projection.tasks[task.id],
+                            projection.attempts
+                          )!,
+                          attempts: projection.attempts
+                        }) + 1
+                      : 0,
                     maxRevisionAttempts: node.maxRevisionAttempts
                   }
                 ] as const

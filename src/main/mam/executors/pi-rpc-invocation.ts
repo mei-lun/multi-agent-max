@@ -14,7 +14,7 @@ import type { MaterializedAttemptResources } from '../profiles/attempt-resource-
 import { PI_ISOLATED_LAUNCHER_SOURCE } from './pi-isolated-launcher-source'
 import { PI_APPLICATION_API_EXTENSION_SOURCE } from './pi-application-api-extension-source'
 import type { PiApplicationApiBridgeEndpoint } from './pi-application-api-bridge-server'
-import { piArguments, piBridgeTools, piModels } from './pi-rpc-launch-configuration'
+import { piArguments, piBridgeTools, piModels, piSettings } from './pi-rpc-launch-configuration'
 
 export type PiRpcInvocation = Readonly<{
   launchOptions: RpcClientOptions
@@ -22,6 +22,7 @@ export type PiRpcInvocation = Readonly<{
   agentDirectory: string
   sessionDirectory: string
   modelsPath: string
+  settingsPath: string
   manifestPath: string
   rpcLogPath: string
 }>
@@ -46,6 +47,8 @@ export async function preparePiRpcInvocation(input: {
   credentialValues: Readonly<Record<string, string>>
   applicationApi?: PiApplicationApiBridgeEndpoint
   logDirectory?: string
+  resumeSessionFile?: string
+  executionTimeoutMs?: number
 }): Promise<PiRpcInvocation> {
   const snapshot = EffectiveRoleConfigSnapshotSchema.parse(input.snapshot)
   const binding = LocalExecutorBindingSchema.parse(input.executorBinding)
@@ -73,6 +76,7 @@ export async function preparePiRpcInvocation(input: {
   const credentialEnvironment = resolveCredentialEnvironment(snapshot, input.credentialValues)
   const skillPaths = await materializeSkills(input.resources, agentDirectory)
   const modelsPath = join(agentDirectory, 'models.json')
+  const settingsPath = join(agentDirectory, 'settings.json')
   const manifestPath = join(agentDirectory, 'mam-invocation-manifest.json')
   const launcherPath = join(agentDirectory, 'mam-pi-launcher.mjs')
   const applicationApiExtensionPath = join(agentDirectory, 'mam-application-api-extension.mjs')
@@ -86,7 +90,8 @@ export async function preparePiRpcInvocation(input: {
     sessionDirectory,
     skillPaths,
     input.applicationApi ? applicationApiExtensionPath : undefined,
-    bridgeTools
+    bridgeTools,
+    input.resumeSessionFile
   )
   const piEnvironment = minimalEnvironment({
     ...(process.versions.electron ? { ELECTRON_RUN_AS_NODE: '1' } : {}),
@@ -106,6 +111,7 @@ export async function preparePiRpcInvocation(input: {
   })
   await Promise.all([
     writePrivateJson(modelsPath, piModels(snapshot)),
+    writePrivateJson(settingsPath, piSettings(snapshot, input.executionTimeoutMs)),
     writePrivateJson(manifestPath, {
       schemaVersion: '1.0.0',
       attemptId: snapshot.attemptId,
@@ -150,6 +156,7 @@ export async function preparePiRpcInvocation(input: {
     agentDirectory,
     sessionDirectory,
     modelsPath,
+    settingsPath,
     manifestPath,
     rpcLogPath
   }

@@ -5,6 +5,7 @@ import type { GitStateRepository } from '../state-store/git-state-repository'
 import { publishMergeReadinessIfEligible } from './merge-readiness-publisher'
 import { advanceDeterministicNodes } from './deterministic-node-advancement'
 import { boundedReviewStatus } from '../review/review-revision-limit'
+import { countFormalRevisions } from '../review/review-revision-counter'
 import { advanceReadyReviewPanel } from './review-panel-advancement'
 
 export class MamReviewDisagreementCommandError extends Error {
@@ -39,14 +40,16 @@ export function resolveReviewDisagreementAndPublishMerge(input: {
   const reviewNode = bundle?.definition.nodes.find(
     (node) => node.type === 'review_gate' && node.id === aggregation.reviewNodeId
   )
-  const attemptCount =
-    input.repository.rebuild(request.workflowRunId).tasks[aggregation.subject.taskId]
-      ?.knownAttemptIds.length ?? 1
+  const projection = input.repository.rebuild(request.workflowRunId)
+  const formalRevisionNumber = countFormalRevisions({
+    attemptId: aggregation.subject.attemptId,
+    attempts: projection.attempts
+  })
   const selectedStatus =
     reviewNode?.type === 'review_gate'
       ? boundedReviewStatus({
           status: request.selectedStatus,
-          attemptCount,
+          attemptCount: formalRevisionNumber + 1,
           maxRevisionAttempts: reviewNode.maxRevisionAttempts
         })
       : request.selectedStatus

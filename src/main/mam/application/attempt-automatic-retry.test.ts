@@ -40,7 +40,7 @@ describe('automatic Attempt retry', () => {
   it('stops after the frozen Role attempt limit', () => {
     expect(
       shouldAutomaticallyRetryAttempt({
-        prepared: preparedAttempt(2),
+        prepared: preparedAttempt(2, 'attempt.second'),
         repository: repositoryWithAttempts(['attempt.first', 'attempt.second']),
         error: new Error('automatic_review_output_invalid'),
         executorCompleted: true
@@ -49,16 +49,30 @@ describe('automatic Attempt retry', () => {
   })
 })
 
-function preparedAttempt(retryMaxAttempts: number): PreparedAttempt {
+function preparedAttempt(retryMaxAttempts: number, previousAttemptId?: string): PreparedAttempt {
   return {
     workflowRunId: 'run.one',
     taskId: 'task.one',
-    retryMaxAttempts
+    retryMaxAttempts,
+    ...(previousAttemptId ? { previousAttemptId } : {})
   } as PreparedAttempt
 }
 
 function repositoryWithAttempts(knownAttemptIds: readonly string[]): GitStateRepository {
   return {
-    rebuild: () => ({ tasks: { 'task.one': { knownAttemptIds } } })
+    rebuild: () => ({
+      tasks: { 'task.one': { knownAttemptIds } },
+      attempts: Object.fromEntries(
+        knownAttemptIds.map((attemptId, index) => [
+          attemptId,
+          {
+            taskId: 'task.one',
+            status: 'submitted',
+            ...(index > 0 ? { previousAttemptId: knownAttemptIds[index - 1] } : {}),
+            lastEventId: `event.${attemptId}`
+          }
+        ])
+      )
+    })
   } as unknown as GitStateRepository
 }

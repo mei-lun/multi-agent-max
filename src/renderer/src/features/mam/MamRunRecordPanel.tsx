@@ -123,6 +123,7 @@ export function MamRunRecordPanel({
             run={run}
             roleNames={roleNames}
             pending={pending}
+            localClaimantInstanceId={`claimant.${localSettings.bindingIdentity}`}
             onAssignTask={onAssignTask}
             onStartAttempt={onStartAttempt}
             onRecoverAttempt={onRecoverAttempt}
@@ -139,6 +140,7 @@ function RunTasks({
   run,
   roleNames,
   pending,
+  localClaimantInstanceId,
   onAssignTask,
   onStartAttempt,
   onRecoverAttempt,
@@ -148,6 +150,7 @@ function RunTasks({
   run: MamUiRunSnapshot
   roleNames: ReadonlyMap<string, string>
   pending: boolean
+  localClaimantInstanceId: string
   onAssignTask(input: MamAssignTaskInput): Promise<void>
   onStartAttempt(input: MamStartAttemptInput): Promise<void>
   onRecoverAttempt(input: MamRecoverAttemptInput): Promise<void>
@@ -197,6 +200,7 @@ function RunTasks({
               task={task}
               attempts={attempts}
               pending={pending}
+              localClaimantInstanceId={localClaimantInstanceId}
               onAssignTask={onAssignTask}
               onStartAttempt={onStartAttempt}
               onRecoverAttempt={onRecoverAttempt}

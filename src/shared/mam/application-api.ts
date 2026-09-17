@@ -2,10 +2,13 @@ import type { MamUiSnapshot } from './ui-projection'
 import type { MamAttemptDiff, MamGetAttemptDiffInput } from './attempt-inspection'
 import type {
   MamAssignTaskInput,
+  MamClaimTaskInput,
+  MamForceTakeoverTaskInput,
   MamCancelWorkflowRunInput,
   MamReassignTaskInput,
   MamCreateWorkflowRunInput,
   MamRecoverAttemptInput,
+  MamReleaseTaskClaimInput,
   MamRestartWorkflowRunInput,
   MamResolveReviewDisagreementInput,
   MamResolveApprovalGateInput,
@@ -47,6 +50,9 @@ export const MAM_SELECT_PROJECT_CHANNEL = 'mam:select-project'
 export const MAM_SELECT_LOG_DIRECTORY_CHANNEL = 'mam:select-log-directory'
 export const MAM_ASSIGN_TASK_CHANNEL = 'mam:assign-task'
 export const MAM_REASSIGN_TASK_CHANNEL = 'mam:reassign-task'
+export const MAM_CLAIM_TASK_CHANNEL = 'mam:claim-task'
+export const MAM_RELEASE_TASK_CLAIM_CHANNEL = 'mam:release-task-claim'
+export const MAM_FORCE_TAKEOVER_TASK_CHANNEL = 'mam:force-takeover-task'
 export const MAM_RECOVER_ATTEMPT_CHANNEL = 'mam:recover-attempt'
 export const MAM_START_ATTEMPT_CHANNEL = 'mam:start-attempt'
 export const MAM_EXECUTE_NEXT_MERGE_CHANNEL = 'mam:execute-next-merge'
@@ -95,6 +101,9 @@ export type MamRendererApi = Readonly<{
   selectLogDirectory(): Promise<string | undefined>
   assignTask(input: MamAssignTaskInput): Promise<MamUiSnapshot>
   reassignTask(input: MamReassignTaskInput): Promise<MamUiSnapshot>
+  claimTask(input: MamClaimTaskInput): Promise<MamUiSnapshot>
+  releaseTaskClaim(input: MamReleaseTaskClaimInput): Promise<MamUiSnapshot>
+  forceTakeoverTask(input: MamForceTakeoverTaskInput): Promise<MamUiSnapshot>
   recoverAttempt(input: MamRecoverAttemptInput): Promise<MamUiSnapshot>
   startAttempt(input: MamStartAttemptInput): Promise<MamUiSnapshot>
   executeNextMerge(input: MamExecuteNextMergeInput): Promise<MamUiSnapshot>

@@ -58,6 +58,7 @@ export class AttemptWorktreeManager {
     remoteName: string | undefined
     attemptId: string
     worktree: AttemptWorktree
+    retainWorktree?: boolean
   }): FinalizedAttemptWorktree {
     const changed = Boolean(this.git.run(input.worktree.path, ['status', '--porcelain']))
     if (changed) {
@@ -86,12 +87,14 @@ export class AttemptWorktreeManager {
         `HEAD:refs/heads/${input.worktree.branch}`
       ])
     }
-    const cleaned = this.git.succeeds(input.repositoryPath, [
-      'worktree',
-      'remove',
-      '--force',
-      input.worktree.path
-    ])
+    const cleaned =
+      input.retainWorktree ||
+      this.git.succeeds(input.repositoryPath, [
+        'worktree',
+        'remove',
+        '--force',
+        input.worktree.path
+      ])
     return {
       ...input.worktree,
       submittedCommit,

@@ -1,38 +1,34 @@
 import type { SchedulerEvent } from '../../../shared/mam/scheduler-protocol'
 import type { WorkflowRunProjection } from './git-state-projection'
 import { applyDynamicTaskEvent } from './dynamic-task-event-application'
+import * as reviewEvents from './review-event-application'
 import {
-  applyReviewRecordedEvent,
-  invalidateReviewsForNewAttempt
-} from './review-event-application'
-import { applyReviewAggregationEvent } from './review-aggregation-event-application'
+  applyReviewAggregateProjection,
+  applyReviewAggregationEvent
+} from './review-aggregation-event-application'
 import { applyReviewDisagreementStatus } from './review-disagreement-gate-application'
 import { applyReviewPanelEvent } from './review-panel-event-application'
 import { applyMergeQueueEvent } from './merge-queue-event-application'
 import { applyAttemptResultSubmitted } from './attempt-result-event-application'
 import { applyAttemptRecoveryEvent } from './attempt-recovery-event-application'
-import {
-  failGitEventApplication as fail,
-  requireProjectedAttempt as requireAttempt,
-  requireProjectedTask as requireTask,
-  uniqueIds as unique,
-  updateProjectedTask as updateTask
-} from './task-attempt-event-state'
+import * as taskState from './task-attempt-event-state'
 import { applyTaskAssignmentEvent } from './task-assignment-event-application'
-import {
-  applyNodeCompletionReuse,
-  applyTaskResultReuse
-} from './workflow-progress-reuse-event-application'
-import {
-  applyHumanAttentionProjectionEvent,
-  isHumanAttentionEvent
-} from './human-attention-event-application'
+import * as reuseEvents from './workflow-progress-reuse-event-application'
+import * as humanAttention from './human-attention-event-application'
+import { applyTaskClaimEvent } from './task-claim-event-application'
+import { applyTaskDeliveryProjection } from './task-delivery-event-application'
 
 export function applyEvent(
   projection: WorkflowRunProjection,
   event: SchedulerEvent
 ): WorkflowRunProjection {
-  if (isHumanAttentionEvent(event)) return applyHumanAttentionProjectionEvent(projection, event)
+  const { failGitEventApplication: fail, requireProjectedAttempt: requireAttempt, requireProjectedTask: requireTask, uniqueIds: unique, updateProjectedTask: updateTask } = taskState
+  if (event.type === 'task_delivery_recorded') return applyTaskDeliveryProjection(projection, event)
+  if (event.type === 'review_aggregate_recorded') {
+    return applyReviewAggregateProjection(projection, event)
+  }
+  if (humanAttention.isHumanAttentionEvent(event))
+    return humanAttention.applyHumanAttentionProjectionEvent(projection, event)
   const tasks = { ...projection.tasks }
   const attempts = { ...projection.attempts }
   const dynamicTaskPlans = { ...projection.dynamicTaskPlans }
@@ -77,12 +73,17 @@ export function applyEvent(
     case 'task_reassigned':
       applyTaskAssignmentEvent({ event, tasks })
       break
+    case 'task_claimed':
+    case 'task_claim_released':
+    case 'task_claim_taken_over':
+      applyTaskClaimEvent({ event, tasks })
+      break
     case 'task_result_reused': {
-      applyTaskResultReuse({ event, tasks, attempts })
+      reuseEvents.applyTaskResultReuse({ event, tasks, attempts })
       break
     }
     case 'node_completion_reused': {
-      applyNodeCompletionReuse({ event, completions: reusedNodeCompletions })
+      reuseEvents.applyNodeCompletionReuse({ event, completions: reusedNodeCompletions })
       break
     }
     case 'execution_announced': {
@@ -116,7 +117,7 @@ export function applyEvent(
                 }
               ]
       })
-      invalidateReviewsForNewAttempt({
+      reviewEvents.invalidateReviewsForNewAttempt({
         taskId: event.taskId,
         attemptId: event.attemptId,
         reviews,
@@ -173,7 +174,7 @@ export function applyEvent(
       break
     }
     case 'review_recorded': {
-      applyReviewRecordedEvent({
+      reviewEvents.applyReviewRecordedEvent({
         event,
         tasks,
         attempts,

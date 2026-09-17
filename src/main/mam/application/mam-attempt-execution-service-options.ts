@@ -9,6 +9,7 @@ import type { AttemptArtifactValidator } from './attempt-artifact-validator'
 import type { MamUiQueryService } from './mam-ui-query-service'
 import type { AttemptSecretValueProvider } from './local-attempt-secrets'
 import type { ExecutorRouter } from './mam-attempt-execution-types'
+import type { LocalExecutionDraftStore } from './local-execution-draft-store'
 
 export type MamAttemptExecutionServiceOptions = Readonly<{
   query: MamUiQueryService
@@ -20,6 +21,7 @@ export type MamAttemptExecutionServiceOptions = Readonly<{
   diagnostics: DiagnosticsRecorder
   workspaceRoot: string
   schedulerId?: string
+  claimantInstanceId?: string
   repository?: GitStateRepository
   secretValues?: AttemptSecretValueProvider
   now?: () => string
@@ -27,4 +29,5 @@ export type MamAttemptExecutionServiceOptions = Readonly<{
   onStateChanged?: () => void
   preflight?: ExecutorLocalPreflight
   enabledExecutorKinds?: readonly ExecutorKind[]
+  drafts?: LocalExecutionDraftStore
 }>

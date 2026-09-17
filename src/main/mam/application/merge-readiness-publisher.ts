@@ -8,6 +8,7 @@ import { createMergeQueueEntry } from './merge-queue-service'
 import { reachableGitMergeNodeIds } from './review-route-projection'
 import { passedNodeIds } from './workflow-task-context'
 import { mergeValidationEvidence } from './merge-validation-policy'
+import { currentTaskDeliveryAttemptId } from './current-task-delivery'
 
 export function publishMergeReadinessIfEligible(input: {
   repository: GitStateRepository
@@ -32,7 +33,7 @@ export function publishMergeReadinessIfEligible(input: {
     (node) => node.id === mergeNodeId && node.type === 'git_merge'
   )
   if (!mergeNode || mergeNode.type !== 'git_merge') return false
-  const attemptId = task.selectedAttemptId ?? task.knownAttemptIds.at(-1)
+  const attemptId = currentTaskDeliveryAttemptId(task, projection.attempts)
   const result = attemptId ? projection.attempts[attemptId]?.result : undefined
   if (!attemptId || !result) return false
   const validationEvidence = mergeValidationEvidence(

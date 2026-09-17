@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { TaskClaimSchema } from './domain/task-claim'
 import { AttemptResultSchema } from './domain/attempt-result'
 import { ArtifactContractSchema, ArtifactRefSchema } from './domain/artifact'
 import {
@@ -57,6 +58,7 @@ export const MamUiTaskSnapshotSchema = z
     roleProfileId: MamEntityIdSchema.optional(),
     roleProfileVersion: z.number().int().positive().optional(),
     assignedByUserId: MamEntityIdSchema.optional(),
+    activeClaim: TaskClaimSchema.optional(),
     dependencies: z.array(MamEntityIdSchema),
     recommendedRoleProfileIds: z.array(MamEntityIdSchema),
     allowedRoleProfileIds: z.array(MamEntityIdSchema),

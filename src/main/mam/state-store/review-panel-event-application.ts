@@ -1,6 +1,7 @@
 import type { ReviewSubject, ReviewTaskDefinition } from '../../../shared/mam/domain/review'
 import type { SchedulerEvent } from '../../../shared/mam/scheduler-protocol'
 import type { AttemptProjection, TaskProjection } from './git-state-projection'
+import { currentTaskDeliveryAttemptId } from '../application/current-task-delivery'
 
 type ReviewPanelProjection = Readonly<{
   reviewNodeId: string
@@ -34,7 +35,7 @@ export function applyReviewPanelEvent(input: {
     targetAttempt.taskId !== event.taskId ||
     targetAttempt.status !== 'submitted' ||
     event.subject.taskId !== event.taskId ||
-    (targetTask.selectedAttemptId ?? targetTask.knownAttemptIds.at(-1)) !== event.subject.attemptId
+    currentTaskDeliveryAttemptId(targetTask, attempts) !== event.subject.attemptId
   ) {
     fail('review_binding_mismatch', 'Review panel subject is not the latest submitted Attempt')
   }

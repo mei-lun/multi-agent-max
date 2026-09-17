@@ -44,7 +44,8 @@ export class MamDesignModelGateway {
     }
     const controller = new AbortController()
     const abort = (): void => controller.abort(input.signal?.reason)
-    input.signal?.addEventListener('abort', abort, { once: true })
+    if (input.signal?.aborted) abort()
+    else input.signal?.addEventListener('abort', abort, { once: true })
     const timeout = setTimeout(() => controller.abort('timeout'), REQUEST_TIMEOUT_MS)
     try {
       const endpoint = buildDesignModelEndpoint(input.provider, input.model)
@@ -57,12 +58,14 @@ export class MamDesignModelGateway {
       } satisfies RequestInit
       let response = await this.fetcher(endpoint, request)
       let body = await readResponseBody(response)
+      requireActiveMamDesignRequest(input.signal, controller.signal)
       if (supportsJsonCompatibilityFallback(input.provider.protocol, response.status)) {
         response = await this.fetcher(endpoint, {
           ...request,
           body: JSON.stringify(buildDesignModelRequestBody(input, 'json'))
         })
         body = await readResponseBody(response)
+        requireActiveMamDesignRequest(input.signal, controller.signal)
       }
       if (!response.ok) {
         fail(
@@ -239,4 +242,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function fail(code: string, message: string): never {
   throw new MamDesignModelGatewayError(code, message)
+}
+
+export function requireActiveMamDesignRequest(
+  inputSignal: AbortSignal | undefined,
+  requestSignal: AbortSignal
+): void {
+  if (!requestSignal.aborted) return
+  fail(
+    inputSignal?.aborted ? 'design_request_cancelled' : 'design_request_timeout',
+    inputSignal?.aborted ? 'Design request was cancelled' : 'Design request timed out'
+  )
 }

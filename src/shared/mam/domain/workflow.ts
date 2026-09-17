@@ -8,6 +8,8 @@ import {
 } from './primitives'
 import { validateHumanReviewWorkflow } from './human-review-workflow-validation'
 import { containsWorkflowCycle } from './workflow-cycle-detection'
+import { validateReviewAggregateWorkflow } from './review-aggregate-workflow-validation'
+import { ReviewAggregateNodeSchema } from './review-aggregate'
 
 const roleSelection = {
   recommendedRoleProfileIds: z.array(MamEntityIdSchema).length(1),
@@ -139,6 +141,7 @@ export const WorkflowNodeSchema = z.discriminatedUnion('type', [
   roleTaskNode,
   dynamicTasksNode,
   reviewGateNode,
+  ReviewAggregateNodeSchema,
   approvalGateNode,
   humanReviewGateNode,
   conditionNode,
@@ -288,6 +291,7 @@ function validateWorkflowGraph(
     })
   }
   validateHumanReviewWorkflow(definition, context)
+  validateReviewAggregateWorkflow(definition, context)
   const unboundedEdges = definition.edges.filter((edge) => {
     if (!nodeIds.has(edge.from) || !nodeIds.has(edge.to)) {
       context.addIssue({

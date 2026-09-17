@@ -21,7 +21,14 @@ describe('condition route resolution', () => {
     const noTask = bundle.taskCatalog.find((task) => task.nodeId === 'no')!
     const before = {
       ...emptyWorkflowRunProjection(bundle.run.id),
-      tasks: { [startTask.id]: taskProjection('submitted') }
+      tasks: { [startTask.id]: taskProjection('submitted', 'attempt.start') },
+      attempts: {
+        'attempt.start': {
+          taskId: startTask.id,
+          status: 'submitted' as const,
+          lastEventId: 'event.result'
+        }
+      }
     }
     expect(projectWorkflowRun(bundle, before, '2026-07-28T23:01:00Z').nodeRuns).toContainEqual(
       expect.objectContaining({ nodeId: 'decide', status: 'ready' })
@@ -65,7 +72,21 @@ describe('condition route resolution', () => {
 
     const completed = projectWorkflowRun(
       bundle,
-      { ...resolved, tasks: { ...resolved.tasks, [yesTask.id]: taskProjection('submitted') } },
+      {
+        ...resolved,
+        tasks: {
+          ...resolved.tasks,
+          [yesTask.id]: taskProjection('submitted', 'attempt.yes')
+        },
+        attempts: {
+          ...resolved.attempts,
+          'attempt.yes': {
+            taskId: yesTask.id,
+            status: 'submitted',
+            lastEventId: 'event.yes'
+          }
+        }
+      },
       '2026-07-28T23:02:00Z'
     )
     expect(completed.nodeRuns).toContainEqual(
@@ -130,14 +151,15 @@ function roleNode(id: string) {
   }
 }
 
-function taskProjection(status: 'submitted') {
+function taskProjection(status: 'submitted', attemptId: string) {
   return {
     status,
     roleProfileId: 'role.builder',
     roleProfileVersion: 1,
     assignedByUserId: 'user.owner',
     activeAttemptIds: [],
-    knownAttemptIds: ['attempt.1'],
+    knownAttemptIds: [attemptId],
+    currentDeliveryAttemptId: attemptId,
     reviewIds: [],
     executionWarnings: [],
     lastEventId: 'event.result'

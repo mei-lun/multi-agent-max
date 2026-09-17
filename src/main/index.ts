@@ -27,6 +27,7 @@ import {
 import { ensureBuiltinPiProfile } from './mam/profiles/builtin-pi-profile'
 import { MamDesignDraftStore } from './mam/application/mam-design-draft-store'
 import { MamDesignAssistantService } from './mam/application/mam-design-assistant-service'
+import { LocalExecutionDraftStore } from './mam/application/local-execution-draft-store'
 import { resolveDesignSecret } from './mam/application/design-secret-resolver'
 import { attachWindowDiagnostics, startDesktopLogging } from './mam/diagnostics/desktop-diagnostics'
 import { rememberLogDirectory } from './mam/diagnostics/log-directories'
@@ -132,7 +133,8 @@ function createMainWindow(): void {
     service,
     {
       userId: process.env.MAM_USER_ID ?? 'user.local',
-      schedulerId: 'scheduler.desktop'
+      schedulerId: 'scheduler.desktop',
+      claimantInstanceId: `claimant.${localSettings.get().bindingIdentity}`
     },
     initialRepository,
     profiles,
@@ -157,6 +159,7 @@ function createMainWindow(): void {
     settings: localSettings,
     executor: new PiRpcAdapter(undefined, undefined, undefined, logDirectory),
     enabledExecutorKinds: ['pi-rpc'],
+    claimantInstanceId: `claimant.${localSettings.get().bindingIdentity}`,
     resources: new AttemptResourceMaterializer(
       join(app.getPath('userData'), 'mam', 'attempt-resources')
     ),
@@ -165,6 +168,7 @@ function createMainWindow(): void {
     ),
     diagnostics,
     workspaceRoot: join(app.getPath('userData'), 'mam', 'attempt-worktrees'),
+    drafts: new LocalExecutionDraftStore(join(app.getPath('userData'), 'mam', 'execution-drafts')),
     onStateChanged: notifySnapshotChanged,
     secretValues,
     ...(initialRepository ? { repository: initialRepository } : {})

@@ -1,5 +1,23 @@
 import type { EffectiveRoleConfigSnapshot } from '../../../shared/mam/domain/role'
 import type { ProviderProtocol } from '../../../shared/mam/domain/execution-profile'
+import { providerRequestTimeoutMs } from './provider-request-timeout'
+
+export function piSettings(
+  snapshot: EffectiveRoleConfigSnapshot,
+  executionTimeoutMs = snapshot.budget.maxDurationSeconds * 1000
+): Record<string, unknown> {
+  return {
+    retry: {
+      enabled: true,
+      maxRetries: 1,
+      provider: {
+        timeoutMs: providerRequestTimeoutMs(executionTimeoutMs),
+        maxRetries: 0,
+        maxRetryDelayMs: 60_000
+      }
+    }
+  }
+}
 
 export function piModels(snapshot: EffectiveRoleConfigSnapshot): Record<string, unknown> {
   const secretEnvironmentKey = snapshot.execution.providerSecretRef
@@ -51,7 +69,8 @@ export function piArguments(
   sessionDirectory: string,
   skillPaths: readonly string[],
   applicationApiExtensionPath: string | undefined,
-  bridgeTools: readonly string[]
+  bridgeTools: readonly string[],
+  resumeSessionFile?: string
 ): string[] {
   const args = [
     '--no-extensions',
@@ -65,6 +84,7 @@ export function piArguments(
     '--system-prompt',
     systemPrompt
   ]
+  if (resumeSessionFile) args.push('--session', resumeSessionFile)
   for (const skillPath of skillPaths) args.push('--skill', skillPath)
   if (applicationApiExtensionPath) args.push('--extension', applicationApiExtensionPath)
   const resourceTools = new Set(['mcp.execute', 'knowledge.search', 'knowledge.read'])

@@ -501,7 +501,7 @@ function effectiveSnapshot(): EffectiveRoleConfigSnapshot {
       maxInputTokens: 10_000,
       maxOutputTokens: 2_000,
       maxCostUsd: 1,
-      maxDurationSeconds: 5
+      maxDurationSeconds: 120
     },
     retry: { maxAttempts: 1, initialBackoffMs: 0, maxBackoffMs: 0 },
     contextPolicy: {

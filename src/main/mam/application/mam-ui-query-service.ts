@@ -201,6 +201,7 @@ function createRunSnapshot(
           ...(task?.roleProfileId ? { roleProfileId: task.roleProfileId } : {}),
           ...(task?.roleProfileVersion ? { roleProfileVersion: task.roleProfileVersion } : {}),
           ...(task?.assignedByUserId ? { assignedByUserId: task.assignedByUserId } : {}),
+          ...(task?.activeClaim ? { activeClaim: task.activeClaim } : {}),
           dependencies: [...(definition?.dependencies ?? [])],
           recommendedRoleProfileIds: [...(definition?.recommendedRoleProfileIds ?? [])],
           allowedRoleProfileIds: [...(definition?.allowedRoleProfileIds ?? [])],

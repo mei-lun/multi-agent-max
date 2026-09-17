@@ -1,8 +1,13 @@
 import type { MergeConflictResolution } from '../../../shared/mam/domain/merge-conflict-task'
 import type { MergeQueueEntry } from '../../../shared/mam/domain/merge-queue'
 import type { HumanAttentionItem } from '../../../shared/mam/domain/human-attention'
-import type { ReviewDecision, ReviewSubject } from '../../../shared/mam/domain/review'
+import type {
+  ReviewAggregation,
+  ReviewDecision,
+  ReviewSubject
+} from '../../../shared/mam/domain/review'
 import type { WorkflowRunBundle } from '../../../shared/mam/domain/run-bundle'
+import type { TaskClaim } from '../../../shared/mam/domain/task-claim'
 
 export type AttemptBinding = Readonly<{
   roleInstanceId: string
@@ -29,18 +34,25 @@ export type SchedulerTaskContext = Readonly<{
     | 'needs_attention'
   assignedRoleProfileId?: string
   assignedRoleProfileVersion?: number
+  activeClaim?: TaskClaim
+  lastClaimGeneration?: number
   activeAttemptIds: ReadonlySet<string>
   reconcilingAttemptIds?: ReadonlySet<string>
   knownAttemptIds: ReadonlySet<string>
+  selectedAttemptId?: string
   submittedAttemptIds: ReadonlySet<string>
   attemptBindings: ReadonlyMap<string, AttemptBinding>
   allowedRoleProfileIds: ReadonlySet<string>
   roleCatalogVersions: ReadonlyMap<string, ReadonlySet<number>>
   dynamicTaskPlanHash?: string
   reviewTarget?: ReviewSubject
+  reviewNodeId?: string
   allowedReviewNodeIds?: ReadonlySet<string>
+  requiredInputTaskIds?: ReadonlySet<string>
   reviewDecisions: ReadonlyMap<string, ReviewDecision>
   minimumReviewDecisions?: number
+  formalRevisionNumber?: number
+  maxRevisionAttempts?: number
   reviewPanelId?: string
   mergeCandidate?: MergeQueueEntry
   mergeResolutionCandidate?: MergeConflictResolution
@@ -76,4 +88,6 @@ export type SchedulerKernelContext = Readonly<{
     }>
   >
   revision?: string
+  reviewAggregations?: ReadonlyMap<string, ReviewAggregation>
+  taskCurrentDeliveryIds?: ReadonlyMap<string, string>
 }>

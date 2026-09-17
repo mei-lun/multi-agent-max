@@ -28,7 +28,14 @@ describe('Review disagreement command', () => {
     const repository = {
       rebuild: () => ({
         reviewAggregations: { [aggregation.id]: aggregation },
-        tasks: { [aggregation.subject.taskId]: { knownAttemptIds: [aggregation.attemptId] } }
+        tasks: { [aggregation.subject.taskId]: { knownAttemptIds: [aggregation.attemptId] } },
+        attempts: {
+          [aggregation.attemptId]: {
+            taskId: aggregation.subject.taskId,
+            status: 'submitted',
+            lastEventId: 'event.delivery'
+          }
+        }
       }),
       loadRunBundle: () => ({
         definition: {

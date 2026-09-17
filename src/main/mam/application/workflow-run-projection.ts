@@ -7,6 +7,7 @@ import { projectWorkflowRoute, type WorkflowRouteProjection } from './workflow-r
 import { isPassedTaskStatus, projectedRunStatus } from './workflow-projection-state'
 import { passedNodeIds, taskContextDefinition } from './workflow-task-context'
 import { latestSubmittedReviewSubject } from './review-route-projection'
+import { currentTaskDeliveryAttemptId } from './current-task-delivery'
 
 export { taskContextDefinition } from './workflow-task-context'
 
@@ -79,13 +80,14 @@ function projectNodeRun(
     if (node.type === 'dynamic_tasks') {
       return dynamicTaskNodeRun(original, task, projection)
     }
-    return taskNodeRun(original, projection.tasks[task.id])
+    return taskNodeRun(original, projection.tasks[task.id], projection.attempts)
   }
   if (passed.has(original.nodeId)) return { ...original, status: 'passed' }
   const dependenciesReady = dependencies.every((nodeId) => passed.has(nodeId))
   if (!dependenciesReady) return { ...original, status: 'waiting_dependencies' }
   const node = bundle.definition.nodes.find((candidate) => candidate.id === original.nodeId)!
   if (node.type === 'review_gate') return reviewNodeRun(original, node.id, projection)
+  if (node.type === 'review_aggregate') return reviewNodeRun(original, node.id, projection)
   if (node.type === 'approval_gate') return { ...original, status: 'waiting_for_approval' }
   if (node.type === 'human_review_gate') {
     return humanReviewNodeRun(original, node.id, node.revisionTargetNodeId, bundle, projection)
@@ -123,8 +125,10 @@ function reviewNodeRun(
   const panel = Object.values(projection.reviewPanels).find(
     (candidate) =>
       candidate.reviewNodeId === reviewNodeId &&
-      projection.tasks[candidate.subject.taskId]?.knownAttemptIds.at(-1) ===
-        candidate.subject.attemptId
+      currentTaskDeliveryAttemptId(
+        projection.tasks[candidate.subject.taskId],
+        projection.attempts
+      ) === candidate.subject.attemptId
   )
   if (!panel) return { ...original, status: 'ready' }
   const aggregation = Object.values(projection.reviewAggregations).find(
@@ -152,14 +156,18 @@ function dynamicTaskNodeRun(
   projection: WorkflowRunProjection
 ): NodeRun {
   const source = projection.tasks[sourceTask.id]
-  if (!source || !isPassedTaskStatus(source.status)) return taskNodeRun(original, source)
+  if (!source || !isPassedTaskStatus(source.status)) {
+    return taskNodeRun(original, source, projection.attempts)
+  }
   const children = Object.values(projection.dynamicTasks).filter(
     (task) => task.parentTaskId === sourceTask.id
   )
   const base = {
     ...original,
     attemptIds: [...source.knownAttemptIds],
-    ...(source.knownAttemptIds.at(-1) ? { latestAttemptId: source.knownAttemptIds.at(-1) } : {})
+    ...(currentTaskDeliveryAttemptId(source, projection.attempts)
+      ? { latestAttemptId: currentTaskDeliveryAttemptId(source, projection.attempts) }
+      : {})
   }
   if (children.length === 0) return { ...base, status: 'validating_output' }
   const statuses = children.map((task) => projection.tasks[task.id]?.status)
@@ -177,9 +185,11 @@ function dynamicTaskNodeRun(
 
 function taskNodeRun(
   original: NodeRun,
-  task: WorkflowRunProjection['tasks'][string] | undefined
+  task: WorkflowRunProjection['tasks'][string] | undefined,
+  attempts?: WorkflowRunProjection['attempts']
 ): NodeRun {
   if (!task) return { ...original, status: 'waiting_role_assignment' }
+  const currentDeliveryId = attempts ? currentTaskDeliveryAttemptId(task, attempts) : undefined
   const mapped = {
     waiting_role_assignment: 'waiting_role_assignment',
     ready: 'ready',
@@ -197,7 +207,12 @@ function taskNodeRun(
   return {
     ...original,
     attemptIds: [...task.knownAttemptIds],
-    ...(task.knownAttemptIds.at(-1) ? { latestAttemptId: task.knownAttemptIds.at(-1) } : {}),
-    status: mapped[task.status as keyof typeof mapped] ?? 'blocked'
+    ...(attempts && currentTaskDeliveryAttemptId(task, attempts)
+      ? { latestAttemptId: currentTaskDeliveryAttemptId(task, attempts) }
+      : {}),
+    status:
+      isPassedTaskStatus(task.status) && !currentDeliveryId
+        ? 'blocked'
+        : (mapped[task.status as keyof typeof mapped] ?? 'blocked')
   }
 }

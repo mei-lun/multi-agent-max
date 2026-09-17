@@ -30,6 +30,7 @@ import {
 import {
   MamDesignModelGateway,
   MamDesignModelGatewayError,
+  requireActiveMamDesignRequest,
   type MamDesignModelGatewayInput
 } from './mam-design-model-gateway'
 import {
@@ -50,11 +51,16 @@ import { createMamDesignProposal } from './mam-design-proposal-validation'
 import { applyMamDesignProposal } from './mam-design-proposal-application'
 import { buildMamDesignSystemPrompt } from './mam-design-system-prompt'
 import { createMamDesignWorkflowRevision } from './mam-design-workflow-revision'
+import {
+  MamDesignRequestTracker,
+  requireCurrentMamDesignRequestDraft,
+  requireEditableMamDesignDraft
+} from './mam-design-request-tracker'
 
 const MAX_GATEWAY_MESSAGES = 80
 
 export class MamDesignAssistantService {
-  private readonly activeRequests = new Map<string, AbortController>()
+  private readonly activeRequests = new MamDesignRequestTracker()
 
   constructor(
     private readonly query: MamUiQueryService,
@@ -76,9 +82,9 @@ export class MamDesignAssistantService {
 
   selectModel(input: unknown): MamDesignDraft {
     const parsed = MamDesignSelectModelInputSchema.parse(input)
-    if (this.activeRequests.size > 0) fail('design_request_active', 'A design request is active')
+    if (this.activeRequests.active) fail('design_request_active', 'A design request is active')
     requireMamDesignTemplateModel(this.profiles, parsed.modelProfileId)
-    const draft = this.requireEditableDraft()
+    const draft = requireEditableMamDesignDraft(this.drafts)
     return this.drafts.save({
       ...draft,
       selectedModelProfileId: parsed.modelProfileId,
@@ -89,7 +95,10 @@ export class MamDesignAssistantService {
   reset(input: unknown): MamDesignDraft {
     const parsed = MamDesignResetInputSchema.parse(input)
     if (parsed.modelProfileId) requireMamDesignTemplateModel(this.profiles, parsed.modelProfileId)
-    if (!parsed.workflowId) return this.drafts.reset(parsed.modelProfileId)
+    if (!parsed.workflowId) {
+      this.activeRequests.cancelAll('design_discarded')
+      return this.drafts.reset(parsed.modelProfileId)
+    }
     const workflow = this.profiles.workflows.getActive(parsed.workflowId)
     if (!workflow) fail('design_workflow_not_found', `Workflow is not active: ${parsed.workflowId}`)
     const revision = createMamDesignWorkflowRevision(this.profiles, workflow.id, workflow.version)
@@ -100,6 +109,7 @@ export class MamDesignAssistantService {
       now: this.now,
       workflowRevision: revision
     })
+    this.activeRequests.cancelAll('design_discarded')
     return this.drafts.reset({
       ...(parsed.modelProfileId ? { modelProfileId: parsed.modelProfileId } : {}),
       workflowRevision: revision,
@@ -109,9 +119,9 @@ export class MamDesignAssistantService {
 
   createTemplate(input: unknown): MamDesignDraft {
     const parsed = MamDesignCreateTemplateInputSchema.parse(input)
-    if (this.activeRequests.size > 0) fail('design_request_active', 'A design request is active')
+    if (this.activeRequests.active) fail('design_request_active', 'A design request is active')
     requireMamDesignTemplateModel(this.profiles, parsed.modelProfileId)
-    const draft = this.requireEditableDraft()
+    const draft = requireEditableMamDesignDraft(this.drafts)
     const source = buildMamDesignStandardTemplate({
       profiles: this.profiles,
       modelProfileId: parsed.modelProfileId
@@ -134,13 +144,13 @@ export class MamDesignAssistantService {
 
   async sendMessage(input: unknown): Promise<MamDesignDraft> {
     const parsed = MamDesignSendMessageInputSchema.parse(input)
-    if (this.activeRequests.size > 0) fail('design_request_active', 'A design request is active')
+    if (this.activeRequests.active) fail('design_request_active', 'A design request is active')
     requireMamDesignModel(this.profiles, this.secrets, parsed.modelProfileId)
     buildMamDesignStandardTemplate({
       profiles: this.profiles,
       modelProfileId: parsed.modelProfileId
     })
-    const draft = this.requireEditableDraft()
+    const draft = requireEditableMamDesignDraft(this.drafts)
     const brainstorm = applyMamDesignBrainstormDecision(draft.brainstorm, parsed.decision)
     const pendingDraft = this.drafts.save({
       ...draft,
@@ -157,8 +167,8 @@ export class MamDesignAssistantService {
 
   async retry(input: unknown): Promise<MamDesignDraft> {
     const parsed = MamDesignRetryInputSchema.parse(input)
-    if (this.activeRequests.size > 0) fail('design_request_active', 'A design request is active')
-    const draft = this.requireEditableDraft()
+    if (this.activeRequests.active) fail('design_request_active', 'A design request is active')
+    const draft = requireEditableMamDesignDraft(this.drafts)
     const modelProfileId = draft.selectedModelProfileId
     if (!modelProfileId) fail('design_model_not_selected', 'Select a Model Profile before retrying')
     requireMamDesignModel(this.profiles, this.secrets, modelProfileId)
@@ -168,13 +178,13 @@ export class MamDesignAssistantService {
 
   cancel(input: unknown): void {
     const parsed = MamDesignCancelInputSchema.parse(input)
-    this.activeRequests.get(parsed.requestId)?.abort('cancelled_by_user')
+    this.activeRequests.cancel(parsed.requestId, 'cancelled_by_user')
   }
 
   updateProposal(input: unknown): MamDesignDraft {
     const parsed = MamDesignUpdateProposalInputSchema.parse(input)
-    if (this.activeRequests.size > 0) fail('design_request_active', 'A design request is active')
-    const draft = this.requireEditableDraft()
+    if (this.activeRequests.active) fail('design_request_active', 'A design request is active')
+    const draft = requireEditableMamDesignDraft(this.drafts)
     if (draft.proposal?.hash !== parsed.expectedProposalHash) {
       fail('design_proposal_stale', 'The Design proposal changed before this edit was saved')
     }
@@ -202,7 +212,7 @@ export class MamDesignAssistantService {
   applyProposal(input: unknown): MamUiSnapshot {
     const parsed = MamDesignApplyProposalInputSchema.parse(input)
     return applyMamDesignProposal({
-      draft: this.requireEditableDraft(),
+      draft: requireEditableMamDesignDraft(this.drafts),
       proposalHash: parsed.proposalHash,
       profiles: this.profiles,
       drafts: this.drafts,
@@ -222,8 +232,7 @@ export class MamDesignAssistantService {
       modelProfileId
     )
     const template = buildMamDesignStandardTemplate({ profiles: this.profiles, modelProfileId })
-    const controller = new AbortController()
-    this.activeRequests.set(requestId, controller)
+    const controller = this.activeRequests.start(requestId)
     try {
       const input = {
         model,
@@ -254,8 +263,10 @@ export class MamDesignAssistantService {
           ...(draft.workflowRevision ? { workflowRevision: draft.workflowRevision } : {})
         })
       )
+      requireActiveMamDesignRequest(controller.signal, controller.signal)
       const review = normalizeMamDesignReview(response.review)
       const brainstorm = mergeMamDesignBrainstorm(response.brainstorm, draft.brainstorm, review)
+      requireCurrentMamDesignRequestDraft(this.drafts, draft.id)
       const { brainstorm: _brainstorm, recovery: _recovery, ...rest } = draft
       return this.drafts.save({
         ...rest,
@@ -269,6 +280,7 @@ export class MamDesignAssistantService {
         updatedAt: this.now()
       })
     } catch (cause) {
+      requireCurrentMamDesignRequestDraft(this.drafts, draft.id)
       if (
         cause instanceof MamDesignModelGatewayError &&
         cause.code === 'design_request_cancelled'
@@ -289,15 +301,8 @@ export class MamDesignAssistantService {
       }
       throw cause
     } finally {
-      this.activeRequests.delete(requestId)
+      this.activeRequests.finish(requestId, controller)
     }
-  }
-
-  private requireEditableDraft(): MamDesignDraft {
-    const draft = this.drafts.get()
-    if (draft.status !== 'draft')
-      fail('design_draft_applied', 'Start a new Design before continuing')
-    return draft
   }
 }
 

@@ -14,6 +14,10 @@ import {
 import { materializeDynamicTaskPlan } from '../application/dynamic-task-plan-service'
 import { createReviewTasks } from '../review/review-fan-out-service'
 import { createHumanAttentionEvent, isHumanAttentionCommand } from './human-attention-event-factory'
+import { isTaskClaimCommand } from './task-claim-command-authority'
+import { createTaskClaimEvent } from './task-claim-event-factory'
+import { createTaskDeliveryEvent } from './task-delivery-event-factory'
+import { createReviewAggregateEvent } from './review-aggregate-event-factory'
 
 export { SchedulerCommandRejectedError }
 export type { SchedulerKernelContext, SchedulerTaskContext }
@@ -59,6 +63,9 @@ export class SchedulerKernel {
     if (isHumanAttentionCommand(command)) {
       return createHumanAttentionEvent(command, context, base)
     }
+    if (isTaskClaimCommand(command)) return createTaskClaimEvent(command, context, base)
+    if (command.type === 'record_task_delivery') return createTaskDeliveryEvent(command, base)
+    if (command.type === 'record_review_aggregate') return createReviewAggregateEvent(command, base)
     switch (command.type) {
       case 'create_workflow_run':
         return {

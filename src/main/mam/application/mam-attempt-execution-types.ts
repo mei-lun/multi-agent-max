@@ -5,6 +5,7 @@ import type {
   StructuredExecutorResult
 } from '../executors/structured-executor-router'
 import type { AttemptWorktree } from './attempt-worktree-manager'
+import type { LocalExecutionDraftStore } from './local-execution-draft-store'
 import type { MergeConflictTaskDefinition } from '../../../shared/mam/domain/merge-conflict-task'
 import type { McpLocalConnection } from '../../../shared/mam/domain/resource-profile'
 import type { ResolvedAttemptConfig } from '../profiles/attempt-config-resolver'
@@ -41,6 +42,7 @@ export type ExecutableAttemptTask = Readonly<{
   baseRef: string
   baseBranch?: string
   inputArtifactContext?: readonly AttemptInputArtifactContext[]
+  inputDeliveries?: readonly Readonly<{ taskId: string; attemptId: string }>[]
   integrationBase?: AttemptIntegrationBase
   nodeType?: StaticTaskDefinition['nodeType']
   reviewTask?: ReviewTaskDefinition
@@ -53,6 +55,9 @@ export type PreparedAttempt = Readonly<{
   taskId: string
   attemptId: string
   previousAttemptId?: string
+  claimId: string
+  claimGeneration: number
+  formalRevisionNumber: number
   roleInstanceId: string
   executorInvocationId: string
   retryMaxAttempts?: number
@@ -69,4 +74,8 @@ export type PreparedAttempt = Readonly<{
   systemPrompt: string
   prompt: string
   worktree: AttemptWorktree
+  draftId?: string
+  resumeSessionFile?: string
 }>
+
+export type AttemptDraftStore = LocalExecutionDraftStore

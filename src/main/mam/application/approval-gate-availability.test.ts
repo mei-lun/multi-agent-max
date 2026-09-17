@@ -28,10 +28,14 @@ describe('approval gate availability', () => {
           assignedByUserId: 'user.owner',
           activeAttemptIds: [],
           knownAttemptIds: ['attempt.build'],
+          currentDeliveryAttemptId: 'attempt.build',
           reviewIds: [],
           executionWarnings: [],
           lastEventId: 'event.result'
         }
+      },
+      attempts: {
+        'attempt.build': { taskId, status: 'submitted' as const, lastEventId: 'event.result' }
       }
     }
     expect(snapshot(bundle, afterBuild).approvalGates).toEqual([

@@ -89,6 +89,8 @@ export class PiRpcAdapter {
     credentialValues: Readonly<Record<string, string>>
     authority: AttemptResultAuthority
     capabilityBridge?: ExecutorCapabilityBridge
+    resumeSessionFile?: string
+    executionTimeoutMs?: number
     onEvent?: ExecutorEventListener
   }): Promise<PiRpcExecutionResult> {
     this.validateExecution(input)
@@ -143,7 +145,9 @@ export class PiRpcAdapter {
           input.snapshot.permissions.writePaths.length > 0
         )
         await logger.append('command', { type: 'prompt', message: workPrompt })
-        const idle = client.waitForIdle(input.snapshot.budget.maxDurationSeconds * 1000)
+        const idle = client.waitForIdle(
+          input.executionTimeoutMs ?? input.snapshot.budget.maxDurationSeconds * 1000
+        )
         await client.prompt(workPrompt)
         await idle
         const failure = outcome.getFailure()

@@ -11,7 +11,11 @@ type PiInput = Parameters<PiRpcAdapter['execute']>[0]
 
 export type StructuredExecutorInput = CodexInput &
   Pick<GrokInput, 'systemPrompt'> &
-  Readonly<{ capabilityBridge?: ExecutorCapabilityBridge }>
+  Readonly<{
+    capabilityBridge?: ExecutorCapabilityBridge
+    resumeSessionFile?: string
+    executionTimeoutMs?: number
+  }>
 
 export type StructuredExecutorResult = Readonly<{
   invocation: unknown

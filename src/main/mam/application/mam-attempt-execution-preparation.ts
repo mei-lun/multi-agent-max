@@ -9,6 +9,8 @@ import { automaticReviewArtifactContract } from './automatic-review-contract'
 import type { MamLocalSettings } from '../../../shared/mam/local-settings'
 import type { ResolvedAttemptConfig } from '../profiles/attempt-config-resolver'
 import { resolveAttemptHandoffContext } from './attempt-handoff-context'
+import { currentTaskDeliveryAttemptId } from './current-task-delivery'
+import { workflowInputTaskIds } from './workflow-input-task-ids'
 
 export function resolveExecutableTask(
   bundle: WorkflowRunBundle,
@@ -29,7 +31,10 @@ export function resolveExecutableTask(
       requireIntegratedRoleInputs: node.type === 'role_task',
       ...(isCommitAncestor ? { isCommitAncestor } : {})
     })
-    const latestAttemptId = projection.tasks[taskId]?.knownAttemptIds.at(-1)
+    const latestAttemptId = currentTaskDeliveryAttemptId(
+      projection.tasks[taskId],
+      projection.attempts
+    )
     const reviewedAttemptId = latestAttemptId
       ? projection.attempts[latestAttemptId]?.previousAttemptId
       : undefined
@@ -56,6 +61,7 @@ export function resolveExecutableTask(
           }
         : {}),
       inputArtifactContext: handoff.inputArtifacts,
+      inputDeliveries: dependencyDeliveries(bundle, projection, staticTask.nodeId),
       ...(revisionFeedback ? { revisionFeedback } : {})
     }
   }
@@ -64,7 +70,8 @@ export function resolveExecutableTask(
     return {
       ...dynamicTask,
       workspaceMode: 'write',
-      baseRef: 'HEAD'
+      baseRef: 'HEAD',
+      inputDeliveries: taskDeliveries(projection, dynamicTask.dependencies)
     }
   }
   const reviewTask = projection.reviewTasks[taskId]
@@ -89,6 +96,9 @@ export function resolveExecutableTask(
       workspaceMode: 'read',
       baseRef: reviewTask.subject.submittedCommit ?? 'HEAD',
       inputArtifactContext,
+      inputDeliveries: [
+        { taskId: reviewTask.subject.taskId, attemptId: reviewTask.subject.attemptId }
+      ],
       reviewTask
     }
   }
@@ -109,6 +119,24 @@ export function resolveExecutableTask(
     }
   }
   throw new Error('executable_task_definition_not_found')
+}
+
+function dependencyDeliveries(
+  bundle: WorkflowRunBundle,
+  projection: WorkflowRunProjection,
+  nodeId: string
+) {
+  return taskDeliveries(projection, workflowInputTaskIds(bundle, nodeId))
+}
+
+function taskDeliveries(projection: WorkflowRunProjection, taskIds: readonly string[]) {
+  return taskIds.flatMap((dependencyTaskId) => {
+    const attemptId = currentTaskDeliveryAttemptId(
+      projection.tasks[dependencyTaskId],
+      projection.attempts
+    )
+    return attemptId ? [{ taskId: dependencyTaskId, attemptId }] : []
+  })
 }
 
 export function requireLocalBinding<T>(bindings: readonly T[], kind: string): T {

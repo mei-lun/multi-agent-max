@@ -42,6 +42,7 @@ export async function prepareGrokCliInvocation(input: {
   executorInvocationId: string
   workspacePath: string
   credentialValues: Readonly<Record<string, string>>
+  executionTimeoutMs?: number
 }): Promise<GrokCliInvocation> {
   const snapshot = EffectiveRoleConfigSnapshotSchema.parse(input.snapshot)
   const binding = LocalExecutorBindingSchema.parse(input.executorBinding)
@@ -115,7 +116,7 @@ export async function prepareGrokCliInvocation(input: {
     runtimeDirectory,
     configPath,
     manifestPath,
-    requestTimeoutMs: snapshot.budget.maxDurationSeconds * 1000
+    requestTimeoutMs: input.executionTimeoutMs ?? snapshot.budget.maxDurationSeconds * 1000
   }
 }
 

@@ -6,8 +6,12 @@ import {
   MamSchemaVersionSchema,
   Sha256Schema
 } from './domain/primitives'
-import { ReviewAggregationSchema, ReviewDecisionSchema } from './domain/review'
-import { ReviewSubjectSchema, ReviewTaskDefinitionSchema } from './domain/review'
+import {
+  ReviewAggregationSchema,
+  ReviewDecisionSchema,
+  ReviewSubjectSchema,
+  ReviewTaskDefinitionSchema
+} from './domain/review'
 import { ArtifactVersionSchema } from './domain/artifact'
 import { DynamicTaskDefinitionSchema, TaskPlanSchema } from './domain/task-plan'
 import { MergeOutcomeSchema, MergeQueueEntrySchema } from './domain/merge-queue'
@@ -15,24 +19,15 @@ import { createMergeQueueCommandSchemas } from './merge-queue-scheduler-command'
 import { MergeConflictResolutionSchema } from './domain/merge-conflict-task'
 import * as conditionProtocol from './condition-scheduler-protocol'
 import * as systemNodeProtocol from './system-node-scheduler-protocol'
-import {
-  createTaskAssignmentCommandSchemas,
-  createTaskAssignmentEventSchemas
-} from './task-assignment-scheduler-protocol'
-import {
-  createWorkflowRunLifecycleCommandSchemas,
-  createWorkflowRunLifecycleEventSchemas
-} from './workflow-run-lifecycle-scheduler-protocol'
-import {
-  createNodeCompletionReuseCommandSchema,
-  createNodeCompletionReuseEventSchema,
-  createTaskResultReuseCommandSchema,
-  createTaskResultReuseEventSchema
-} from './task-result-reuse-scheduler-protocol'
+import * as taskAssignmentProtocol from './task-assignment-scheduler-protocol'
+import * as workflowRunProtocol from './workflow-run-lifecycle-scheduler-protocol'
+import * as resultReuseProtocol from './task-result-reuse-scheduler-protocol'
 import * as humanAttentionProtocol from './human-attention-scheduler-protocol'
+import * as taskClaimProtocol from './task-claim-scheduler-protocol'
+import * as taskDeliveryProtocol from './task-delivery-scheduler-protocol'
+import * as reviewAggregateProtocol from './review-aggregate-scheduler-protocol'
 
-export const EMPTY_SCHEDULER_REVISION =
-  '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945'
+export const EMPTY_SCHEDULER_REVISION = '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945'
 
 const userActor = z.object({ kind: z.literal('user'), userId: MamEntityIdSchema }).strict()
 const schedulerActor = z
@@ -63,8 +58,10 @@ const commandEnvelope = {
 
 const taskCommandEnvelope = { ...commandEnvelope, taskId: MamEntityIdSchema }
 const mergeQueueCommands = createMergeQueueCommandSchemas(commandEnvelope, taskCommandEnvelope)
-const taskAssignmentCommands = createTaskAssignmentCommandSchemas(taskCommandEnvelope)
-const workflowRunLifecycleCommands = createWorkflowRunLifecycleCommandSchemas(commandEnvelope)
+const taskAssignmentCommands =
+  taskAssignmentProtocol.createTaskAssignmentCommandSchemas(taskCommandEnvelope)
+const workflowRunLifecycleCommands =
+  workflowRunProtocol.createWorkflowRunLifecycleCommandSchemas(commandEnvelope)
 const humanAttentionCommands =
   humanAttentionProtocol.createHumanAttentionCommandSchemas(taskCommandEnvelope)
 
@@ -76,8 +73,11 @@ const AttemptRecoveryDirectiveSchema = z.discriminatedUnion('kind', [
 export const SchedulerCommandSchema = z.discriminatedUnion('type', [
   ...workflowRunLifecycleCommands,
   ...taskAssignmentCommands,
-  createTaskResultReuseCommandSchema(commandEnvelope),
-  createNodeCompletionReuseCommandSchema(commandEnvelope),
+  ...taskClaimProtocol.createTaskClaimCommandSchemas(taskCommandEnvelope),
+  taskDeliveryProtocol.createTaskDeliveryCommandSchema(taskCommandEnvelope),
+  reviewAggregateProtocol.command(taskCommandEnvelope),
+  resultReuseProtocol.createTaskResultReuseCommandSchema(commandEnvelope),
+  resultReuseProtocol.createNodeCompletionReuseCommandSchema(commandEnvelope),
   ...humanAttentionCommands,
   z
     .object({
@@ -202,10 +202,13 @@ function event<T extends string, S extends z.ZodRawShape>(type: T, fields: S) {
 }
 
 export const SchedulerEventSchema = z.discriminatedUnion('type', [
-  ...createWorkflowRunLifecycleEventSchemas(eventEnvelope),
-  ...createTaskAssignmentEventSchemas(eventEnvelope),
-  createTaskResultReuseEventSchema(eventEnvelope),
-  createNodeCompletionReuseEventSchema(eventEnvelope),
+  ...workflowRunProtocol.createWorkflowRunLifecycleEventSchemas(eventEnvelope),
+  ...taskAssignmentProtocol.createTaskAssignmentEventSchemas(eventEnvelope),
+  ...taskClaimProtocol.createTaskClaimEventSchemas(eventEnvelope),
+  taskDeliveryProtocol.createTaskDeliveryEventSchema(eventEnvelope),
+  reviewAggregateProtocol.event(eventEnvelope),
+  resultReuseProtocol.createTaskResultReuseEventSchema(eventEnvelope),
+  resultReuseProtocol.createNodeCompletionReuseEventSchema(eventEnvelope),
   ...humanAttentionProtocol.createHumanAttentionEventSchemas(eventEnvelope),
   event('execution_announced', {
     taskId: MamEntityIdSchema,
@@ -305,6 +308,4 @@ export const SchedulerEventSchema = z.discriminatedUnion('type', [
   })
 ])
 
-export type SchedulerActor = z.infer<typeof SchedulerActorSchema>
-export type SchedulerCommand = z.infer<typeof SchedulerCommandSchema>
-export type SchedulerEvent = z.infer<typeof SchedulerEventSchema>
+export type SchedulerCommand = z.infer<typeof SchedulerCommandSchema>; export type SchedulerEvent = z.infer<typeof SchedulerEventSchema>

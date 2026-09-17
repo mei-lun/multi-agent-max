@@ -153,7 +153,7 @@ describe('MamRunsPage', () => {
     expect(markup).toContain('Confirm before retry')
     expect(markup).toContain('Clean or continue')
     expect(markup).toContain('Workflow Role: Builder')
-    expect(markup).toContain('Run Task')
+    expect(markup).toContain('Claim and run')
     expect(markup).not.toContain('Assign Role')
     expect(markup).not.toContain('Change Role')
     expect(markup).toContain('Technical details')

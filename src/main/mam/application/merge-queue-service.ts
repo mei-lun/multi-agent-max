@@ -6,6 +6,7 @@ import type { WorkflowRunProjection } from '../state-store/git-state-projection'
 import { profileContentHash } from '../profiles/profile-content-hash'
 import { resolvedReviewStatus } from './review-disagreement-resolution'
 import { executableMergeValidationCommands } from './merge-validation-policy'
+import { currentTaskDeliveryAttemptId } from './current-task-delivery'
 
 export class MergeQueueError extends Error {
   constructor(
@@ -35,7 +36,7 @@ export function createMergeQueueEntry(input: {
   if (!task || (task.status !== 'approved' && !(task.status === 'completed' && promotion))) {
     fail('merge_review_required', 'Merge candidate is not approved')
   }
-  const attemptId = task.selectedAttemptId ?? task.knownAttemptIds.at(-1)
+  const attemptId = currentTaskDeliveryAttemptId(task, input.projection.attempts)
   const attempt = attemptId ? input.projection.attempts[attemptId] : undefined
   if (!attemptId || !attempt || attempt.status !== 'submitted' || !attempt.result) {
     fail('merge_attempt_invalid', 'Merge candidate has no latest submitted Attempt Result')

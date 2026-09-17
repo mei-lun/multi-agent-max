@@ -73,6 +73,7 @@ export class GrokCliAdapter {
     credentialValues: Readonly<Record<string, string>>
     authority: AttemptResultAuthority
     onEvent?: ExecutorEventListener
+    executionTimeoutMs?: number
   }): Promise<GrokCliExecutionResult> {
     this.validateExecution(input)
     const invocation = await prepareGrokCliInvocation({

@@ -1,12 +1,14 @@
 import type { WorkflowRunBundle } from '../../../shared/mam/domain/run-bundle'
 import type { NodeRun, WorkflowRun } from '../../../shared/mam/domain/workflow'
 import type { WorkflowRunProjection } from '../state-store/git-state-projection'
+import { currentTaskDeliveryAttemptId } from './current-task-delivery'
 
 export function taskReviewPanel(projection: WorkflowRunProjection, taskId: string) {
   return Object.values(projection.reviewPanels).find(
     (panel) =>
       panel.subject.taskId === taskId &&
-      projection.tasks[taskId]?.knownAttemptIds.at(-1) === panel.subject.attemptId
+      currentTaskDeliveryAttemptId(projection.tasks[taskId], projection.attempts) ===
+        panel.subject.attemptId
   )
 }
 
@@ -44,4 +46,8 @@ export function roleCatalogVersions(
 
 export function isPassedTaskStatus(status: string | undefined): boolean {
   return status === 'submitted' || status === 'approved' || status === 'completed'
+}
+
+export function hasCurrentDelivery(projection: WorkflowRunProjection, taskId: string): boolean {
+  return Boolean(currentTaskDeliveryAttemptId(projection.tasks[taskId], projection.attempts))
 }

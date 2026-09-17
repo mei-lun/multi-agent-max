@@ -1,14 +1,17 @@
-import { AttemptResultSchema, type AttemptResult } from '../../../shared/mam/domain/attempt-result'
 import { existsSync } from 'node:fs'
 import { diagnosticError } from '../diagnostics/diagnostic-error'
 import type { DiagnosticsRecorder } from '../diagnostics/diagnostics-recorder'
-import { GitCommandRetryCoordinator } from '../state-store/git-command-retry-coordinator'
 import type { GitStateRepository } from '../state-store/git-state-repository'
 import type { AttemptArtifactValidator } from './attempt-artifact-validator'
 import type { AttemptWorktreeManager } from './attempt-worktree-manager'
 import type { ConflictResolutionWorktreeManager } from './conflict-resolution-worktree-manager'
 import type { GitCommandClient } from '../state-store/git-command-client'
 import type { ExecutorRouter, PreparedAttempt } from './mam-attempt-execution-types'
+import type { LocalExecutionDraftStore } from './local-execution-draft-store'
+import {
+  recordPreparedAttemptDraftState,
+  remainingPreparedAttemptRuntimeMs
+} from './prepared-attempt-draft'
 import { advanceReadyReviewPanel } from './review-panel-advancement'
 import { finalizeMergeConflictAttempt } from './merge-conflict-attempt-finalizer'
 import { advanceDynamicTaskPlan } from './dynamic-task-advancement'
@@ -22,7 +25,7 @@ import {
   publishAutomaticReviewSubmission
 } from './automatic-review-submission'
 import { shouldAutomaticallyRetryAttempt } from './attempt-automatic-retry'
-import { buildAttemptResultCommand } from './attempt-result-command'
+import { publishRegularTaskDelivery } from './task-delivery-command-service'
 import { normalizePreparedReviewContracts } from './automatic-review-contract'
 import { AttemptExecutorEventObserver } from './attempt-executor-event-observer'
 import {
@@ -45,6 +48,7 @@ export type PreparedAttemptRunnerInput = Readonly<{
   now(): string
   createId(kind: string): string
   onActivityChanged?(): void
+  drafts?: LocalExecutionDraftStore
 }>
 
 export async function runPreparedAttempt(input: PreparedAttemptRunnerInput): Promise<void> {
@@ -53,6 +57,8 @@ export async function runPreparedAttempt(input: PreparedAttemptRunnerInput): Pro
   let executorCompleted = false
   try {
     recordAttemptRunnerStart(input)
+    const executionTimeoutMs = remainingPreparedAttemptRuntimeMs(input.drafts, prepared)
+    if (executionTimeoutMs <= 0) throw new Error('executor_timeout')
     const authority = attemptGatewayAuthority(prepared)
     const capability = createAttemptCapabilityBridge({
       prepared,
@@ -76,7 +82,9 @@ export async function runPreparedAttempt(input: PreparedAttemptRunnerInput): Pro
         credentialValues: prepared.credentialValues,
         authority: attemptAuthority(prepared, input.now()),
         capabilityBridge: capability.bridge,
-        onEvent: eventObserver.observe
+        executionTimeoutMs,
+        onEvent: eventObserver.observe,
+        ...(prepared.resumeSessionFile ? { resumeSessionFile: prepared.resumeSessionFile } : {})
       })
       .finally(capability.dispose)
     executorCompleted = true
@@ -125,18 +133,20 @@ export async function runPreparedAttempt(input: PreparedAttemptRunnerInput): Pro
           commandId: () => input.createId('command'),
           now: input.now
         })
-      : finalizeRegularAttempt(input, validated.result, validated.validHashes)
+      : publishRegularTaskDelivery(input, validated.result, validated.validHashes, automaticReview)
     record(input, 'executor', {
       status: 'result_submitted',
       submittedCommit: authoritative.system.submittedCommit
     })
-    const reviewPublication = publishAutomaticReviewSubmission({
-      request: automaticReview,
-      repository: input.repository,
-      schedulerId: input.schedulerId,
-      nextCommandId: () => input.createId('command'),
-      now: input.now
-    })
+    const reviewPublication = prepared.task.reviewTask
+      ? 'submitted'
+      : publishAutomaticReviewSubmission({
+          request: automaticReview,
+          repository: input.repository,
+          schedulerId: input.schedulerId,
+          nextCommandId: () => input.createId('command'),
+          now: input.now
+        })
     if (reviewPublication === 'submitted') {
       record(input, 'scheduler', { status: 'automatic_review_submitted' })
     } else if (reviewPublication === 'superseded') {
@@ -206,27 +216,35 @@ export async function runPreparedAttempt(input: PreparedAttemptRunnerInput): Pro
       })
     }
     recordCost(input, execution.usage)
+    recordPreparedAttemptDraftState({
+      store: input.drafts,
+      prepared,
+      state: 'delivered',
+      at: input.now()
+    })
   } catch (error) {
     eventObserver.flush()
     let recoveryStatus: string
     try {
-      recoveryStatus = recordAttemptInterruption({
-        repository: input.repository,
-        workflowRunId: prepared.workflowRunId,
-        taskId: prepared.taskId,
-        attemptId: prepared.attemptId,
-        schedulerId: input.schedulerId,
-        commandId: input.createId('command'),
-        issuedAt: input.now(),
-        ...(shouldAutomaticallyRetryAttempt({
-          prepared,
-          repository: input.repository,
-          error,
-          executorCompleted
-        })
-          ? { replacementAttemptId: input.createId('attempt') }
-          : {})
-      })
+      recoveryStatus = prepared.task.mergeConflictTask
+        ? recordAttemptInterruption({
+            repository: input.repository,
+            workflowRunId: prepared.workflowRunId,
+            taskId: prepared.taskId,
+            attemptId: prepared.attemptId,
+            schedulerId: input.schedulerId,
+            commandId: input.createId('command'),
+            issuedAt: input.now(),
+            ...(shouldAutomaticallyRetryAttempt({
+              prepared,
+              repository: input.repository,
+              error,
+              executorCompleted
+            })
+              ? { replacementAttemptId: input.createId('attempt') }
+              : {})
+          })
+        : 'local_draft_retained'
     } catch (recoveryError) {
       recoveryStatus = `recovery_record_failed:${errorCode(recoveryError)}`
       record(input, 'scheduler', {
@@ -242,35 +260,14 @@ export async function runPreparedAttempt(input: PreparedAttemptRunnerInput): Pro
       recoveryStatus,
       worktreeRetained: existsSync(prepared.worktree.path)
     })
+    recordPreparedAttemptDraftState({
+      store: input.drafts,
+      prepared,
+      state: errorCode(error) === 'executor_timeout' ? 'waiting_for_resume' : 'needs_attention',
+      at: input.now(),
+      errorCode: errorCode(error)
+    })
   }
-}
-
-function finalizeRegularAttempt(
-  input: Parameters<typeof runPreparedAttempt>[0],
-  result: AttemptResult,
-  validArtifactHashes: ReadonlySet<string>
-): AttemptResult {
-  const finalized = input.worktrees.finalize({
-    repositoryPath: input.repository.projectDirectory,
-    remoteName: input.repository.remote,
-    attemptId: input.prepared.attemptId,
-    worktree: input.prepared.worktree
-  })
-  const authoritative = AttemptResultSchema.parse({
-    ...result,
-    system: { ...result.system, submittedCommit: finalized.submittedCommit }
-  })
-  new GitCommandRetryCoordinator(input.repository).executeAndPush({
-    command: buildAttemptResultCommand(
-      input.prepared,
-      authoritative,
-      input.createId('command'),
-      input.now()
-    ),
-    schedulerId: input.schedulerId,
-    validArtifactHashes
-  })
-  return authoritative
 }
 
 function attemptAuthority(prepared: PreparedAttempt, createdAt: string) {

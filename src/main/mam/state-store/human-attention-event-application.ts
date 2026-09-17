@@ -14,6 +14,7 @@ import {
   requireProjectedTask,
   updateProjectedTask
 } from './task-attempt-event-state'
+import { currentTaskDeliveryAttemptId } from '../application/current-task-delivery'
 
 type HumanAttentionEvent = Extract<SchedulerEvent, { type: `human_${string}` }>
 
@@ -59,7 +60,7 @@ export function applyHumanAttentionEvent(input: {
   const task = requireProjectedTask(tasks, event.taskId)
   if (event.type === 'human_review_resolved') {
     if (reviewDecisions[event.decision.id]) fail('duplicate_human_review', 'Review already exists')
-    if (task.knownAttemptIds.at(-1) !== event.decision.subject.attemptId) {
+    if (currentTaskDeliveryAttemptId(task, attempts) !== event.decision.subject.attemptId) {
       fail('stale_human_review', 'Human review does not target the latest Attempt')
     }
     reviewDecisions[event.decision.id] = event.decision

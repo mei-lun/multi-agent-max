@@ -37,7 +37,10 @@ describe('GrokCliAdapter', () => {
       readyPreflight()
     )
 
-    const execution = await adapter.execute(executionInput(fixture))
+    const execution = await adapter.execute({
+      ...executionInput(fixture),
+      executionTimeoutMs: 12_345
+    })
 
     expect(execution.result).toMatchObject({
       status: 'submitted',
@@ -76,6 +79,7 @@ describe('GrokCliAdapter', () => {
     ])
     expect(execution.stderr).toContain('[REDACTED]')
     expect(execution.stderr).not.toContain('mam-canary-secret')
+    expect(execution.invocation.requestTimeoutMs).toBe(12_345)
     const config = await readFile(execution.invocation.configPath, 'utf8')
     expect(config).toContain('api_backend = "chat_completions"')
     expect(config).toContain('env_key = "MAM_GROK_PROVIDER_KEY"')

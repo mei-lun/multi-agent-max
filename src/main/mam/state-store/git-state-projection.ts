@@ -20,6 +20,7 @@ import type {
 import type { ConditionProjection } from './condition-projection'
 import type { SystemNodeExecutionProjection } from './system-node-execution-projection'
 import { projectTaskAttemptCommandContext } from './task-attempt-command-context'
+import { currentTaskDeliveryIds } from '../application/current-task-delivery'
 import type {
   ReusedNodeCompletions,
   ReusedTaskResultSource
@@ -28,6 +29,9 @@ import type {
   HumanAttentionItem,
   HumanReviewDecision
 } from '../../../shared/mam/domain/human-attention'
+import { countFormalRevisions } from '../review/review-revision-counter'
+import type { TaskContextDefinition } from '../application/workflow-task-context'
+import type { TaskClaim } from '../../../shared/mam/domain/task-claim'
 
 export { emptyWorkflowRunProjection } from './empty-workflow-run-projection'
 
@@ -37,10 +41,13 @@ export type TaskProjection = Readonly<{
   status: ProjectedTaskStatus
   roleProfileId?: string
   roleProfileVersion?: number
+  activeClaim?: TaskClaim
+  lastClaimGeneration?: number
   assignedByUserId?: string
   activeAttemptIds: readonly string[]
   knownAttemptIds: readonly string[]
   selectedAttemptId?: string
+  currentDeliveryAttemptId?: string
   reviewIds: readonly string[]
   executionWarnings: readonly Readonly<{
     attemptId: string
@@ -169,16 +176,7 @@ export function schedulerContextFromProjection(
     validArtifactHashes?: ReadonlySet<string>
     approvalGates?: SchedulerKernelContext['approvalGates']
     humanReviewGates?: SchedulerKernelContext['humanReviewGates']
-    taskDefinition?: Readonly<{
-      initialStatus: 'waiting_dependencies' | 'waiting_role_assignment'
-      allowedRoleProfileIds: readonly string[]
-      roleCatalogVersions: ReadonlyMap<string, ReadonlySet<number>>
-      reviewTarget?: ReviewSubject
-      allowedReviewNodeIds?: readonly string[]
-      minimumReviewDecisions?: number
-      mergeCandidate?: MergeQueueEntry
-      mergeResolutionCandidate?: MergeConflictResolution
-    }>
+    taskDefinition?: TaskContextDefinition
     runBundle?: WorkflowRunBundle
   }>
 ): SchedulerKernelContext {
@@ -208,6 +206,8 @@ export function schedulerContextFromProjection(
     validArtifactHashes: input.validArtifactHashes ?? new Set(),
     processedCommandIds: new Set(projection.commandIds),
     mergeQueueEntries: new Map(Object.entries(projection.mergeQueueEntries)),
+    reviewAggregations: new Map(Object.entries(projection.reviewAggregations)),
+    taskCurrentDeliveryIds: currentTaskDeliveryIds(projection),
     ...(input.runBundle ? { runBundle: input.runBundle } : {}),
     existingTaskIds: new Set([
       ...Object.keys(projection.tasks),
@@ -238,16 +238,7 @@ function toTaskContext(
   reviews: WorkflowRunProjection['reviews'],
   reviewValidity: WorkflowRunProjection['reviewValidity'],
   humanAttentionItems: WorkflowRunProjection['humanAttentionItems'],
-  definition?: Readonly<{
-    initialStatus: 'waiting_dependencies' | 'waiting_role_assignment'
-    allowedRoleProfileIds: readonly string[]
-    roleCatalogVersions: ReadonlyMap<string, ReadonlySet<number>>
-    reviewTarget?: ReviewSubject
-    allowedReviewNodeIds?: readonly string[]
-    minimumReviewDecisions?: number
-    mergeCandidate?: MergeQueueEntry
-    mergeResolutionCandidate?: MergeConflictResolution
-  }>
+  definition?: TaskContextDefinition
 ): SchedulerTaskContext {
   const attemptContext = projectTaskAttemptCommandContext(task, attempts)
   const openHumanAttention = Object.values(humanAttentionItems).find(
@@ -267,7 +258,10 @@ function toTaskContext(
     status: task?.status ?? definition?.initialStatus ?? 'waiting_dependencies',
     ...(task?.roleProfileId ? { assignedRoleProfileId: task.roleProfileId } : {}),
     ...(task?.roleProfileVersion ? { assignedRoleProfileVersion: task.roleProfileVersion } : {}),
+    ...(task?.activeClaim ? { activeClaim: task.activeClaim } : {}),
+    ...(task?.lastClaimGeneration ? { lastClaimGeneration: task.lastClaimGeneration } : {}),
     ...attemptContext,
+    ...(task?.selectedAttemptId ? { selectedAttemptId: task.selectedAttemptId } : {}),
     allowedRoleProfileIds: new Set(definition?.allowedRoleProfileIds ?? []),
     roleCatalogVersions:
       definition?.roleCatalogVersions ??
@@ -279,12 +273,27 @@ function toTaskContext(
     ...(task?.dynamicTaskPlanHash ? { dynamicTaskPlanHash: task.dynamicTaskPlanHash } : {}),
     ...(task?.reviewPanelId ? { reviewPanelId: task.reviewPanelId } : {}),
     ...(definition?.reviewTarget ? { reviewTarget: definition.reviewTarget } : {}),
+    ...(definition?.reviewNodeId ? { reviewNodeId: definition.reviewNodeId } : {}),
     ...(definition?.allowedReviewNodeIds
       ? { allowedReviewNodeIds: new Set(definition.allowedReviewNodeIds) }
+      : {}),
+    ...(definition?.requiredInputTaskIds
+      ? { requiredInputTaskIds: new Set(definition.requiredInputTaskIds) }
       : {}),
     reviewDecisions,
     ...(definition?.minimumReviewDecisions
       ? { minimumReviewDecisions: definition.minimumReviewDecisions }
+      : {}),
+    ...(definition?.maxRevisionAttempts
+      ? { maxRevisionAttempts: definition.maxRevisionAttempts }
+      : {}),
+    ...(task?.selectedAttemptId
+      ? {
+          formalRevisionNumber: countFormalRevisions({
+            attemptId: task.selectedAttemptId,
+            attempts
+          })
+        }
       : {}),
     ...(definition?.mergeCandidate ? { mergeCandidate: definition.mergeCandidate } : {}),
     ...(definition?.mergeResolutionCandidate
