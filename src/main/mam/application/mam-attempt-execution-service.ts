@@ -140,7 +140,7 @@ export class MamAttemptExecutionService {
         }
       )
       return this.query.getSnapshot()
-    })
+    }, () => this.query.getSnapshot())
   }
 
   private async prepare(

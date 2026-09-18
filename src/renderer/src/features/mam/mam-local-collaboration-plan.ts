@@ -47,11 +47,14 @@ export function nextMamLocalCollaborationAction(
   const activeAttempt = run.attempts.find(
     (attempt) => attempt.status === 'announced' || attempt.status === 'running'
   )
-  if (activeAttempt) {
-    const task = run.tasks.find((candidate) => candidate.id === activeAttempt.taskId)
+  const activeTask = activeAttempt
+    ? run.tasks.find((candidate) => candidate.id === activeAttempt.taskId)
+    : run.tasks.find((task) => Boolean(task.activeClaim))
+  if (activeAttempt || activeTask) {
+    const taskTitle = activeTask?.title ?? activeAttempt?.taskId ?? 'the active Task'
     return wait(
       'active',
-      `Local Role is working on ${task?.title ?? activeAttempt.taskId}. This may take several minutes. No action is needed; the next Task will start automatically.`
+      `Local Role is working on ${taskTitle}. This may take several minutes. No action is needed; the next Task will start automatically.`
     )
   }
   if (run.mergeQueueEntries.some((entry) => entry.status === 'queued')) {

@@ -34,9 +34,8 @@ export function mamLiveNodes(
       : node?.latestAttemptId
         ? run.attempts.find((candidate) => candidate.id === node.latestAttemptId)
         : undefined
-    const task = attempt
-      ? run.tasks.find((candidate) => candidate.id === attempt.taskId)
-      : undefined
+    const taskId = attempt?.taskId ?? latestActivity?.taskId
+    const task = taskId ? run.tasks.find((candidate) => candidate.id === taskId) : undefined
     const role = task?.roleProfileId
       ? run.roleProfiles.find(
           (candidate) =>
@@ -48,7 +47,7 @@ export function mamLiveNodes(
       ...(definition?.nodes.find((candidate) => candidate.id === id)?.type
         ? { type: definition.nodes.find((candidate) => candidate.id === id)!.type }
         : {}),
-      status: node?.status ?? 'created',
+      status: task?.activeClaim ? 'running' : (node?.status ?? 'created'),
       ...(task ? { task } : {}),
       ...(attempt ? { attempt } : {}),
       ...(role ? { roleName: role.displayName } : {}),

@@ -63,6 +63,41 @@ describe('local collaboration plan', () => {
     })
   })
 
+  it('waits while a ready Task has an active execution Claim without a Formal Attempt', () => {
+    const run = mamUiRunFixture()
+    run.tasks.push({
+      id: 'task.implement',
+      title: 'Implement',
+      kind: 'static',
+      status: 'ready',
+      roleProfileId: 'role.developer',
+      roleProfileVersion: 1,
+      activeClaim: {
+        schemaVersion: '1.0.0',
+        claimId: 'claim.implement',
+        taskId: 'task.implement',
+        roleProfileId: 'role.developer',
+        roleProfileVersion: 1,
+        claimantInstanceId: 'claimant.machine-test',
+        generation: 1,
+        claimedAt: '2026-07-28T17:30:00Z'
+      },
+      dependencies: [],
+      recommendedRoleProfileIds: ['role.developer'],
+      allowedRoleProfileIds: ['role.developer'],
+      attemptIds: [],
+      reviewIds: [],
+      executionWarningCount: 0
+    })
+
+    expect(nextMamLocalCollaborationAction(run, ['role.developer'])).toEqual({
+      kind: 'wait',
+      reason: 'active',
+      message:
+        'Local Role is working on Implement. This may take several minutes. No action is needed; the next Task will start automatically.'
+    })
+  })
+
   it('identifies the active Task instead of implying the workflow is stuck', () => {
     const run = mamUiRunFixture()
     run.tasks.push({

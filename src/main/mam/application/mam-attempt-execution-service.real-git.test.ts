@@ -488,6 +488,7 @@ describe('MAM Attempt execution with real Git state', () => {
     expect(running.tasks[fixture.taskId]?.knownAttemptIds).toHaveLength(0)
     expect(firstSnapshot.runs[0]?.attempts).toHaveLength(0)
     expect(duplicateSnapshot.runs[0]?.attempts).toHaveLength(0)
+    expect(duplicateSnapshot).not.toBe(firstSnapshot)
     await vi.waitFor(() => expect(execute).toHaveBeenCalledOnce())
 
     releaseExecution.resolve()
