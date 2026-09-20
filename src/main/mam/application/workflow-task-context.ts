@@ -15,6 +15,7 @@ import {
 import { projectWorkflowRoute } from './workflow-route-projection'
 import { currentTaskDeliveryAttemptId } from './current-task-delivery'
 import { workflowInputTaskIds } from './workflow-input-task-ids'
+import { effectiveReviewRevisionLimit } from '../review/review-revision-limit'
 
 export type TaskContextDefinition = Readonly<{
   initialStatus: 'waiting_dependencies' | 'waiting_role_assignment'
@@ -171,7 +172,11 @@ function reviewableContext(input: {
     ...(reviewNode?.type === 'review_gate'
       ? {
           minimumReviewDecisions: reviewNode.minimumDecisions,
-          maxRevisionAttempts: reviewNode.maxRevisionAttempts
+          maxRevisionAttempts: effectiveReviewRevisionLimit({
+            reviewNodeId: reviewNode.id,
+            maxRevisionAttempts: reviewNode.maxRevisionAttempts,
+            edges: input.bundle.definition.edges
+          })
         }
       : {})
   }

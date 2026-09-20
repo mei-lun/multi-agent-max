@@ -196,9 +196,8 @@ describe('MAM Attempt execution with real Git state', () => {
     const firstProjection = fixture.repository.rebuild(fixture.bundle.run.id)
     const firstAttemptId = firstProjection.tasks[fixture.taskId]!.knownAttemptIds.at(-1)!
     submitReviewDecision(fixture, firstAttemptId, 'changes_requested', ids)
-    expect(fixture.repository.rebuild(fixture.bundle.run.id).tasks[fixture.taskId]).toMatchObject({
-      status: 'changes_requested'
-    })
+    const requested = fixture.repository.rebuild(fixture.bundle.run.id)
+    expect(requested.tasks[fixture.taskId]).toMatchObject({ status: 'changes_requested' })
 
     const secondCompletion = completionSignal()
     await executionService(fixture, ids, secondCompletion.resolve).start({

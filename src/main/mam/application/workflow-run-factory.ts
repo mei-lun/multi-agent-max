@@ -35,9 +35,14 @@ export function createWorkflowRunBundle(input: {
   roleProfiles?: readonly RoleProfile[]
   inputArtifacts?: readonly ArtifactRef[]
   createdAt: string
+  enforceReviewReturnEdges?: boolean
 }): WorkflowRunBundle {
   const definition = WorkflowDefinitionSchema.parse(input.definition)
-  const plan = compileWorkflow(definition, input.inputArtifacts ?? [])
+  const compilerOptions =
+    input.enforceReviewReturnEdges === undefined
+      ? {}
+      : { enforceReviewReturnEdges: input.enforceReviewReturnEdges }
+  const plan = compileWorkflow(definition, input.inputArtifacts ?? [], compilerOptions)
   const roleCatalog = [...input.roleCatalog].sort((left, right) =>
     roleKey(left).localeCompare(roleKey(right))
   )

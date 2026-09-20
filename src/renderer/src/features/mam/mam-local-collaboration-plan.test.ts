@@ -98,6 +98,86 @@ describe('local collaboration plan', () => {
     })
   })
 
+  it('waits while a changes-requested Task is already starting its replacement Attempt', () => {
+    const run = mamUiRunFixture()
+    run.tasks.push({
+      id: 'task.rework',
+      title: 'Revise delivery',
+      kind: 'static',
+      status: 'changes_requested',
+      roleProfileId: 'role.developer',
+      roleProfileVersion: 1,
+      activeClaim: {
+        schemaVersion: '1.0.0',
+        claimId: 'claim.rework',
+        taskId: 'task.rework',
+        roleProfileId: 'role.developer',
+        roleProfileVersion: 1,
+        claimantInstanceId: 'claimant.machine-test',
+        generation: 2,
+        claimedAt: '2026-07-28T17:31:00Z'
+      },
+      dependencies: [],
+      recommendedRoleProfileIds: ['role.developer'],
+      allowedRoleProfileIds: ['role.developer'],
+      attemptIds: ['attempt.original'],
+      reviewIds: ['review.changes'],
+      executionWarningCount: 0
+    })
+
+    expect(nextMamLocalCollaborationAction(run, ['role.developer'])).toMatchObject({
+      kind: 'wait',
+      reason: 'active'
+    })
+  })
+
+  it('does not let a submitted Task Claim block a changes-requested upstream Task', () => {
+    const run = mamUiRunFixture()
+    run.tasks.push({
+      id: 'review-task',
+      title: 'Review',
+      kind: 'review',
+      status: 'submitted',
+      roleProfileId: 'role.reviewer',
+      roleProfileVersion: 1,
+      activeClaim: {
+        schemaVersion: '1.0.0',
+        claimId: 'claim.review',
+        taskId: 'review-task',
+        roleProfileId: 'role.reviewer',
+        roleProfileVersion: 1,
+        claimantInstanceId: 'claimant.machine-test',
+        generation: 1,
+        claimedAt: '2026-07-28T17:30:00Z'
+      },
+      dependencies: [],
+      recommendedRoleProfileIds: ['role.reviewer'],
+      allowedRoleProfileIds: ['role.reviewer'],
+      attemptIds: [],
+      reviewIds: [],
+      executionWarningCount: 0
+    })
+    run.tasks.push({
+      id: 'task.implement',
+      title: 'Implement',
+      kind: 'static',
+      status: 'changes_requested',
+      roleProfileId: 'role.developer',
+      roleProfileVersion: 1,
+      dependencies: [],
+      recommendedRoleProfileIds: ['role.developer'],
+      allowedRoleProfileIds: ['role.developer'],
+      attemptIds: ['attempt.implement'],
+      reviewIds: [],
+      executionWarningCount: 0
+    })
+
+    expect(nextMamLocalCollaborationAction(run, ['role.developer'])).toEqual({
+      kind: 'start',
+      input: { workflowRunId: run.run.id, taskId: 'task.implement' }
+    })
+  })
+
   it('identifies the active Task instead of implying the workflow is stuck', () => {
     const run = mamUiRunFixture()
     run.tasks.push({

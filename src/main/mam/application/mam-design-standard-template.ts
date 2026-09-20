@@ -162,6 +162,12 @@ export function createMamDesignStandardTemplate(input: {
       edges: [
         { from: 'prepare-delivery', to: 'review-delivery' },
         { from: 'review-delivery', to: 'integrate-develop' },
+        {
+          from: 'review-delivery',
+          to: 'prepare-delivery',
+          when: 'changes_requested',
+          maxTraversals: 2
+        },
         { from: 'integrate-develop', to: 'approve-release' },
         { from: 'approve-release', to: 'promote-main' },
         { from: 'promote-main', to: 'finish' }

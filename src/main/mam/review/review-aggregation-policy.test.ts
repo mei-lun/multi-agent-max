@@ -2,8 +2,19 @@ import { describe, expect, it } from 'vitest'
 import type { SchedulerCommand } from '../../../shared/mam/scheduler-protocol'
 import { SchedulerKernel, type KernelEventBatch } from '../scheduler/kernel'
 import { ReviewAggregationPolicy } from './review-aggregation-policy'
+import { effectiveReviewRevisionLimit } from './review-revision-limit'
 
 describe('ReviewAggregationPolicy', () => {
+  it('uses the stricter bounded return-edge traversal limit', () => {
+    expect(
+      effectiveReviewRevisionLimit({
+        reviewNodeId: 'review',
+        maxRevisionAttempts: 4,
+        edges: [{ from: 'review', when: 'changes_requested', maxTraversals: 1 }]
+      })
+    ).toBe(2)
+  })
+
   it('classifies consensus and mergeable finding differences without a user gate', () => {
     const policy = new ReviewAggregationPolicy(() => '2026-07-22T20:00:00Z')
     const consensus = policy.aggregate([

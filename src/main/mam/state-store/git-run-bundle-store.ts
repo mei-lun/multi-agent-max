@@ -119,7 +119,8 @@ function assertBundleIntegrity(bundle: WorkflowRunBundle): void {
     roleCatalog: bundle.run.roleCatalog,
     ...(bundle.roleProfiles ? { roleProfiles: bundle.roleProfiles } : {}),
     inputArtifacts: bundle.plan.inputArtifacts,
-    createdAt: bundle.createdAt
+    createdAt: bundle.createdAt,
+    enforceReviewReturnEdges: false
   })
   if (expected.bundleHash !== bundle.bundleHash) {
     fail('run_bundle_not_canonical', 'Run Bundle does not match the compiled Workflow')

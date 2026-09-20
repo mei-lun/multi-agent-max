@@ -242,6 +242,7 @@ function workflow(mergeValidations: readonly string[] = []): WorkflowDefinition 
     edges: [
       { from: 'build', to: 'review' },
       { from: 'review', to: 'merge' },
+      { from: 'review', to: 'build', when: 'changes_requested', maxTraversals: 2 },
       { from: 'merge', to: 'finish' }
     ],
     maxTransitions: 10,

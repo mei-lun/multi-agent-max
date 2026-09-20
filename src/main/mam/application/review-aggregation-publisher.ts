@@ -2,6 +2,7 @@ import type { ReviewSubject } from '../../../shared/mam/domain/review'
 import type { SchedulerCommand } from '../../../shared/mam/scheduler-protocol'
 import { calculateReviewAggregation } from '../review/review-aggregation-calculator'
 import { countFormalRevisions } from '../review/review-revision-counter'
+import { effectiveReviewRevisionLimit } from '../review/review-revision-limit'
 import { GitCommandRetryCoordinator } from '../state-store/git-command-retry-coordinator'
 import type { GitStateRepository } from '../state-store/git-state-repository'
 
@@ -46,7 +47,11 @@ export function publishReviewAggregationIfReady(input: {
       attemptId: input.subject.attemptId,
       attempts: projection.attempts
     }),
-    maxRevisionAttempts: reviewNode.maxRevisionAttempts
+    maxRevisionAttempts: effectiveReviewRevisionLimit({
+      reviewNodeId: reviewNode.id,
+      maxRevisionAttempts: reviewNode.maxRevisionAttempts,
+      edges: bundle.definition.edges
+    })
   })
   const command: Extract<SchedulerCommand, { type: 'record_review_aggregation' }> = {
     schemaVersion: '1.0.0',

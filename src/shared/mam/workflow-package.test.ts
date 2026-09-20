@@ -74,6 +74,7 @@ function workflow(): WorkflowDefinition {
     ],
     edges: [
       { from: 'build', to: 'review' },
+      { from: 'review', to: 'build', when: 'changes_requested', maxTraversals: 1 },
       { from: 'review', to: 'finish' }
     ],
     maxTransitions: 10,

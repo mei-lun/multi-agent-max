@@ -49,7 +49,11 @@ export function nextMamLocalCollaborationAction(
   )
   const activeTask = activeAttempt
     ? run.tasks.find((candidate) => candidate.id === activeAttempt.taskId)
-    : run.tasks.find((task) => Boolean(task.activeClaim))
+    : run.tasks.find(
+        (task) =>
+          Boolean(task.activeClaim) &&
+          ['ready', 'running', 'in_review', 'changes_requested'].includes(task.status)
+      )
   if (activeAttempt || activeTask) {
     const taskTitle = activeTask?.title ?? activeAttempt?.taskId ?? 'the active Task'
     return wait(

@@ -195,6 +195,12 @@ export function newDeliveryWorkflowDefinition(
     edges: [
       { from: 'create-delivery', to: 'review-delivery' },
       { from: 'review-delivery', to: 'integrate-develop' },
+      {
+        from: 'review-delivery',
+        to: 'create-delivery',
+        when: 'changes_requested',
+        maxTraversals: 2
+      },
       { from: 'integrate-develop', to: 'approve-release' },
       { from: 'approve-release', to: 'promote-main' },
       { from: 'promote-main', to: 'finish' }

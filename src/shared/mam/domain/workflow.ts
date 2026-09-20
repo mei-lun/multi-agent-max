@@ -6,10 +6,8 @@ import {
   MamSchemaVersionSchema,
   Sha256Schema
 } from './primitives'
-import { validateHumanReviewWorkflow } from './human-review-workflow-validation'
-import { containsWorkflowCycle } from './workflow-cycle-detection'
-import { validateReviewAggregateWorkflow } from './review-aggregate-workflow-validation'
 import { ReviewAggregateNodeSchema } from './review-aggregate'
+import { validateWorkflowDefinition } from './workflow-definition-validation'
 
 const roleSelection = {
   recommendedRoleProfileIds: z.array(MamEntityIdSchema).length(1),
@@ -175,7 +173,7 @@ export const WorkflowDefinitionSchema = z
     maxRunDurationSeconds: z.number().int().positive()
   })
   .strict()
-  .superRefine(validateWorkflowGraph)
+  .superRefine(validateWorkflowDefinition)
 
 export const NodeRunSchema = z
   .object({
@@ -239,78 +237,6 @@ export const WorkflowRunSchema = z
     updatedAt: IsoTimestampSchema
   })
   .strict()
-
-function validateWorkflowGraph(
-  definition: {
-    nodes: {
-      id: string
-      type: string
-      recommendedRoleProfileIds?: string[]
-      allowedRoleProfileIds?: string[]
-      revisionTargetNodeId?: string | undefined
-      maxRevisionAttempts?: number | undefined
-    }[]
-    edges: {
-      from: string
-      to: string
-      when?: string | undefined
-      maxTraversals?: number | undefined
-    }[]
-  },
-  context: z.RefinementCtx
-): void {
-  for (const node of definition.nodes) {
-    if (
-      node.allowedRoleProfileIds &&
-      node.recommendedRoleProfileIds &&
-      node.allowedRoleProfileIds[0] !== node.recommendedRoleProfileIds[0]
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['nodes'],
-        message: `node ${node.id} must bind one fixed Role`
-      })
-    }
-  }
-  const nodeIds = new Set<string>()
-  for (const node of definition.nodes) {
-    if (nodeIds.has(node.id)) {
-      context.addIssue({
-        code: 'custom',
-        path: ['nodes'],
-        message: `duplicate node id: ${node.id}`
-      })
-    }
-    nodeIds.add(node.id)
-  }
-  if (!definition.nodes.some((node) => node.type === 'finish')) {
-    context.addIssue({
-      code: 'custom',
-      path: ['nodes'],
-      message: 'workflow requires a finish node'
-    })
-  }
-  validateHumanReviewWorkflow(definition, context)
-  validateReviewAggregateWorkflow(definition, context)
-  const unboundedEdges = definition.edges.filter((edge) => {
-    if (!nodeIds.has(edge.from) || !nodeIds.has(edge.to)) {
-      context.addIssue({
-        code: 'custom',
-        path: ['edges'],
-        message: `edge references unknown node: ${edge.from} -> ${edge.to}`
-      })
-      return false
-    }
-    return edge.maxTraversals === undefined
-  })
-  if (containsWorkflowCycle(nodeIds, unboundedEdges)) {
-    context.addIssue({
-      code: 'custom',
-      path: ['edges'],
-      message: 'workflow contains an unbounded cycle; every cycle requires maxTraversals'
-    })
-  }
-}
 
 export type WorkflowNode = z.infer<typeof WorkflowNodeSchema>
 export type WorkflowEdge = z.infer<typeof WorkflowEdgeSchema>

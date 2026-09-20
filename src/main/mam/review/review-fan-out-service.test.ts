@@ -117,6 +117,7 @@ function reviewWorkflow(minimumDecisions: number): WorkflowDefinition {
     ],
     edges: [
       { from: 'implementation', to: 'review' },
+      { from: 'review', to: 'implementation', when: 'changes_requested', maxTraversals: 3 },
       { from: 'review', to: 'finish' }
     ],
     maxTransitions: 20,

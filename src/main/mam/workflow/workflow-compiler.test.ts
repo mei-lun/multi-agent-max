@@ -52,13 +52,18 @@ maxRunDurationSeconds: 3600
       edges: [
         { from: 'implement', to: 'review' },
         { from: 'review', to: 'finish' },
-        { from: 'review', to: 'implement', maxTraversals: 2 }
+        { from: 'review', to: 'implement', when: 'changes_requested', maxTraversals: 2 }
       ],
       maxTransitions: 20
     }
     const plan = compileWorkflow(looped)
     expect(plan.nodes.map((node) => node.id)).toEqual(['implement', 'review', 'finish'])
-    expect(plan.edges).toContainEqual({ from: 'review', to: 'implement', maxTraversals: 2 })
+    expect(plan.edges).toContainEqual({
+      from: 'review',
+      to: 'implement',
+      when: 'changes_requested',
+      maxTraversals: 2
+    })
   })
 
   it('rejects unbounded cycles and bounded edges that point forward', () => {
@@ -77,10 +82,26 @@ maxRunDurationSeconds: 3600
         edges: [
           { from: 'implement', to: 'review' },
           { from: 'review', to: 'finish' },
+          { from: 'review', to: 'implement', when: 'changes_requested', maxTraversals: 2 },
           { from: 'implement', to: 'finish', maxTraversals: 2 }
         ]
       })
     ).toThrow(expect.objectContaining({ code: 'invalid_loop_edge' }))
+  })
+
+  it('requires a bounded changes_requested return edge for revisable Reviews', () => {
+    const definition = workflowDefinition()
+    const revisable = {
+      ...definition,
+      nodes: [definition.nodes[0], reviewNode(), definition.nodes[1]],
+      edges: [
+        { from: 'implement', to: 'review' },
+        { from: 'review', to: 'finish' }
+      ]
+    }
+    expect(() => compileWorkflow(revisable)).toThrow(
+      expect.objectContaining({ code: 'definition_schema_error' })
+    )
   })
 
   it('requires exact external Artifact inputs', () => {
@@ -267,6 +288,7 @@ function allNodeWorkflowDefinition() {
       { from: 'transform', to: 'join' },
       { from: 'join', to: 'review' },
       { from: 'review', to: 'merge' },
+      { from: 'review', to: 'implement', when: 'changes_requested', maxTraversals: 3 },
       { from: 'merge', to: 'finish' }
     ],
     maxTransitions: 50,

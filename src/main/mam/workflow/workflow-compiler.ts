@@ -16,6 +16,7 @@ import {
   validateWorkflowPlan
 } from './workflow-graph-analysis'
 import { WorkflowCompilationError } from './workflow-compilation-error'
+import { reviewGateWorkflowIssues } from '../../../shared/mam/domain/review-gate-workflow-validation'
 
 export { WorkflowCompilationError } from './workflow-compilation-error'
 
@@ -45,12 +46,13 @@ export function parseWorkflowDefinition(source: string): WorkflowDefinition {
       definition.error.issues.map((issue) => issue.message).join('; ')
     )
   }
-  return definition.data
+  return requireReviewReturnEdges(definition.data)
 }
 
 export function compileWorkflow(
   definitionInput: unknown,
-  inputArtifactsInput: readonly unknown[] = []
+  inputArtifactsInput: readonly unknown[] = [],
+  options: Readonly<{ enforceReviewReturnEdges?: boolean }> = {}
 ): WorkflowExecutionPlan {
   const result = WorkflowDefinitionSchema.safeParse(definitionInput)
   if (!result.success) {
@@ -59,7 +61,8 @@ export function compileWorkflow(
       result.error.issues.map((issue) => issue.message).join('; ')
     )
   }
-  const definition = result.data
+  const definition =
+    options.enforceReviewReturnEdges === false ? result.data : requireReviewReturnEdges(result.data)
   const inputArtifacts = inputArtifactsInput.map((artifact) => ArtifactRefSchema.parse(artifact))
   const graphs = buildWorkflowGraphs(definition)
   const orderedNodeIds = validateWorkflowPlan(definition, inputArtifacts, graphs)
@@ -101,6 +104,14 @@ export function compileWorkflow(
       planHash: createHash('sha256').update(canonicalJson(payload)).digest('hex')
     })
   )
+}
+
+function requireReviewReturnEdges(definition: WorkflowDefinition): WorkflowDefinition {
+  const issues = reviewGateWorkflowIssues(definition)
+  if (issues.length > 0) {
+    throw new WorkflowCompilationError('definition_schema_error', issues.join('; '))
+  }
+  return definition
 }
 
 function artifactKey(artifact: ArtifactRef): string {

@@ -10,6 +10,7 @@ import {
   type MamWorkflowPackage
 } from '../../../shared/mam/workflow-package'
 import type { MamUiWritableProfiles } from './mam-profile-write-ports'
+import { compileWorkflow } from '../workflow/workflow-compiler'
 
 export function exportWorkflowPackage(
   input: unknown,
@@ -58,6 +59,14 @@ export function importWorkflowPackage(
   let pack: MamWorkflowPackage
   try {
     pack = MamWorkflowPackageSchema.parse(JSON.parse(readFileSync(resolve(sourcePath), 'utf8')))
+  } catch (error) {
+    throw createError(
+      'workflow_package_invalid',
+      error instanceof Error ? error.message : String(error)
+    )
+  }
+  try {
+    compileWorkflow(pack.workflow)
   } catch (error) {
     throw createError(
       'workflow_package_invalid',
