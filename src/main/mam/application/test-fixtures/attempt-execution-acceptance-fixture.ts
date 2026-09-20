@@ -13,6 +13,7 @@ import { createWorkflowRunBundle, createWorkflowRunCommand } from '../workflow-r
 
 export function createAttemptExecutionAcceptanceFixture(input?: {
   mergeValidations?: readonly string[]
+  executorKind?: 'codex-cli' | 'pi-rpc'
 }) {
   const root = mkdtempSync(join(tmpdir(), 'mam-attempt-execution-'))
   const origin = join(root, 'origin.git')
@@ -34,9 +35,9 @@ export function createAttemptExecutionAcceptanceFixture(input?: {
   const executor = catalog.executors.save({
     id: 'executor.codex',
     version: 1,
-    kind: 'codex-cli',
-    executableRef: 'codex',
-    adapterOptions: { mode: 'headless' }
+    kind: input?.executorKind ?? 'codex-cli',
+    executableRef: input?.executorKind === 'pi-rpc' ? 'pi' : 'codex',
+    adapterOptions: { mode: input?.executorKind === 'pi-rpc' ? 'rpc' : 'headless' }
   })
   const provider = catalog.providers.save({
     id: 'provider.test',

@@ -61,4 +61,62 @@ describe('prepared Attempt result collection', () => {
       JSON.parse(await readFile(join(workspacePath, 'artifact.design-spec.json'), 'utf8'))
     ).toEqual({ title: 'Guessing game' })
   })
+
+  it('normalizes a free-form Review before enforcing the internal JSON contract', async () => {
+    const workspacePath = await mkdtemp(join(tmpdir(), 'mam-review-result-'))
+    temporaryDirectories.push(workspacePath)
+    const prepared = {
+      snapshot: { permissions: { writePaths: [] } },
+      task: {
+        reviewTask: { id: 'review-task.one' },
+        outputContracts: [
+          {
+            schemaVersion: '1.0.0',
+            artifactType: 'artifact.review',
+            format: 'json-schema',
+            required: true,
+            maxBytes: 10_000,
+            jsonSchema: {
+              type: 'object',
+              required: ['status', 'summary'],
+              properties: {
+                status: { enum: ['approved', 'changes_requested', 'blocked'] },
+                summary: { type: 'string' },
+                findings: { type: 'array' }
+              }
+            }
+          }
+        ]
+      },
+      worktree: { path: workspacePath, baseCommit: 'abcdef1' }
+    } as unknown as PreparedAttempt
+
+    const collected = await collectPreparedAttemptResult({
+      prepared,
+      assistantText:
+        '三份交付物正在审核。\n{"status":"changes_requested","summary":"输入处理需要修改。","findings":[{"severity":"high","category":"validation","summary":"空值缺少提示。"}]}',
+      usage: { status: 'unknown' },
+      git: { runRaw: () => '', run: () => '' } as unknown as GitCommandClient,
+      authority: authority()
+    })
+
+    expect(collected.contents.get('artifact.review')?.value).toMatchObject({
+      status: 'changes_requested',
+      summary: '输入处理需要修改。',
+      findings: [expect.objectContaining({ summary: '空值缺少提示。' })]
+    })
+  })
 })
+
+function authority() {
+  return {
+    workflowRunId: 'run.test',
+    nodeRunId: 'node-run.test',
+    taskId: 'task.test',
+    attemptId: 'attempt.test',
+    roleInstanceId: 'role-instance.test',
+    executorInvocationId: 'executor-invocation.test',
+    effectiveConfigHash: 'a'.repeat(64),
+    createdAt: '2026-09-20T12:38:44.000Z'
+  }
+}

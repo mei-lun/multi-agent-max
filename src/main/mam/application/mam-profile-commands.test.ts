@@ -83,7 +83,7 @@ describe('MAM Profile Application commands', () => {
     const afterConnection = service.saveModelConnection({
       displayName: 'Relay coding model',
       protocol: 'openai-completions',
-      baseUrl: 'https://relay.example.com/v1',
+      baseUrl: 'https://relay.example.com/v1/responses',
       apiKey: 'sk-local-test-value',
       remoteModelId: 'relay-model-v2'
     })

@@ -8,15 +8,11 @@ import type { ConflictResolutionWorktreeManager } from './conflict-resolution-wo
 import type { GitCommandClient } from '../state-store/git-command-client'
 import type { ExecutorRouter, PreparedAttempt } from './mam-attempt-execution-types'
 import type { LocalExecutionDraftStore } from './local-execution-draft-store'
-import {
-  recordPreparedAttemptDraftState,
-  remainingPreparedAttemptRuntimeMs
-} from './prepared-attempt-draft'
+import { recordPreparedAttemptDraftState } from './prepared-attempt-draft'
 import { advanceReadyReviewPanel } from './review-panel-advancement'
 import { finalizeMergeConflictAttempt } from './merge-conflict-attempt-finalizer'
 import { advanceDynamicTaskPlan } from './dynamic-task-advancement'
 import { advanceDeterministicNodes } from './deterministic-node-advancement'
-import { createAttemptCapabilityBridge } from './attempt-capability-bridge'
 import { recordAttemptInterruption } from './attempt-interruption-recovery'
 import { materializeDirectAttemptResult } from './direct-attempt-result'
 import { collectPreparedAttemptResult } from './prepared-attempt-result-collector'
@@ -28,6 +24,9 @@ import { shouldAutomaticallyRetryAttempt } from './attempt-automatic-retry'
 import { publishRegularTaskDelivery } from './task-delivery-command-service'
 import { normalizePreparedReviewContracts } from './automatic-review-contract'
 import { AttemptExecutorEventObserver } from './attempt-executor-event-observer'
+import { recoveredReviewExecution } from './review-output-recovery'
+import { executePreparedAttempt } from './prepared-attempt-executor'
+import { preparedAttemptResultAuthority } from './prepared-attempt-authority'
 import {
   attemptRunnerErrorCode as errorCode,
   recordAttemptRunnerStart,
@@ -57,36 +56,9 @@ export async function runPreparedAttempt(input: PreparedAttemptRunnerInput): Pro
   let executorCompleted = false
   try {
     recordAttemptRunnerStart(input)
-    const executionTimeoutMs = remainingPreparedAttemptRuntimeMs(input.drafts, prepared)
-    if (executionTimeoutMs <= 0) throw new Error('executor_timeout')
-    const authority = attemptGatewayAuthority(prepared)
-    const capability = createAttemptCapabilityBridge({
-      prepared,
-      repository: input.repository,
-      diagnostics: input.diagnostics,
-      schedulerId: input.schedulerId,
-      authority,
-      createId: input.createId,
-      now: input.now
-    })
-    const execution = await input.executor
-      .execute({
-        profile: prepared.profile,
-        binding: prepared.binding,
-        snapshot: prepared.snapshot,
-        resources: prepared.resources,
-        executorInvocationId: prepared.executorInvocationId,
-        workspacePath: prepared.worktree.path,
-        systemPrompt: prepared.systemPrompt,
-        prompt: prepared.prompt,
-        credentialValues: prepared.credentialValues,
-        authority: attemptAuthority(prepared, input.now()),
-        capabilityBridge: capability.bridge,
-        executionTimeoutMs,
-        onEvent: eventObserver.observe,
-        ...(prepared.resumeSessionFile ? { resumeSessionFile: prepared.resumeSessionFile } : {})
-      })
-      .finally(capability.dispose)
+    const recoveredExecution = recoveredReviewExecution(prepared)
+    const execution =
+      recoveredExecution ?? (await executePreparedAttempt(input, prepared, eventObserver))
     executorCompleted = true
     eventObserver.recordReturned(execution.events)
     const collected = execution.result
@@ -96,7 +68,7 @@ export async function runPreparedAttempt(input: PreparedAttemptRunnerInput): Pro
           assistantText: execution.assistantText,
           usage: execution.usage,
           git: input.git,
-          authority: attemptAuthority(prepared, input.now())
+          authority: preparedAttemptResultAuthority(prepared, input.now())
         })
     const validated = await input.artifacts.validate({
       result: execution.result ?? collected!.result,
@@ -267,30 +239,5 @@ export async function runPreparedAttempt(input: PreparedAttemptRunnerInput): Pro
       at: input.now(),
       errorCode: errorCode(error)
     })
-  }
-}
-
-function attemptAuthority(prepared: PreparedAttempt, createdAt: string) {
-  return {
-    workflowRunId: prepared.workflowRunId,
-    nodeRunId: prepared.task.nodeRunId,
-    taskId: prepared.taskId,
-    attemptId: prepared.attemptId,
-    roleInstanceId: prepared.roleInstanceId,
-    executorInvocationId: prepared.executorInvocationId,
-    effectiveConfigHash: prepared.snapshot.contentHash,
-    createdAt
-  }
-}
-
-function attemptGatewayAuthority(prepared: PreparedAttempt) {
-  return {
-    workflowRunId: prepared.workflowRunId,
-    nodeRunId: prepared.task.nodeRunId,
-    taskId: prepared.taskId,
-    attemptId: prepared.attemptId,
-    roleInstanceId: prepared.roleInstanceId,
-    executorInvocationId: prepared.executorInvocationId,
-    effectiveConfigHash: prepared.snapshot.contentHash
   }
 }

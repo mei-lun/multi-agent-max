@@ -19,7 +19,7 @@ describe('Review Attempt prompt', () => {
     expect(prompt).toContain('MAM converts the report into its internal Review decision.')
   })
 
-  it('requires actionable findings for structured change requests', () => {
+  it('accepts JSON, Markdown, or prose while requiring actionable change findings', () => {
     const prompt = attemptExecutionPrompt(
       {
         specification: 'Review the website.',
@@ -29,7 +29,8 @@ describe('Review Attempt prompt', () => {
       'mam/review'
     )
 
-    expect(prompt).toContain('Return exactly one JSON object')
+    expect(prompt).toContain('JSON, Markdown, or clear prose')
+    expect(prompt).not.toContain('Return exactly one JSON object')
     expect(prompt).toContain('include at least one actionable finding')
   })
 

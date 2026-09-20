@@ -27,6 +27,7 @@ import {
 import { ensureBuiltinPiProfile } from './mam/profiles/builtin-pi-profile'
 import { MamDesignDraftStore } from './mam/application/mam-design-draft-store'
 import { MamDesignAssistantService } from './mam/application/mam-design-assistant-service'
+import { MamDesignModelGateway } from './mam/application/mam-design-model-gateway'
 import { LocalExecutionDraftStore } from './mam/application/local-execution-draft-store'
 import { resolveDesignSecret } from './mam/application/design-secret-resolver'
 import { attachWindowDiagnostics, startDesktopLogging } from './mam/diagnostics/desktop-diagnostics'
@@ -145,7 +146,10 @@ function createMainWindow(): void {
     service,
     profiles,
     new MamDesignDraftStore(join(mamRoot, 'design-draft.json')),
-    { resolve: (secretRef) => resolveDesignSecret(secretRef, localSettings, secretValues) }
+    { resolve: (secretRef) => resolveDesignSecret(secretRef, localSettings, secretValues) },
+    new MamDesignModelGateway(undefined, ({ event, ...details }) =>
+      runtimeLogger.record('design_model', event, details)
+    )
   )
   const workflowRuns = new MamWorkflowRunCommandService(
     service,

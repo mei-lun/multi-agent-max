@@ -1,12 +1,13 @@
 import { readFileSync } from 'node:fs'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { LocalExecutionDraftStore } from './local-execution-draft-store'
 import {
   preparedAttemptMatchesActiveClaim,
-  recoverableDraftForActiveClaim
+  recoverableDraftForActiveClaim,
+  restoredPreparedFields
 } from './local-execution-draft-restore'
 import { discardSupersededLocalDrafts } from './superseded-local-draft-discard'
 
@@ -52,6 +53,39 @@ describe('LocalExecutionDraftStore', () => {
     expect(store.listUnfinished()).toEqual([saved])
   })
 
+  it('restores a completed Pi final answer without another model request', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'mam-local-draft-'))
+    roots.push(root)
+    const sessionDirectory = join(root, 'sessions')
+    await mkdir(sessionDirectory)
+    await writeFile(
+      join(sessionDirectory, 'review.jsonl'),
+      `${JSON.stringify({
+        type: 'message',
+        message: {
+          role: 'assistant',
+          stopReason: 'stop',
+          content: [
+            responseText('Checking delivery.', 'commentary'),
+            responseText('审核通过，交付符合要求。', 'final_answer')
+          ]
+        }
+      })}\n`,
+      'utf8'
+    )
+    const retained = {
+      ...draft(),
+      sessionDirectory,
+      state: 'needs_attention' as const,
+      lastErrorCode: 'execution_error'
+    }
+
+    expect(restoredPreparedFields(retained, true)).toMatchObject({
+      recoveredAssistantText: '审核通过，交付符合要求。',
+      executorInvocationId: retained.executorInvocationId
+    })
+  })
+
   it('does not restore a Draft after its Claim generation was fenced', () => {
     const retained = draft()
     expect(
@@ -61,9 +95,14 @@ describe('LocalExecutionDraftStore', () => {
         taskId: retained.taskId,
         claimantInstanceId: 'claimant.local',
         activeClaim: {
-          schemaVersion: '1.0.0', claimId: 'claim.takeover', taskId: retained.taskId,
-          roleProfileId: 'role.1', roleProfileVersion: 1, claimantInstanceId: 'claimant.local',
-          generation: 2, claimedAt: '2026-09-17T10:02:00Z'
+          schemaVersion: '1.0.0',
+          claimId: 'claim.takeover',
+          taskId: retained.taskId,
+          roleProfileId: 'role.1',
+          roleProfileVersion: 1,
+          claimantInstanceId: 'claimant.local',
+          generation: 2,
+          claimedAt: '2026-09-17T10:02:00Z'
         }
       })
     ).toBeUndefined()
@@ -71,9 +110,14 @@ describe('LocalExecutionDraftStore', () => {
       preparedAttemptMatchesActiveClaim(
         { claimId: retained.claimId, claimGeneration: retained.claimGeneration },
         {
-          schemaVersion: '1.0.0', claimId: 'claim.takeover', taskId: retained.taskId,
-          roleProfileId: 'role.1', roleProfileVersion: 1, claimantInstanceId: 'claimant.local',
-          generation: 2, claimedAt: '2026-09-17T10:02:00Z'
+          schemaVersion: '1.0.0',
+          claimId: 'claim.takeover',
+          taskId: retained.taskId,
+          roleProfileId: 'role.1',
+          roleProfileVersion: 1,
+          claimantInstanceId: 'claimant.local',
+          generation: 2,
+          claimedAt: '2026-09-17T10:02:00Z'
         },
         'claimant.local'
       )
@@ -86,12 +130,21 @@ describe('LocalExecutionDraftStore', () => {
     const store = new LocalExecutionDraftStore(root)
     store.save(draft())
     discardSupersededLocalDrafts({
-      store, worktrees: { abandon: () => true } as never, repositoryPath: root,
-      workflowRunId: 'run.1', taskId: 'task.1', claimantInstanceId: 'claimant.local',
+      store,
+      worktrees: { abandon: () => true } as never,
+      repositoryPath: root,
+      workflowRunId: 'run.1',
+      taskId: 'task.1',
+      claimantInstanceId: 'claimant.local',
       activeClaim: {
-        schemaVersion: '1.0.0', claimId: 'claim.takeover', taskId: 'task.1',
-        roleProfileId: 'role.1', roleProfileVersion: 1, claimantInstanceId: 'claimant.local',
-        generation: 2, claimedAt: '2026-09-17T10:02:00Z'
+        schemaVersion: '1.0.0',
+        claimId: 'claim.takeover',
+        taskId: 'task.1',
+        roleProfileId: 'role.1',
+        roleProfileVersion: 1,
+        claimantInstanceId: 'claimant.local',
+        generation: 2,
+        claimedAt: '2026-09-17T10:02:00Z'
       }
     })
     expect(store.get('draft.1')).toBeUndefined()
@@ -125,4 +178,8 @@ function draft() {
     createdAt: '2026-09-17T10:00:00Z',
     updatedAt: '2026-09-17T10:01:00Z'
   }
+}
+
+function responseText(text: string, phase: 'commentary' | 'final_answer') {
+  return { type: 'text', text, textSignature: JSON.stringify({ version: 1, phase }) }
 }

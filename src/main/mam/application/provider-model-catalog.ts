@@ -5,9 +5,11 @@ import {
   type MamModelCatalogItem,
   type MamModelCatalogResult
 } from '../../../shared/mam/model-catalog'
+import { openAiProviderEndpoint } from './openai-provider-url'
 
 const RESPONSE_LIMIT = 2_000_000
-const REQUEST_TIMEOUT_MS = 12_000
+// Match the discovery window used by LevelUpAgent. Some relays cold-start model catalogs.
+const REQUEST_TIMEOUT_MS = 30_000
 
 type ModelCatalogFetcher = (input: string, init: RequestInit) => Promise<Response>
 
@@ -60,6 +62,9 @@ export function buildModelCatalogEndpoint(input: MamFetchModelCatalogInput): str
     base.hash
   ) {
     throw new Error('API address must be an HTTP(S) URL without credentials or query parameters')
+  }
+  if (input.protocol === 'openai-responses' || input.protocol === 'openai-completions') {
+    return openAiProviderEndpoint(base.toString(), 'models')
   }
   const version = input.protocol === 'google-generative-ai' ? 'v1beta' : 'v1'
   const path = base.pathname.replace(/\/+$/, '')

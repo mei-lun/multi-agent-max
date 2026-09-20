@@ -17,29 +17,25 @@ afterEach(() => {
 })
 
 describe('MAM Design Assistant recovery', () => {
-  it('repairs a missing proposal and accepts a fenced minimal replacement', async () => {
+  it('does not issue an automatic repair request for an invalid response', async () => {
     let requests = 0
     const service = createService(() => {
       requests += 1
-      if (requests === 1) return { message: 'I need more details.' }
-      return `\`\`\`json\n${JSON.stringify(minimalProposal())}\n\`\`\``
+      return { message: 'I need more details.' }
     })
 
-    const draft = await service.sendMessage({
-      requestId: 'design-request.repair',
-      modelProfileId: 'model.designer',
-      message: 'Create a writing workflow.'
-    })
+    await expect(
+      service.sendMessage({
+        requestId: 'design-request.repair',
+        modelProfileId: 'model.designer',
+        message: 'Create a writing workflow.'
+      })
+    ).rejects.toMatchObject({ code: 'design_model_response_invalid' })
 
-    expect(requests).toBe(2)
-    expect(draft.recovery).toBeUndefined()
-    expect(draft.proposal?.issues).toEqual([])
-    expect(draft.proposal?.roles[0]).toMatchObject({
-      execution: {
-        executorProfileId: 'executor.pi',
-        modelProfileId: 'model.designer'
-      },
-      permissions: { readPaths: ['.'], writePaths: ['.'] }
+    expect(requests).toBe(1)
+    expect(service.getDraft().recovery).toMatchObject({
+      code: 'design_model_response_invalid',
+      attempts: 1
     })
   })
 
@@ -47,22 +43,19 @@ describe('MAM Design Assistant recovery', () => {
     let requests = 0
     const service = createService(() => {
       requests += 1
-      return requests <= 3 ? invalidForwardBoundedEdgeProposal() : minimalProposal()
+      return requests === 1 ? invalidForwardBoundedEdgeProposal() : minimalProposal()
     })
 
-    await expect(
-      service.sendMessage({
-        requestId: 'design-request.invalid-graph',
-        modelProfileId: 'model.designer',
-        message: 'Create a workflow with revision handling.'
-      })
-    ).rejects.toMatchObject({ code: 'design_proposal_invalid' })
+    const failed = await service.sendMessage({
+      requestId: 'design-request.invalid-graph',
+      modelProfileId: 'model.designer',
+      message: 'Create a workflow with revision handling.'
+    })
 
-    const failed = service.getDraft()
-    expect(requests).toBe(3)
+    expect(requests).toBe(1)
     expect(failed.recovery).toMatchObject({
       code: 'design_proposal_invalid',
-      attempts: 3
+      attempts: 1
     })
     expect(failed.recovery?.issues).toEqual(
       expect.arrayContaining([expect.objectContaining({ code: 'orphan_node' })])
@@ -71,7 +64,7 @@ describe('MAM Design Assistant recovery', () => {
 
     const recovered = await service.retry({ requestId: 'design-retry.invalid-graph' })
 
-    expect(requests).toBe(4)
+    expect(requests).toBe(2)
     expect(recovered.recovery).toBeUndefined()
     expect(recovered.proposal?.issues).toEqual([])
   })

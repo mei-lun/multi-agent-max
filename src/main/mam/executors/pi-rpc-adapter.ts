@@ -11,11 +11,7 @@ import type {
 import type { AttemptResult } from '../../../shared/mam/domain/attempt-result'
 import type { EffectiveRoleConfigSnapshot } from '../../../shared/mam/domain/role'
 import type { ExecutorEvent, ExecutorUsage } from '../../../shared/mam/executor-events'
-import {
-  AgentAttemptResultPayloadSchema,
-  buildAttemptResult,
-  type AttemptResultAuthority
-} from '../artifacts/attempt-result-builder'
+import type { AttemptResultAuthority } from '../artifacts/attempt-result-builder'
 import type { MaterializedAttemptResources } from '../profiles/attempt-resource-materializer'
 import { ExecutorLocalPreflight } from './executor-local-preflight'
 import { normalizePiRpcEvent, normalizePiRpcUsage } from './pi-rpc-event-normalizer'
@@ -25,6 +21,8 @@ import { PiRpcOutcome } from './pi-rpc-outcome'
 import type { ExecutorCapabilityBridge } from '../application/executor-capability-bridge'
 import { startPiApplicationApiBridge } from './pi-application-api-bridge-server'
 import { emitObservedExecutorEvent, type ExecutorEventListener } from './executor-event-listener'
+import { PiAssistantResponseSelector } from './pi-assistant-response'
+import { tryParsePiStructuredResult } from './pi-rpc-result'
 
 export type PiRpcClient = Readonly<{
   start(): Promise<void>
@@ -125,8 +123,10 @@ export class PiRpcAdapter {
       const client = await this.createClient(invocation.launchOptions)
       const events: ExecutorEvent[] = []
       const outcome = new PiRpcOutcome(Object.values(input.credentialValues))
+      const assistantResponse = new PiAssistantResponseSelector()
       const unsubscribe = client.onEvent((event) => {
         outcome.observe(event)
+        assistantResponse.observe(event)
         void logger.append('event', event).catch(() => undefined)
         const normalized = normalizePiRpcEvent({
           event,
@@ -152,12 +152,17 @@ export class PiRpcAdapter {
         await idle
         const failure = outcome.getFailure()
         if (failure) fail(failure.code, failure.message)
-        const [resultText, stats] = await Promise.all([
+        const [flattenedText, stats] = await Promise.all([
           client.getLastAssistantText(),
           client.getSessionStats()
         ])
         const usage = normalizePiRpcUsage(stats)
-        const result = tryParseStructuredResult(resultText, usage, {
+        const resultText = assistantResponse.selectText(
+          flattenedText,
+          input.snapshot.permissions.writePaths.length === 0,
+          () => fail('assistant_output_ambiguous', 'Pi returned ambiguous assistant outputs')
+        )
+        const result = tryParsePiStructuredResult(resultText, usage, {
           ...input.authority,
           executorInvocationId: input.executorInvocationId,
           effectiveConfigHash: input.snapshot.contentHash
@@ -274,31 +279,6 @@ function workspacePrompt(prompt: string, canWriteWorkspace: boolean): string {
         'Do not claim that unavailable tools prevented completion and do not describe commands as chat text.'
       ]
   return [prompt, '', ...completionInstruction].join('\n')
-}
-
-function tryParseStructuredResult(
-  resultText: string | null,
-  usage: ExecutorUsage,
-  authority: AttemptResultAuthority
-): AttemptResult | undefined {
-  if (!resultText) return undefined
-  try {
-    const parsed = AgentAttemptResultPayloadSchema.parse(JSON.parse(resultText))
-    return buildAttemptResult(
-      {
-        ...parsed,
-        usage: {
-          status: usage.status,
-          ...(usage.inputTokens === undefined ? {} : { inputTokens: usage.inputTokens }),
-          ...(usage.outputTokens === undefined ? {} : { outputTokens: usage.outputTokens }),
-          ...(usage.costUsd === undefined ? {} : { costUsd: usage.costUsd })
-        }
-      },
-      authority
-    )
-  } catch {
-    return undefined
-  }
 }
 
 function firstLine(value: string): string {

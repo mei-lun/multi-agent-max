@@ -251,21 +251,23 @@ export class MamDesignAssistantService {
         messages: draft.messages.slice(-MAX_GATEWAY_MESSAGES),
         signal: controller.signal
       } satisfies MamDesignModelGatewayInput
-      const { response, proposal } = await new MamDesignProposalGenerator(
-        this.gateway,
-        this.now
-      ).generate(input, (source) =>
-        buildMamDesignProposal({
-          source,
-          template,
-          profiles: this.profiles,
-          now: this.now,
-          ...(draft.workflowRevision ? { workflowRevision: draft.workflowRevision } : {})
-        })
+      const { response, proposal } = await new MamDesignProposalGenerator(this.gateway).generate(
+        input,
+        (source) =>
+          buildMamDesignProposal({
+            source,
+            template,
+            profiles: this.profiles,
+            now: this.now,
+            ...(draft.workflowRevision ? { workflowRevision: draft.workflowRevision } : {})
+          })
       )
       requireActiveMamDesignRequest(controller.signal, controller.signal)
       const review = normalizeMamDesignReview(response.review)
       const brainstorm = mergeMamDesignBrainstorm(response.brainstorm, draft.brainstorm, review)
+      const recovery = hasBlockingDesignIssues(proposal.issues)
+        ? createMamDesignIssueRecovery(proposal.issues, this.now())
+        : undefined
       requireCurrentMamDesignRequestDraft(this.drafts, draft.id)
       const { brainstorm: _brainstorm, recovery: _recovery, ...rest } = draft
       return this.drafts.save({
@@ -277,6 +279,7 @@ export class MamDesignAssistantService {
         brainstorm,
         review,
         proposal,
+        ...(recovery ? { recovery } : {}),
         updatedAt: this.now()
       })
     } catch (cause) {

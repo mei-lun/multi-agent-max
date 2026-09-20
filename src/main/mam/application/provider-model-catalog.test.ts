@@ -21,6 +21,20 @@ describe('Provider model catalog', () => {
     ).toBe('https://generativelanguage.example.test/v1beta/models')
   })
 
+  it.each(['openai-responses', 'openai-completions'] as const)(
+    'discovers models from an OpenAI %s operation URL',
+    (protocol) => {
+      for (const operation of ['/responses', '/chat/completions', '/models']) {
+        expect(
+          buildModelCatalogEndpoint({
+            protocol,
+            baseUrl: `https://relay.example.test/v1${operation}`
+          })
+        ).toBe('https://relay.example.test/v1/models')
+      }
+    }
+  )
+
   it('accepts OpenAI and Gemini model-list response shapes', () => {
     expect(parseModelCatalog('{"data":[{"id":"gpt-5"},{"id":"gpt-5"}]}')).toEqual([{ id: 'gpt-5' }])
     expect(

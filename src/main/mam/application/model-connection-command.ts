@@ -6,6 +6,7 @@ import {
 import { MamEntityIdSchema } from '../../../shared/mam/domain/primitives'
 import type { MamLocalSettingsStore } from '../profiles/mam-local-settings-store'
 import type { MamLocalSecretWriter, MamUiWritableProfiles } from './mam-profile-write-ports'
+import { normalizeOpenAiProviderBaseUrl } from './openai-provider-url'
 
 export function saveModelConnectionProfiles(
   input: unknown,
@@ -14,6 +15,7 @@ export function saveModelConnectionProfiles(
   localSecrets?: MamLocalSecretWriter
 ): void {
   const parsed = MamSaveModelConnectionInputSchema.parse(input)
+  const baseUrl = normalizedBaseUrl(parsed.protocol, parsed.baseUrl)
   const ids = connectionIds()
   requireSecretStorage(parsed, localSettings, localSecrets)
   if (parsed.apiKey) localSecrets!.save(ids.secretRef, parsed.apiKey)
@@ -21,7 +23,7 @@ export function saveModelConnectionProfiles(
     id: ids.providerId,
     version: 1,
     protocol: parsed.protocol,
-    ...(parsed.baseUrl ? { baseUrl: parsed.baseUrl } : {}),
+    ...(baseUrl ? { baseUrl } : {}),
     ...(parsed.apiKey ? { secretRef: ids.secretRef } : {})
   })
   profiles.models.save({
@@ -30,6 +32,9 @@ export function saveModelConnectionProfiles(
     displayName: parsed.displayName,
     providerProfileId: ids.providerId,
     remoteModelId: parsed.remoteModelId,
+    ...(parsed.protocol === 'openai-responses' || parsed.protocol === 'openai-completions'
+      ? { defaultInference: { reasoningEffort: 'medium' } }
+      : {}),
     capabilities: {
       modalities: ['text'],
       supportsTools: true,
@@ -38,6 +43,16 @@ export function saveModelConnectionProfiles(
     }
   })
   if (parsed.apiKey) saveSecretBinding(localSettings!, ids.secretRef)
+}
+
+function normalizedBaseUrl(
+  protocol: MamSaveModelConnectionInput['protocol'],
+  baseUrl: string | undefined
+): string | undefined {
+  if (!baseUrl || (protocol !== 'openai-responses' && protocol !== 'openai-completions')) {
+    return baseUrl
+  }
+  return normalizeOpenAiProviderBaseUrl(baseUrl)
 }
 
 function requireSecretStorage(

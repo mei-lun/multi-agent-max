@@ -236,7 +236,7 @@ function reviewOutputInstructions(task: ExecutableAttemptTask): readonly string[
   const structured = task.outputContracts.some((contract) => contract.format === 'json-schema')
   if (structured) {
     return [
-      'This is a Review Task. Return exactly one JSON object with status (approved, changes_requested, or blocked), summary, and findings; do not wrap it in Markdown.',
+      'This is a Review Task. State exactly one explicit verdict: approved, changes_requested, or blocked, followed by a concise summary and findings. JSON, Markdown, or clear prose are accepted.',
       'Use an empty findings array when approved. For changes_requested, include at least one actionable finding with severity, category, and summary; filePath and line are optional.'
     ]
   }

@@ -222,6 +222,26 @@ describe('PiRpcAdapter', () => {
     )
   })
 
+  it('returns only the final answer when Responses also emits commentary', async () => {
+    const fixture = await createFixture()
+    fixture.snapshot = readOnlySnapshot(fixture.snapshot)
+    fixture.resources = { ...fixture.resources, contentHash: fixture.snapshot.contentHash }
+    const finalAnswer = '{"status":"approved","summary":"Ready","findings":[]}'
+    const client = new PhasedPiClient(`Reviewing now.\n${finalAnswer}`, [
+      responseText('Reviewing now.', 'commentary'),
+      responseText(finalAnswer, 'final_answer')
+    ])
+    const adapter = new PiRpcAdapter(
+      () => client,
+      () => '2026-09-20T12:38:44Z',
+      readyPreflight()
+    )
+
+    const execution = await adapter.execute(executionInput(fixture))
+
+    expect(execution.assistantText).toBe(finalAnswer)
+  })
+
   it('exposes steer and abort only for an active invocation', async () => {
     const fixture = await createFixture()
     const client = new ControllablePiClient(JSON.stringify(agentPayload()), false)
@@ -387,6 +407,27 @@ class StreamingPiClient extends ControllablePiClient {
     }
     await super.prompt()
   }
+}
+
+class PhasedPiClient extends ControllablePiClient {
+  constructor(
+    flattened: string,
+    private readonly content: readonly unknown[]
+  ) {
+    super(flattened)
+  }
+
+  override async prompt(): Promise<void> {
+    this.emitForTest({
+      type: 'message_end',
+      message: { role: 'assistant', stopReason: 'stop', content: this.content }
+    } as never)
+    await super.prompt()
+  }
+}
+
+function responseText(text: string, phase: 'commentary' | 'final_answer') {
+  return { type: 'text', text, textSignature: JSON.stringify({ version: 1, phase }) }
 }
 
 async function createFixture() {

@@ -201,7 +201,7 @@ function validateBindings(
     )
   }
   const inferenceOptions = Object.keys(snapshot.execution.inference).filter(
-    (key) => key !== 'thinkingLevel'
+    (key) => key !== 'thinkingLevel' && key !== 'reasoningEffort'
   )
   if (inferenceOptions.length > 0) {
     fail(

@@ -56,7 +56,7 @@ export function automaticReviewSubmission(
   return parsed.success ? parsed.data : undefined
 }
 
-function normalizeAutomaticReviewReport(
+export function normalizeAutomaticReviewReport(
   content: unknown
 ): z.infer<typeof automaticReviewReportSchema> | undefined {
   const direct = normalizeReviewObject(content)
@@ -119,6 +119,7 @@ function finalizeReport(
     status === 'changes_requested' && findings.length === 0 && !isGenericChangeSummary(summary)
       ? [reviewFinding(summary)]
       : findings
+  if (status === 'changes_requested' && actionable.length === 0) return undefined
   const parsed = automaticReviewReportSchema.safeParse({ status, summary, findings: actionable })
   return parsed.success ? parsed.data : undefined
 }

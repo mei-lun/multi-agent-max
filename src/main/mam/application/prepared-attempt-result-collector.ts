@@ -3,6 +3,7 @@ import type { GitCommandClient } from '../state-store/git-command-client'
 import { collectDirectAttemptResult, materializeDirectAttemptResult } from './direct-attempt-result'
 import type { PreparedAttempt } from './mam-attempt-execution-types'
 import { collectWorkspaceAttemptResult } from './workspace-attempt-result'
+import { normalizeAutomaticReviewReport } from './automatic-review-submission'
 
 export async function collectPreparedAttemptResult(input: {
   prepared: PreparedAttempt
@@ -13,7 +14,7 @@ export async function collectPreparedAttemptResult(input: {
 }) {
   if (input.prepared.snapshot.permissions.writePaths.length === 0) {
     return collectDirectAttemptResult({
-      text: input.assistantText,
+      text: directAssistantText(input.prepared, input.assistantText),
       outputContracts: input.prepared.task.outputContracts,
       authority: input.authority,
       usage: input.usage
@@ -42,6 +43,29 @@ export async function collectPreparedAttemptResult(input: {
       direct.contents
     )
     return direct
+  }
+}
+
+function directAssistantText(
+  prepared: PreparedAttempt,
+  assistantText: string | null | undefined
+): string | null | undefined {
+  if (!prepared.task.reviewTask) return assistantText
+  if (!assistantText?.trim()) {
+    throw new ReviewOutputError('review_output_missing', 'Review output is missing')
+  }
+  const report = normalizeAutomaticReviewReport(assistantText)
+  if (!report) throw new ReviewOutputError('review_output_invalid', 'Review output is invalid')
+  return JSON.stringify(report)
+}
+
+class ReviewOutputError extends Error {
+  constructor(
+    readonly code: string,
+    message: string
+  ) {
+    super(message)
+    this.name = 'ReviewOutputError'
   }
 }
 

@@ -6,6 +6,7 @@ import type {
 } from '../../../shared/mam/domain/execution-profile'
 import {
   MamDesignModelGateway,
+  type MamDesignModelDiagnosticEvent,
   MAM_DESIGN_RESPONSE_SCHEMA_NAME,
   buildDesignModelEndpoint,
   buildDesignModelRequestBody,
@@ -21,6 +22,21 @@ describe('MAM Design Model gateway', () => {
     ['google-generative-ai', 'https://api.example.test/v1/models/designer-model:generateContent']
   ] as const)('builds the %s endpoint', (protocol, expected) => {
     expect(buildDesignModelEndpoint(provider(protocol), model())).toBe(expected)
+  })
+
+  it.each([
+    [
+      'openai-responses',
+      'https://api.example.test/v1/chat/completions',
+      'https://api.example.test/v1/responses'
+    ],
+    [
+      'openai-completions',
+      'https://api.example.test/v1/responses',
+      'https://api.example.test/v1/chat/completions'
+    ]
+  ] as const)('uses the selected %s route from an operation URL', (protocol, baseUrl, expected) => {
+    expect(buildDesignModelEndpoint({ ...provider(protocol), baseUrl }, model())).toBe(expected)
   })
 
   it.each([
@@ -47,6 +63,8 @@ describe('MAM Design Model gateway', () => {
     const body = buildDesignModelRequestBody(gatewayInput('openai-responses'))
 
     expect(body).toMatchObject({
+      stream: true,
+      reasoning: { effort: 'medium' },
       text: {
         format: {
           type: 'json_schema',
@@ -138,6 +156,26 @@ describe('MAM Design Model gateway', () => {
     })
   })
 
+  it('sends Responses reasoning and reconstructs streamed output text', async () => {
+    let requestBody: Record<string, unknown> | undefined
+    const gateway = new MamDesignModelGateway(async (_url, init) => {
+      requestBody = JSON.parse(String(init.body)) as Record<string, unknown>
+      return new Response(
+        'data: {"type":"response.output_text.delta","delta":"{\\"message\\":\\"ok\\"}"}',
+        { status: 200, headers: { 'content-type': 'text/event-stream' } }
+      )
+    })
+
+    await expect(gateway.generate(gatewayInput('openai-responses'))).resolves.toBe(
+      '{"message":"ok"}'
+    )
+    expect(requestBody).toMatchObject({
+      stream: true,
+      reasoning: { effort: 'medium' },
+      model: 'designer-model'
+    })
+  })
+
   it('sends the Anthropic protocol version through a credential-free relay', async () => {
     let headers: Headers | undefined
     const { secretRef: _secretRef, ...credentialFreeProvider } = provider('anthropic-messages')
@@ -184,6 +222,171 @@ describe('MAM Design Model gateway', () => {
     )
     expect(requestBodies[0]).toMatchObject({ response_format: { type: 'json_schema' } })
     expect(requestBodies[1]).toMatchObject({ response_format: { type: 'json_object' } })
+  })
+
+  it('records a redacted request lifecycle with endpoint and response metadata', async () => {
+    const events: MamDesignModelDiagnosticEvent[] = []
+    const gateway = new MamDesignModelGateway(
+      async () =>
+        new Response(JSON.stringify({ choices: [{ message: { content: '{"message":"ok"}' } }] }), {
+          status: 200,
+          headers: {
+            'content-type': 'application/json',
+            'content-length': '62',
+            'x-request-id': 'request.levelup.1'
+          }
+        }),
+      (event) => events.push(event)
+    )
+
+    await gateway.generate({
+      ...gatewayInput('openai-completions'),
+      credential: 'secret-value'
+    })
+
+    expect(events).toHaveLength(3)
+    expect(events[0]).toMatchObject({
+      event: 'request_started',
+      endpoint: 'https://api.example.test/v1/chat/completions',
+      providerProtocol: 'openai-completions',
+      providerProfileId: 'provider.openai-completions',
+      providerProfileVersion: 1,
+      modelProfileId: 'model.designer',
+      modelProfileVersion: 1,
+      remoteModelId: 'designer-model',
+      formatMode: 'schema',
+      requestAttempt: 1,
+      requestTimeoutMs: 90_000,
+      stage: 'waiting_response_headers'
+    })
+    expect(events[0]?.requestBodyBytes).toEqual(expect.any(Number))
+    expect(events[1]).toMatchObject({
+      event: 'response_headers',
+      status: 200,
+      contentType: 'application/json',
+      contentLength: 62,
+      providerRequestId: 'request.levelup.1',
+      stage: 'reading_response_body'
+    })
+    expect(events[2]).toMatchObject({
+      event: 'request_completed',
+      status: 200,
+      responseBodyBytes: expect.any(Number),
+      stage: 'complete'
+    })
+    expect(JSON.stringify(events)).not.toContain('secret-value')
+    expect(JSON.stringify(events)).not.toContain('authorization')
+  })
+
+  it('records whether a timeout happened before response headers arrived', async () => {
+    const events: MamDesignModelDiagnosticEvent[] = []
+    const gateway = new MamDesignModelGateway(
+      async (_url, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          init.signal?.addEventListener('abort', () => reject(new Error('aborted')), { once: true })
+        }),
+      (event) => events.push(event),
+      5
+    )
+
+    await expect(gateway.generate(gatewayInput('openai-responses'))).rejects.toMatchObject({
+      code: 'design_request_timeout'
+    })
+
+    expect(events.at(-1)).toMatchObject({
+      event: 'request_failed',
+      providerProtocol: 'openai-responses',
+      code: 'design_request_timeout',
+      stage: 'waiting_response_headers',
+      requestTimeoutMs: 5
+    })
+  })
+
+  it('does not apply the response-header timeout while reading a streamed response body', async () => {
+    const events: MamDesignModelDiagnosticEvent[] = []
+    const gateway = new MamDesignModelGateway(
+      async () =>
+        new Response(
+          new ReadableStream({
+            start(stream) {
+              setTimeout(() => {
+                stream.enqueue(
+                  new TextEncoder().encode(
+                    'data: {"type":"response.output_text.delta","delta":"{\\"message\\":\\"ok\\"}"}\n\n'
+                  )
+                )
+                stream.close()
+              }, 20)
+            }
+          }),
+          { status: 200, headers: { 'content-type': 'text/event-stream' } }
+        ),
+      (event) => events.push(event),
+      5
+    )
+
+    await expect(gateway.generate(gatewayInput('openai-responses'))).resolves.toBe(
+      '{"message":"ok"}'
+    )
+
+    expect(events.at(-1)).toMatchObject({
+      event: 'request_completed',
+      status: 200,
+      stage: 'complete'
+    })
+  })
+
+  it('preserves the timeout stage when a fetch resolves after ignoring abort', async () => {
+    const events: MamDesignModelDiagnosticEvent[] = []
+    const gateway = new MamDesignModelGateway(
+      async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20))
+        return new Response(
+          JSON.stringify({ output: [{ content: [{ text: '{"message":"late"}' }] }] }),
+          { status: 200 }
+        )
+      },
+      (event) => events.push(event),
+      5
+    )
+
+    await expect(gateway.generate(gatewayInput('openai-responses'))).rejects.toMatchObject({
+      code: 'design_request_timeout'
+    })
+
+    expect(events.at(-1)).toMatchObject({
+      event: 'request_failed',
+      code: 'design_request_timeout',
+      stage: 'waiting_response_headers'
+    })
+  })
+
+  it('does not carry a schema rejection status into a failed fallback request', async () => {
+    const events: MamDesignModelDiagnosticEvent[] = []
+    let requestCount = 0
+    const gateway = new MamDesignModelGateway(
+      async (_url, init) => {
+        requestCount += 1
+        if (requestCount === 1) return new Response('{}', { status: 400 })
+        return new Promise<Response>((_resolve, reject) => {
+          init.signal?.addEventListener('abort', () => reject(new Error('aborted')), { once: true })
+        })
+      },
+      (event) => events.push(event),
+      5
+    )
+
+    await expect(gateway.generate(gatewayInput('openai-responses'))).rejects.toMatchObject({
+      code: 'design_request_timeout'
+    })
+
+    expect(events.at(-1)).toMatchObject({
+      event: 'request_failed',
+      requestAttempt: 2,
+      formatMode: 'json',
+      stage: 'waiting_response_headers'
+    })
+    expect(events.at(-1)).not.toHaveProperty('status')
   })
 
   it('propagates a cancellation that happened before a generation attempt started', async () => {

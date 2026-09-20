@@ -5,13 +5,22 @@ import type {
 } from '../../../shared/mam/domain/execution-profile'
 import type { MamDesignMessage } from '../../../shared/mam/design-assistant'
 import { buildDesignModelRequestBody } from './mam-design-model-request'
+import { openAiProviderEndpoint } from './openai-provider-url'
+import {
+  MamDesignModelDiagnostics,
+  type MamDesignModelDiagnosticReporter
+} from './mam-design-model-diagnostics'
+import { readModelResponse } from './mam-design-model-response'
+export type {
+  MamDesignModelDiagnosticEvent,
+  MamDesignModelDiagnosticReporter
+} from './mam-design-model-diagnostics'
 export {
   buildDesignModelRequestBody,
   designResponseJsonSchema,
   MAM_DESIGN_RESPONSE_SCHEMA_NAME
 } from './mam-design-model-request'
 
-const RESPONSE_LIMIT = 2_000_000
 const REQUEST_TIMEOUT_MS = 90_000
 
 type ModelFetcher = (input: string, init: RequestInit) => Promise<Response>
@@ -36,35 +45,68 @@ export class MamDesignModelGatewayError extends Error {
 }
 
 export class MamDesignModelGateway {
-  constructor(private readonly fetcher: ModelFetcher = (input, init) => fetch(input, init)) {}
+  constructor(
+    private readonly fetcher: ModelFetcher = (input, init) => fetch(input, init),
+    private readonly reportDiagnostic?: MamDesignModelDiagnosticReporter,
+    private readonly requestTimeoutMs = REQUEST_TIMEOUT_MS
+  ) {}
 
   async generate(input: MamDesignModelGatewayInput): Promise<string> {
     if (input.provider.protocol === 'executor-native') {
       fail('provider_protocol_unsupported', 'Design Assistant requires a direct Model Provider')
     }
     const controller = new AbortController()
-    const abort = (): void => controller.abort(input.signal?.reason)
+    let diagnostics: MamDesignModelDiagnostics | undefined
+    const abort = (): void => {
+      diagnostics?.requestAborted()
+      controller.abort(input.signal?.reason)
+    }
     if (input.signal?.aborted) abort()
     else input.signal?.addEventListener('abort', abort, { once: true })
-    const timeout = setTimeout(() => controller.abort('timeout'), REQUEST_TIMEOUT_MS)
     try {
       const endpoint = buildDesignModelEndpoint(input.provider, input.model)
-      const request = {
-        method: 'POST',
-        headers: requestHeaders(input.provider, input.credential),
-        body: JSON.stringify(buildDesignModelRequestBody(input)),
-        redirect: 'error',
-        signal: controller.signal
-      } satisfies RequestInit
-      let response = await this.fetcher(endpoint, request)
-      let body = await readResponseBody(response)
+      const requestDiagnostics = new MamDesignModelDiagnostics(
+        input,
+        endpoint,
+        this.requestTimeoutMs,
+        this.reportDiagnostic
+      )
+      diagnostics = requestDiagnostics
+      if (controller.signal.aborted) requestDiagnostics.requestAborted()
+      const request = async (
+        mode: 'schema' | 'json'
+      ): Promise<Readonly<{ response: Response; body: string }>> => {
+        const body = JSON.stringify(buildDesignModelRequestBody(input, mode, mode === 'schema'))
+        requestDiagnostics.requestStarted(mode, body)
+        const responseHeadersTimeout = setTimeout(() => {
+          requestDiagnostics.requestAborted()
+          controller.abort('timeout')
+        }, this.requestTimeoutMs)
+        let response: Response
+        try {
+          response = await this.fetcher(endpoint, {
+            method: 'POST',
+            headers: requestHeaders(input.provider, input.credential),
+            body,
+            redirect: 'error',
+            signal: controller.signal
+          })
+        } finally {
+          clearTimeout(responseHeadersTimeout)
+        }
+        requestDiagnostics.responseHeaders(response)
+        const responseBody = await readModelResponse(response, controller.signal, () =>
+          fail('provider_response_too_large', 'Response is too large')
+        )
+        requestDiagnostics.requestCompleted(responseBody)
+        return { response, body: responseBody }
+      }
+      let { response, body } = await request('schema')
       requireActiveMamDesignRequest(input.signal, controller.signal)
       if (supportsJsonCompatibilityFallback(input.provider.protocol, response.status)) {
-        response = await this.fetcher(endpoint, {
-          ...request,
-          body: JSON.stringify(buildDesignModelRequestBody(input, 'json'))
-        })
-        body = await readResponseBody(response)
+        const fallback = await request('json')
+        response = fallback.response
+        body = fallback.body
         requireActiveMamDesignRequest(input.signal, controller.signal)
       }
       if (!response.ok) {
@@ -75,20 +117,22 @@ export class MamDesignModelGateway {
       }
       return extractDesignModelText(input.provider.protocol, body)
     } catch (cause) {
-      if (cause instanceof MamDesignModelGatewayError) throw cause
-      if (controller.signal.aborted) {
-        const code = input.signal?.aborted ? 'design_request_cancelled' : 'design_request_timeout'
-        return fail(
-          code,
+      let error: MamDesignModelGatewayError
+      if (cause instanceof MamDesignModelGatewayError) error = cause
+      else if (controller.signal.aborted) {
+        error = new MamDesignModelGatewayError(
+          input.signal?.aborted ? 'design_request_cancelled' : 'design_request_timeout',
           input.signal?.aborted ? 'Design request was cancelled' : 'Design request timed out'
         )
+      } else {
+        error = new MamDesignModelGatewayError(
+          'provider_request_failed',
+          cause instanceof Error ? cause.message : 'Could not reach the Model Provider'
+        )
       }
-      return fail(
-        'provider_request_failed',
-        cause instanceof Error ? cause.message : 'Could not reach the Model Provider'
-      )
+      diagnostics?.requestFailed(error.code)
+      throw error
     } finally {
-      clearTimeout(timeout)
       input.signal?.removeEventListener('abort', abort)
     }
   }
@@ -107,6 +151,9 @@ export function buildDesignModelEndpoint(provider: ProviderProfile, model: Model
     fail('provider_url_invalid', 'Provider URL must be HTTP(S) without credentials or a query')
   }
   const path = base.pathname.replace(/\/+$/, '')
+  if (provider.protocol === 'openai-responses' || provider.protocol === 'openai-completions') {
+    return openAiProviderEndpoint(base.toString(), providerPath(provider.protocol))
+  }
   if (provider.protocol === 'google-generative-ai') {
     const modelId = model.remoteModelId.replace(/^models\//, '')
     base.pathname = `${path || '/v1beta'}/models/${encodeURIComponent(modelId)}:generateContent`
@@ -171,14 +218,6 @@ function defaultBaseUrl(protocol: ProviderProtocol): string {
     return 'https://generativelanguage.googleapis.com/v1beta'
   }
   return 'https://api.openai.com/v1'
-}
-
-async function readResponseBody(response: Response): Promise<string> {
-  const declaredLength = Number(response.headers.get('content-length') ?? 0)
-  if (declaredLength > RESPONSE_LIMIT) fail('provider_response_too_large', 'Response is too large')
-  const body = await response.text()
-  if (body.length > RESPONSE_LIMIT) fail('provider_response_too_large', 'Response is too large')
-  return body
 }
 
 function openAiResponseText(value: unknown): string | undefined {

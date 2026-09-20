@@ -76,6 +76,7 @@ export type PreparedAttempt = Readonly<{
   worktree: AttemptWorktree
   draftId?: string
   resumeSessionFile?: string
+  recoveredAssistantText?: string
 }>
 
 export type AttemptDraftStore = LocalExecutionDraftStore

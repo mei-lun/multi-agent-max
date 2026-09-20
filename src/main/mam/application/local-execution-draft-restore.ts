@@ -2,7 +2,7 @@ import type { LocalExecutionDraft } from '../../../shared/mam/local-execution-dr
 import type { AttemptWorktree } from './attempt-worktree-manager'
 import type { PreparedAttempt } from './mam-attempt-execution-types'
 import type { TaskClaim } from '../../../shared/mam/domain/task-claim'
-import { latestPiSessionFile } from './pi-session-continuation'
+import { latestPiSessionFile, recoverablePiSessionText } from './pi-session-continuation'
 
 export function restoredAttemptIdentity(draft: LocalExecutionDraft) {
   return {
@@ -21,8 +21,13 @@ export function restoredWorktree(draft: LocalExecutionDraft): AttemptWorktree {
   }
 }
 
-export function restoredPreparedFields(draft: LocalExecutionDraft) {
+export function restoredPreparedFields(draft: LocalExecutionDraft, reviewTask = false) {
   const resumeSessionFile = latestPiSessionFile(draft.sessionDirectory)
+  const recoveredAssistantText = reviewTask ? recoverablePiSessionText(draft) : undefined
+  const requiresReviewRecovery = reviewTask && draft.state === 'needs_attention'
+  if (requiresReviewRecovery && !recoveredAssistantText) {
+    throw new Error('review_output_recovery_unavailable')
+  }
   return {
     claimId: draft.claimId,
     claimGeneration: draft.claimGeneration,
@@ -30,7 +35,10 @@ export function restoredPreparedFields(draft: LocalExecutionDraft) {
     roleInstanceId: draft.roleInstanceId,
     prompt: 'Continue the existing Task from the persisted session and current workspace state.',
     draftId: draft.id,
-    ...(resumeSessionFile ? { resumeSessionFile } : {})
+    ...(resumeSessionFile ? { resumeSessionFile } : {}),
+    ...(recoveredAssistantText
+      ? { recoveredAssistantText, executorInvocationId: draft.executorInvocationId }
+      : {})
   }
 }
 
@@ -89,8 +97,8 @@ export function preparedAttemptMatchesActiveClaim(
 ): boolean {
   return Boolean(
     prepared &&
-      activeClaim?.claimantInstanceId === claimantInstanceId &&
-      prepared.claimId === activeClaim.claimId &&
-      prepared.claimGeneration === activeClaim.generation
+    activeClaim?.claimantInstanceId === claimantInstanceId &&
+    prepared.claimId === activeClaim.claimId &&
+    prepared.claimGeneration === activeClaim.generation
   )
 }

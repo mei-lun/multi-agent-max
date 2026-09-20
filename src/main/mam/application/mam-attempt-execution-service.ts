@@ -261,8 +261,7 @@ export class MamAttemptExecutionService {
             baseRef: task.baseRef,
             ...(task.baseBranch ? { baseBranch: task.baseBranch } : {})
           })
-    const roleInstanceId = persisted?.roleInstanceId ?? this.createId('role-instance')
-    const executorInvocationId = this.createId('executor-invocation')
+    const roleInstanceId = persisted?.roleInstanceId ?? this.createId('role-instance'); const restoredFields = persisted ? restoredPreparedFields(persisted, Boolean(task.reviewTask)) : undefined
     return {
       workflowRunId,
       taskId,
@@ -270,8 +269,8 @@ export class MamAttemptExecutionService {
       ...(attemptIdentity.previousAttemptId
         ? { previousAttemptId: attemptIdentity.previousAttemptId }
         : {}),
-      ...(persisted
-        ? restoredPreparedFields(persisted)
+      ...(restoredFields
+        ? restoredFields
         : {
             claimId: 'claim.pending',
             claimGeneration: 1,
@@ -282,8 +281,8 @@ export class MamAttemptExecutionService {
             roleInstanceId,
             prompt: attemptExecutionPrompt(task, worktree.branch)
           }),
-      roleInstanceId,
-      executorInvocationId,
+      executorInvocationId:
+        restoredFields?.executorInvocationId ?? this.createId('executor-invocation'),
       retryMaxAttempts: role.retry.maxAttempts,
       nodeId: task.nodeId,
       task,

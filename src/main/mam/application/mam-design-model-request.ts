@@ -6,7 +6,8 @@ export const MAM_DESIGN_RESPONSE_SCHEMA_NAME = 'mam_design_response'
 
 export function buildDesignModelRequestBody(
   input: MamDesignModelGatewayInput,
-  mode: 'schema' | 'json' = 'schema'
+  mode: 'schema' | 'json' = 'schema',
+  stream = true
 ): Record<string, unknown> {
   const messages = input.messages.map((message) => ({
     role: message.role,
@@ -17,6 +18,8 @@ export function buildDesignModelRequestBody(
       model: input.model.remoteModelId,
       instructions: input.systemPrompt,
       input: messages,
+      stream,
+      reasoning: { effort: reasoningEffort(input) },
       text: { format: mode === 'schema' ? openAiResponsesFormat() : { type: 'json_object' } },
       store: false
     }
@@ -52,6 +55,13 @@ export function buildDesignModelRequestBody(
       maxOutputTokens: outputTokenLimit(input, 16_000)
     }
   }
+}
+
+function reasoningEffort(input: MamDesignModelGatewayInput): string {
+  const configured = input.model.defaultInference?.reasoningEffort
+  return typeof configured === 'string' && configured.trim()
+    ? configured.trim().toLowerCase()
+    : 'medium'
 }
 
 export function designResponseJsonSchema(): Record<string, unknown> {

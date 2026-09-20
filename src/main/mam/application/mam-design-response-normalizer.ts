@@ -5,24 +5,91 @@ import {
 
 export function parseMamDesignModelResponse(responseText: string): MamDesignModelResponse {
   const value = JSON.parse(extractJsonObject(responseText))
-  return MamDesignModelResponseSchema.parse(normalizeResponseEnvelope(value))
+  const normalized = normalizeResponseEnvelope(value)
+  const parsed = MamDesignModelResponseSchema.safeParse(normalized)
+  if (parsed.success) return parsed.data
+  return MamDesignModelResponseSchema.parse(stripUnrecognizedKeys(normalized, parsed.error.issues))
 }
 
 function normalizeResponseEnvelope(value: unknown): unknown {
   if (!isRecord(value)) return value
   if ('proposal' in value) {
-    return 'brainstorm' in value ? value : { ...value, brainstorm: legacyBrainstorm() }
+    return normalizeReviewBounds(
+      'brainstorm' in value ? value : { ...value, brainstorm: legacyBrainstorm() }
+    )
   }
   if (!('roles' in value) || !('workflow' in value)) return value
   const message =
     typeof value.message === 'string' ? value.message : 'A complete proposal is ready to review.'
   const { roles, workflow } = value
-  return {
+  return normalizeReviewBounds({
     message,
     brainstorm: legacyBrainstorm(),
     review: defaultReview(),
     proposal: { roles, workflow }
+  })
+}
+
+function normalizeReviewBounds(value: Record<string, unknown>): Record<string, unknown> {
+  if (!isRecord(value.proposal) || !isRecord(value.proposal.workflow)) return value
+  const nodes = value.proposal.workflow.nodes
+  if (!Array.isArray(nodes)) return value
+  return {
+    ...value,
+    proposal: {
+      ...value.proposal,
+      workflow: {
+        ...value.proposal.workflow,
+        nodes: nodes.map(normalizeReviewNodeBounds)
+      }
+    }
   }
+}
+
+function normalizeReviewNodeBounds(value: unknown): unknown {
+  if (!isRecord(value)) return value
+  if (value.type === 'review_gate') {
+    return {
+      ...value,
+      minimumDecisions: value.minimumDecisions ?? 1,
+      maxRevisionAttempts: value.maxRevisionAttempts ?? 2
+    }
+  }
+  if (value.type === 'human_review_gate') {
+    const { minimumDecisions: _minimumDecisions, ...node } = value
+    return { ...node, maxRevisionAttempts: node.maxRevisionAttempts ?? 2 }
+  }
+  const {
+    minimumDecisions: _minimumDecisions,
+    maxRevisionAttempts: _maxRevisionAttempts,
+    ...node
+  } = value
+  return node
+}
+
+function stripUnrecognizedKeys(value: unknown, issues: readonly unknown[]): unknown {
+  const sanitized = JSON.parse(JSON.stringify(value)) as unknown
+  for (const issue of issues) {
+    if (!isRecord(issue) || issue.code !== 'unrecognized_keys' || !Array.isArray(issue.keys)) {
+      continue
+    }
+    const target = valueAtPath(sanitized, Array.isArray(issue.path) ? issue.path : [])
+    if (!isRecord(target)) continue
+    for (const key of issue.keys) {
+      if (typeof key === 'string') delete target[key]
+    }
+  }
+  return sanitized
+}
+
+function valueAtPath(value: unknown, path: readonly unknown[]): unknown {
+  let current = value
+  for (const segment of path) {
+    if (typeof segment === 'number' && Array.isArray(current)) current = current[segment]
+    else if (typeof segment === 'string' && isRecord(current)) current = current[segment]
+    else return undefined
+  }
+  return current
 }
 
 function defaultReview(): Record<string, unknown> {

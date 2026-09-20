@@ -118,6 +118,8 @@ export function MamModelProfileFields({
   if (!providerOptions.some((option) => option.value === profile.providerProfileId)) {
     providerOptions.unshift({ value: profile.providerProfileId, label: profile.providerProfileId })
   }
+  const provider = snapshot.providers.find((item) => item.id === profile.providerProfileId)
+  const reasoningEffort = profile.defaultInference?.reasoningEffort
   return (
     <div className="space-y-4">
       <MamProfileTextField
@@ -140,6 +142,24 @@ export function MamModelProfileFields({
         mono
         onChange={(remoteModelId) => onChange({ ...profile, remoteModelId })}
       />
+      {(provider?.protocol === 'openai-responses' ||
+        provider?.protocol === 'openai-completions') && (
+        <MamProfileSelectField
+          label="Reasoning strength"
+          description="Sent as the provider reasoning effort for this model."
+          value={typeof reasoningEffort === 'string' ? reasoningEffort : 'medium'}
+          options={['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].map((value) => ({
+            value,
+            label: value[0]!.toUpperCase() + value.slice(1)
+          }))}
+          onChange={(value) =>
+            onChange({
+              ...profile,
+              defaultInference: { ...profile.defaultInference, reasoningEffort: value }
+            })
+          }
+        />
+      )}
       <details className="rounded-md border border-border p-3">
         <summary className="cursor-pointer text-xs font-medium">Model capabilities</summary>
         <div className="mt-3 space-y-3">

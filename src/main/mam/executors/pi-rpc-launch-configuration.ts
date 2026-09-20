@@ -1,5 +1,6 @@
 import type { EffectiveRoleConfigSnapshot } from '../../../shared/mam/domain/role'
 import type { ProviderProtocol } from '../../../shared/mam/domain/execution-profile'
+import { normalizeOpenAiProviderBaseUrl } from '../application/openai-provider-url'
 import { providerRequestTimeoutMs } from './provider-request-timeout'
 
 export function piSettings(
@@ -45,7 +46,21 @@ export function piModels(snapshot: EffectiveRoleConfigSnapshot): Record<string, 
             id: snapshot.execution.remoteModelId,
             name: snapshot.execution.remoteModelId,
             contextWindow: snapshot.contextPolicy.maxContextTokens,
-            maxTokens: snapshot.budget.maxOutputTokens
+            maxTokens: snapshot.budget.maxOutputTokens,
+            ...(snapshot.execution.providerProtocol === 'openai-responses'
+              ? {
+                  reasoning: true,
+                  thinkingLevelMap: {
+                    off: 'none',
+                    minimal: 'minimal',
+                    low: 'low',
+                    medium: 'medium',
+                    high: 'high',
+                    xhigh: 'xhigh',
+                    max: 'max'
+                  }
+                }
+              : {})
           }
         ]
       }
@@ -55,12 +70,7 @@ export function piModels(snapshot: EffectiveRoleConfigSnapshot): Record<string, 
 
 export function piProviderBaseUrl(protocol: ProviderProtocol, configured: string): string {
   if (protocol !== 'openai-responses' && protocol !== 'openai-completions') return configured
-  const base = new URL(configured)
-  const suffix = protocol === 'openai-responses' ? '/responses' : '/chat/completions'
-  const path = base.pathname.replace(/\/+$/, '')
-  // Pi's SDK appends the operation path; bare origins use the same /v1 default as Design.
-  base.pathname = path.endsWith(suffix) ? path.slice(0, -suffix.length) || '/' : path || '/v1'
-  return base.toString().replace(/\/$/, '')
+  return normalizeOpenAiProviderBaseUrl(configured)
 }
 
 export function piArguments(
@@ -97,7 +107,10 @@ export function piArguments(
   ]
   if (tools.length > 0) args.push('--tools', [...new Set(tools)].join(','))
   else args.push('--no-tools')
-  const thinkingLevel = snapshot.execution.inference.thinkingLevel
+  const thinkingLevel =
+    snapshot.execution.inference.thinkingLevel ??
+    snapshot.execution.inference.reasoningEffort ??
+    (snapshot.execution.providerProtocol === 'openai-responses' ? 'medium' : undefined)
   if (typeof thinkingLevel === 'string') args.push('--thinking', thinkingLevel)
   return args
 }
