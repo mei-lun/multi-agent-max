@@ -111,6 +111,14 @@ history, review, Git branches/worktrees, merge queues, and recovery on top of gr
 
 ## Interface and delivery demo
 
+### Design Assistant
+
+The Design Assistant keeps requirements discussion, solution drafts, and generated results in one
+workspace while showing the roles and workflow being created, so the design can be confirmed before
+the first run.
+
+![Multi-Agent Max Design Assistant](docs/readme/assets/mam-design-assistant.png)
+
 ### Workflow management
 
 A workflow can evolve through multiple versions. Each version freezes its nodes, edges, roles,
@@ -125,6 +133,20 @@ Live Activity groups role messages, tool and command events, token usage, and ex
 node, making it easy to follow current work and locate anything that needs attention.
 
 ![Multi-Agent Max Live Activity](docs/readme/assets/mam-live-activity.png)
+
+### Run history
+
+Run history brings current, actionable, completed, and canceled runs together with their delivered
+artifacts, review status, and Git integration activity for end-to-end delivery traceability.
+
+![Multi-Agent Max run history](docs/readme/assets/mam-run-history.png)
+
+### Review
+
+The Review page summarizes system review results and immutable review decisions, including findings,
+release status, and the associated integration activity.
+
+![Multi-Agent Max review](docs/readme/assets/mam-review.png)
 
 ### Delivered result
 

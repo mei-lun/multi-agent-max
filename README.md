@@ -75,6 +75,12 @@ MAM 不是图数据库、GraphQL 服务或通用图数据基础设施，也不�
 
 ## 界面与交付演示
 
+### 设计助手
+
+设计助手把需求讨论、方案草稿和生成结果集中在同一工作区，并同步展示生成的角色与工作流，方便在正式运行前完成设计确认。
+
+![Multi-Agent Max 设计助手界面](docs/readme/assets/mam-design-assistant.png)
+
 ### 工作流管理
 
 同一工作流可以持续创建新版本，并为每个版本固定节点、连线、角色、转换上限、运行时间和预算；用户可以直接从所选版本启动 Run。
@@ -86,6 +92,18 @@ MAM 不是图数据库、GraphQL 服务或通用图数据基础设施，也不�
 实时观测页面按节点汇总角色消息、工具与命令事件、Token 用量和执行状态，既能查看当前活动，也能定位需要人工处理的节点。
 
 ![Multi-Agent Max 实时观测界面](docs/readme/assets/mam-live-activity.png)
+
+### 运行记录
+
+运行记录集中展示当前、待处理、已完成和已取消的执行，并保留交付产物、审核状态与 Git 集成活动，便于追踪完整交付过程。
+
+![Multi-Agent Max 运行记录界面](docs/readme/assets/mam-run-history.png)
+
+### 审核
+
+审核页面汇总系统审核结果与不可变审核结论，展示发现项、放行状态和对应的集成活动。
+
+![Multi-Agent Max 审核界面](docs/readme/assets/mam-review.png)
 
 ### 交付结果示例
 
