@@ -83,7 +83,7 @@ export type SchedulerKernelContext = Readonly<{
       subject: ReviewSubject
       revisionTargetNodeId: string
       revisionTargetTaskId: string
-      attemptCount: number
+      revisionCount: number
       maxRevisionAttempts: number
     }>
   >

@@ -61,6 +61,7 @@ export type PreparedAttempt = Readonly<{
   roleInstanceId: string
   executorInvocationId: string
   retryMaxAttempts?: number
+  continuationAttempts?: number
   nodeId: string
   task: ExecutableAttemptTask
   profile: ExecutorProfile

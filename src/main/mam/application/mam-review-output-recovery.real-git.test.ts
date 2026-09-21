@@ -20,64 +20,106 @@ afterEach(() => {
 })
 
 describe('MAM Review output recovery with real Git state', () => {
-  it('publishes the retained final answer with the same Attempt and no new model request', async () => {
-    const fixture = createAttemptExecutionAcceptanceFixture({ executorKind: 'pi-rpc' })
-    fixtures.push(fixture)
-    const ids = sequentialIds()
-    const buildCompleted = completionSignal()
-    await service(fixture, ids, buildCompleted.resolve, buildWorkspace).start({
-      workflowRunId: fixture.bundle.run.id,
-      taskId: fixture.taskId
-    })
-    await buildCompleted.promise
-
-    const reviewTask = Object.values(
-      fixture.repository.rebuild(fixture.bundle.run.id).reviewTasks
-    )[0]!
-    new MamUiCommandService(
-      fixture.query,
-      { userId: 'user.owner', schedulerId: 'scheduler.desktop', createId: ids },
-      fixture.repository
-    ).assignTask({
-      workflowRunId: fixture.bundle.run.id,
-      taskId: reviewTask.id,
-      roleProfileId: fixture.reviewerRole.id,
-      roleProfileVersion: fixture.reviewerRole.version
-    })
-
-    const interrupted = completionSignal()
-    await service(fixture, ids, interrupted.resolve, persistFinalAnswerThenFail).start({
-      workflowRunId: fixture.bundle.run.id,
-      taskId: reviewTask.id
-    })
-    await interrupted.promise
-    const drafts = new LocalExecutionDraftStore(join(fixture.root, 'worktrees', 'drafts'))
-    const retained = drafts.listUnfinished().find((draft) => draft.taskId === reviewTask.id)!
-    expect(retained.state).toBe('needs_attention')
-
-    const execute = vi.fn(async () => {
-      throw new Error('model_must_not_run')
-    })
-    const recovered = completionSignal()
-    await service(fixture, ids, recovered.resolve, execute).start({
-      workflowRunId: fixture.bundle.run.id,
-      taskId: reviewTask.id,
-      resumeNeedsAttention: true
-    })
-    await recovered.promise
-
-    const projection = fixture.repository.rebuild(fixture.bundle.run.id)
-    expect(execute).not.toHaveBeenCalled()
-    expect(projection.attempts[retained.attemptId]).toMatchObject({ status: 'submitted' })
-    expect(Object.values(projection.reviews)).toEqual([
-      expect.objectContaining({
-        reviewerTaskId: reviewTask.id,
-        reviewerAttemptId: retained.attemptId,
-        status: 'approved'
+  it.each([
+    {
+      name: 'changes requested',
+      finalAnswer: JSON.stringify({
+        status: 'changes_requested',
+        summary: '输入校验存在致命缺口。',
+        findings: [
+          {
+            severity: 'blocker',
+            category: 'validation',
+            summary: '空白输入会导致非法状态。'
+          }
+        ]
+      }),
+      status: 'changes_requested',
+      sourceTaskStatus: 'changes_requested',
+      mergeReady: false
+    },
+    {
+      name: 'approved',
+      finalAnswer: '审核通过，交付符合要求。',
+      status: 'approved',
+      sourceTaskStatus: 'completed',
+      mergeReady: true
+    }
+  ] as const)(
+    'publishes a retained $name final answer with the same Attempt and no new model request',
+    async ({ finalAnswer, status, sourceTaskStatus, mergeReady }) => {
+      const fixture = createAttemptExecutionAcceptanceFixture({ executorKind: 'pi-rpc' })
+      fixtures.push(fixture)
+      const ids = sequentialIds()
+      const diagnostics = new DiagnosticsRecorder()
+      const buildCompleted = completionSignal()
+      await service(fixture, ids, buildCompleted.resolve, buildWorkspace, diagnostics).start({
+        workflowRunId: fixture.bundle.run.id,
+        taskId: fixture.taskId
       })
-    ])
-    expect(drafts.get(retained.id)?.state).toBe('delivered')
-  })
+      await buildCompleted.promise
+
+      const reviewTask = Object.values(
+        fixture.repository.rebuild(fixture.bundle.run.id).reviewTasks
+      )[0]!
+      new MamUiCommandService(
+        fixture.query,
+        { userId: 'user.owner', schedulerId: 'scheduler.desktop', createId: ids },
+        fixture.repository
+      ).assignTask({
+        workflowRunId: fixture.bundle.run.id,
+        taskId: reviewTask.id,
+        roleProfileId: fixture.reviewerRole.id,
+        roleProfileVersion: fixture.reviewerRole.version
+      })
+
+      const interrupted = completionSignal()
+      await service(
+        fixture,
+        ids,
+        interrupted.resolve,
+        (input) => persistFinalAnswerThenFail(input, finalAnswer),
+        diagnostics
+      ).start({ workflowRunId: fixture.bundle.run.id, taskId: reviewTask.id })
+      await interrupted.promise
+      const drafts = new LocalExecutionDraftStore(join(fixture.root, 'worktrees', 'drafts'))
+      const retained = drafts.listUnfinished().find((draft) => draft.taskId === reviewTask.id)!
+      expect(retained.state).toBe('needs_attention')
+
+      const execute = vi.fn(async () => {
+        throw new Error('model_must_not_run')
+      })
+      const recovered = completionSignal()
+      await service(fixture, ids, recovered.resolve, execute, diagnostics).start({
+        workflowRunId: fixture.bundle.run.id,
+        taskId: reviewTask.id,
+        resumeNeedsAttention: true
+      })
+      await recovered.promise
+
+      const projection = fixture.repository.rebuild(fixture.bundle.run.id)
+      expect(execute).not.toHaveBeenCalled()
+      expect(projection.attempts[retained.attemptId]).toMatchObject({ status: 'submitted' })
+      expect(Object.values(projection.reviews)).toEqual([
+        expect.objectContaining({
+          reviewerTaskId: reviewTask.id,
+          reviewerAttemptId: retained.attemptId,
+          status
+        })
+      ])
+      expect(Object.values(projection.reviewAggregations)).toEqual([
+        expect.objectContaining({ proposedStatus: status })
+      ])
+      expect(
+        diagnostics.list().filter((event) => event.payload.status === 'review_aggregation_failed')
+      ).toEqual([])
+      expect(projection.tasks[fixture.taskId]).toMatchObject({ status: sourceTaskStatus })
+      expect(Object.values(projection.mergeQueueEntries)).toEqual(
+        mergeReady ? [expect.objectContaining({ taskId: fixture.taskId, status: 'queued' })] : []
+      )
+      expect(drafts.get(retained.id)?.state).toBe('delivered')
+    }
+  )
 })
 
 async function buildWorkspace(input: StructuredExecutorInput) {
@@ -85,7 +127,10 @@ async function buildWorkspace(input: StructuredExecutorInput) {
   return { invocation: {}, events: [], usage: { status: 'unknown' as const }, stderr: '' }
 }
 
-async function persistFinalAnswerThenFail(input: StructuredExecutorInput): Promise<never> {
+async function persistFinalAnswerThenFail(
+  input: StructuredExecutorInput,
+  finalAnswer: string
+): Promise<never> {
   const directory = join(
     input.binding.configRoot,
     'invocations',
@@ -102,7 +147,7 @@ async function persistFinalAnswerThenFail(input: StructuredExecutorInput): Promi
         stopReason: 'stop',
         content: [
           responseText('Checking delivery.', 'commentary'),
-          responseText('审核通过，交付符合要求。', 'final_answer')
+          responseText(finalAnswer, 'final_answer')
         ]
       }
     })}\n`,
@@ -115,7 +160,8 @@ function service(
   fixture: ReturnType<typeof createAttemptExecutionAcceptanceFixture>,
   createId: (kind: string) => string,
   onStateChanged: () => void,
-  execute: (input: StructuredExecutorInput) => Promise<unknown>
+  execute: (input: StructuredExecutorInput) => Promise<unknown>,
+  diagnostics = new DiagnosticsRecorder()
 ) {
   return new MamAttemptExecutionService({
     query: fixture.query,
@@ -126,7 +172,7 @@ function service(
     artifacts: new AttemptArtifactValidator(
       new LocalArtifactStore(join(fixture.root, 'artifacts'))
     ),
-    diagnostics: new DiagnosticsRecorder(),
+    diagnostics,
     workspaceRoot: join(fixture.root, 'worktrees'),
     repository: fixture.repository,
     claimantInstanceId: 'claimant.recovery',

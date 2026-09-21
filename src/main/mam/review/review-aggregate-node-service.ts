@@ -36,7 +36,7 @@ export function aggregateReviewGates(input: {
     findings: [...findings.values()].sort((left, right) => left.id.localeCompare(right.id)),
     proposedStatus: boundedReviewStatus({
       status: blocking ? 'blocked' : first.proposedStatus,
-      attemptCount: input.formalRevisionNumber + 1,
+      revisionCount: input.formalRevisionNumber,
       maxRevisionAttempts: input.maxRevisionAttempts
     }),
     requiresHumanDecision: blocking,

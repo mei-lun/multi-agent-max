@@ -24,9 +24,10 @@ import { shouldAutomaticallyRetryAttempt } from './attempt-automatic-retry'
 import { publishRegularTaskDelivery } from './task-delivery-command-service'
 import { normalizePreparedReviewContracts } from './automatic-review-contract'
 import { AttemptExecutorEventObserver } from './attempt-executor-event-observer'
-import { recoveredReviewExecution } from './review-output-recovery'
-import { executePreparedAttempt } from './prepared-attempt-executor'
+import { executePreparedAttemptWithTimeoutRecovery } from './prepared-attempt-execution-loop'
 import { preparedAttemptResultAuthority } from './prepared-attempt-authority'
+import { publishReviewAggregationIfReady } from './review-aggregation-publisher'
+import { publishMergeReadinessIfEligible } from './merge-readiness-publisher'
 import {
   attemptRunnerErrorCode as errorCode,
   recordAttemptRunnerStart,
@@ -51,15 +52,18 @@ export type PreparedAttemptRunnerInput = Readonly<{
 }>
 
 export async function runPreparedAttempt(input: PreparedAttemptRunnerInput): Promise<void> {
-  const prepared = normalizePreparedReviewContracts(input.prepared)
-  const eventObserver = new AttemptExecutorEventObserver(input)
+  let prepared = normalizePreparedReviewContracts(input.prepared)
+  let runnerInput = { ...input, prepared }
+  let eventObserver = new AttemptExecutorEventObserver(runnerInput)
   let executorCompleted = false
   try {
-    recordAttemptRunnerStart(input)
-    const recoveredExecution = recoveredReviewExecution(prepared)
-    const execution =
-      recoveredExecution ?? (await executePreparedAttempt(input, prepared, eventObserver))
-    executorCompleted = true
+    recordAttemptRunnerStart(runnerInput)
+    const executionState = await executePreparedAttemptWithTimeoutRecovery(input, prepared)
+    prepared = executionState.prepared
+    runnerInput = { ...input, prepared }
+    eventObserver = executionState.eventObserver
+    const execution = executionState.execution
+    executorCompleted = executionState.executorCompleted
     eventObserver.recordReturned(execution.events)
     const collected = execution.result
       ? undefined
@@ -105,8 +109,13 @@ export async function runPreparedAttempt(input: PreparedAttemptRunnerInput): Pro
           commandId: () => input.createId('command'),
           now: input.now
         })
-      : publishRegularTaskDelivery(input, validated.result, validated.validHashes, automaticReview)
-    record(input, 'executor', {
+      : publishRegularTaskDelivery(
+          runnerInput,
+          validated.result,
+          validated.validHashes,
+          automaticReview
+        )
+    record(runnerInput, 'executor', {
       status: 'result_submitted',
       submittedCommit: authoritative.system.submittedCommit
     })
@@ -120,15 +129,55 @@ export async function runPreparedAttempt(input: PreparedAttemptRunnerInput): Pro
           now: input.now
         })
     if (reviewPublication === 'submitted') {
-      record(input, 'scheduler', { status: 'automatic_review_submitted' })
+      record(runnerInput, 'scheduler', { status: 'automatic_review_submitted' })
+      const reviewTask = prepared.task.reviewTask
+      if (reviewTask) {
+        try {
+          const aggregated = publishReviewAggregationIfReady({
+            repository: input.repository,
+            workflowRunId: prepared.workflowRunId,
+            reviewNodeId: reviewTask.reviewNodeId,
+            subject: reviewTask.subject,
+            schedulerId: input.schedulerId,
+            commandId: input.createId('command'),
+            issuedAt: input.now()
+          })
+          if (aggregated) {
+            try {
+              publishMergeReadinessIfEligible({
+                repository: input.repository,
+                workflowRunId: prepared.workflowRunId,
+                taskId: reviewTask.subject.taskId,
+                schedulerId: input.schedulerId,
+                commandId: input.createId('command'),
+                issuedAt: input.now()
+              })
+            } catch (error) {
+              record(runnerInput, 'scheduler', {
+                status: 'merge_readiness_failed',
+                error: diagnosticError(error),
+                errorCode: errorCode(error),
+                message: error instanceof Error ? error.message : String(error)
+              })
+            }
+          }
+        } catch (error) {
+          record(runnerInput, 'scheduler', {
+            status: 'review_aggregation_failed',
+            error: diagnosticError(error),
+            errorCode: errorCode(error),
+            message: error instanceof Error ? error.message : String(error)
+          })
+        }
+      }
     } else if (reviewPublication === 'superseded') {
-      record(input, 'scheduler', {
+      record(runnerInput, 'scheduler', {
         status: 'automatic_review_superseded',
         subjectAttemptId: prepared.task.reviewTask?.subject.attemptId
       })
     }
     if (prepared.task.mergeConflictTask) {
-      recordCost(input, execution.usage)
+      recordCost(runnerInput, execution.usage)
       return
     }
     try {
@@ -141,9 +190,9 @@ export async function runPreparedAttempt(input: PreparedAttemptRunnerInput): Pro
         commandId: input.createId('command'),
         issuedAt: input.now()
       })
-      if (created) record(input, 'scheduler', { status: 'dynamic_tasks_created' })
+      if (created) record(runnerInput, 'scheduler', { status: 'dynamic_tasks_created' })
     } catch (error) {
-      record(input, 'scheduler', {
+      record(runnerInput, 'scheduler', {
         status: 'dynamic_task_advancement_failed',
         errorCode: errorCode(error),
         message: error instanceof Error ? error.message : String(error)
@@ -158,10 +207,10 @@ export async function runPreparedAttempt(input: PreparedAttemptRunnerInput): Pro
         now: input.now
       })
       if (resolved.conditions.length > 0 || resolved.systemNodes.length > 0) {
-        record(input, 'scheduler', resolved)
+        record(runnerInput, 'scheduler', resolved)
       }
     } catch (error) {
-      record(input, 'scheduler', {
+      record(runnerInput, 'scheduler', {
         status: 'condition_advancement_failed',
         error: diagnosticError(error),
         errorCode: errorCode(error),
@@ -178,16 +227,16 @@ export async function runPreparedAttempt(input: PreparedAttemptRunnerInput): Pro
         commandId: input.createId('command'),
         issuedAt: input.now()
       })
-      if (created) record(input, 'scheduler', { status: 'review_panel_created' })
+      if (created) record(runnerInput, 'scheduler', { status: 'review_panel_created' })
     } catch (error) {
-      record(input, 'scheduler', {
+      record(runnerInput, 'scheduler', {
         status: 'review_panel_advancement_failed',
         error: diagnosticError(error),
         errorCode: errorCode(error),
         message: error instanceof Error ? error.message : String(error)
       })
     }
-    recordCost(input, execution.usage)
+    recordCost(runnerInput, execution.usage)
     recordPreparedAttemptDraftState({
       store: input.drafts,
       prepared,
@@ -219,12 +268,12 @@ export async function runPreparedAttempt(input: PreparedAttemptRunnerInput): Pro
         : 'local_draft_retained'
     } catch (recoveryError) {
       recoveryStatus = `recovery_record_failed:${errorCode(recoveryError)}`
-      record(input, 'scheduler', {
+      record(runnerInput, 'scheduler', {
         status: 'recovery_record_failed',
         error: diagnosticError(recoveryError)
       })
     }
-    record(input, 'executor', {
+    record(runnerInput, 'executor', {
       status: 'execution_interrupted',
       error: diagnosticError(error),
       errorCode: errorCode(error),

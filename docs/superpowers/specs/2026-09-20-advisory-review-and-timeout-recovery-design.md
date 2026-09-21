@@ -34,6 +34,8 @@ user does not have a direct continue action for the same Attempt.
 - Do not allow a reviewer to approve or reject a subject outside its explicit
   Review Gate binding.
 - Do not change the Workflow, Review, Attempt, Artifact or Git event schemas.
+  A backward-compatible optional `continuationAttempts` field may be added to
+  the local Draft record so retry limits survive application restarts.
 - Do not silently turn a fatal finding into a suggestion.
 - Do not create a new formal Attempt for a timeout continuation.
 
@@ -131,8 +133,8 @@ write Drafts or Git state directly.
 
 ## Version and Migration
 
-The implementation increments the patch version to `0.1.30`. No shared event
-or persisted state schema changes are planned. Existing Drafts without a
-continuation counter are treated as count zero; existing blocked Runs remain
-immutable and are not rewritten. A new Run or explicit Restart uses the new
-policy.
+The implementation increments the patch version to `0.1.30`. No shared event,
+Workflow, Review, Attempt or Artifact schema changes are planned. The local
+Draft record may carry an optional continuation counter; existing Drafts
+without it are treated as count zero. Existing blocked Runs remain immutable
+and are not rewritten. A new Run or explicit Restart uses the new policy.

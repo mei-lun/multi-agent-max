@@ -43,6 +43,7 @@ export function continuePreparedAttempt(
     executorInvocationId: recoveredAssistantText
       ? draft!.executorInvocationId
       : executorInvocationId,
+    continuationAttempts: (draft?.continuationAttempts ?? 0) + 1,
     ...(resumeSessionFile ? { resumeSessionFile } : {}),
     ...(recoveredAssistantText ? { recoveredAssistantText } : {}),
     prompt: 'Continue the existing Task from the persisted session and current workspace state.'

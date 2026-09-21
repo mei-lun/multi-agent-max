@@ -24,7 +24,8 @@ describe('publishReviewAggregationIfReady', () => {
               minimumDecisions: 1,
               maxRevisionAttempts: 2
             }
-          ]
+          ],
+          edges: []
         }
       }),
       rebuild: () => ({

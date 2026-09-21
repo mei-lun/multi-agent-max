@@ -55,7 +55,7 @@ export function calculateReviewAggregation(
     findings: mergeFindings(decisions),
     proposedStatus: boundedReviewStatus({
       status,
-      attemptCount: input.formalRevisionNumber + 1,
+      revisionCount: input.formalRevisionNumber,
       maxRevisionAttempts: input.maxRevisionAttempts
     }),
     requiresHumanDecision: classification === 'blocking_disagreement',

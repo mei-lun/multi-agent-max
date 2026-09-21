@@ -62,6 +62,7 @@ export function MamRunTaskDetails({
         {...(task.selectedAttemptId ? { selectedAttemptId: task.selectedAttemptId } : {})}
         workflowRunId={run.run.id}
         pending={pending}
+        onStartAttempt={onStartAttempt}
         onRecoverAttempt={onRecoverAttempt}
         onSelectAttempt={onSelectAttempt}
         onGetAttemptDiff={onGetAttemptDiff}

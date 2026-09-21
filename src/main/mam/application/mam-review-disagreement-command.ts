@@ -4,7 +4,7 @@ import { GitCommandRetryCoordinator } from '../state-store/git-command-retry-coo
 import type { GitStateRepository } from '../state-store/git-state-repository'
 import { publishMergeReadinessIfEligible } from './merge-readiness-publisher'
 import { advanceDeterministicNodes } from './deterministic-node-advancement'
-import { boundedReviewStatus } from '../review/review-revision-limit'
+import { boundedReviewStatus, effectiveReviewRevisionLimit } from '../review/review-revision-limit'
 import { countFormalRevisions } from '../review/review-revision-counter'
 import { advanceReadyReviewPanel } from './review-panel-advancement'
 
@@ -49,8 +49,12 @@ export function resolveReviewDisagreementAndPublishMerge(input: {
     reviewNode?.type === 'review_gate'
       ? boundedReviewStatus({
           status: request.selectedStatus,
-          attemptCount: formalRevisionNumber + 1,
-          maxRevisionAttempts: reviewNode.maxRevisionAttempts
+          revisionCount: formalRevisionNumber,
+          maxRevisionAttempts: effectiveReviewRevisionLimit({
+            reviewNodeId: reviewNode.id,
+            maxRevisionAttempts: reviewNode.maxRevisionAttempts,
+            edges: bundle?.definition.edges ?? []
+          })
         })
       : request.selectedStatus
   new GitCommandRetryCoordinator(input.repository).executeAndPush({

@@ -25,15 +25,22 @@ describe('calculateReviewAggregation', () => {
     expect(first.findings.map((finding) => finding.id)).toEqual(['finding.right', 'finding.left'])
   })
 
-  it('applies the revision limit inside the canonical calculation', () => {
-    const aggregation = calculateReviewAggregation({
+  it('counts only revisions after the initial delivery', () => {
+    const available = calculateReviewAggregation({
       decisions: [decision('only', 'changes_requested', 'Clarify the input boundary.')],
       createdAt: '2026-09-17T08:00:00Z',
       formalRevisionNumber: 1,
       maxRevisionAttempts: 2
     })
+    const exhausted = calculateReviewAggregation({
+      decisions: [decision('only', 'changes_requested', 'Clarify the input boundary.')],
+      createdAt: '2026-09-17T08:00:00Z',
+      formalRevisionNumber: 2,
+      maxRevisionAttempts: 2
+    })
 
-    expect(aggregation.proposedStatus).toBe('blocked')
+    expect(available.proposedStatus).toBe('changes_requested')
+    expect(exhausted.proposedStatus).toBe('blocked')
   })
 })
 

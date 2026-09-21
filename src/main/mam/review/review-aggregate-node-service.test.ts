@@ -19,12 +19,16 @@ describe('aggregateReviewGates', () => {
     ).toMatchObject({ classification: 'blocking_disagreement', requiresHumanDecision: true })
   })
 
-  it('blocks another revision after the aggregate limit', () => {
+  it('blocks only after the configured aggregate revision limit', () => {
+    const aggregations = [
+      aggregation('review.a', 'changes_requested'),
+      aggregation('review.b', 'changes_requested')
+    ]
     expect(
-      aggregateReviewGates({
-        ...input([aggregation('review.a', 'changes_requested'), aggregation('review.b', 'changes_requested')]),
-        formalRevisionNumber: 1
-      }).proposedStatus
+      aggregateReviewGates({ ...input(aggregations), formalRevisionNumber: 1 }).proposedStatus
+    ).toBe('changes_requested')
+    expect(
+      aggregateReviewGates({ ...input(aggregations), formalRevisionNumber: 2 }).proposedStatus
     ).toBe('blocked')
   })
 })

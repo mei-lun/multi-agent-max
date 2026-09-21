@@ -108,7 +108,7 @@ export function createHumanAttentionEvent(
   const gate = context.humanReviewGates!.get(command.gateNodeId)!
   const status = boundedReviewStatus({
     status: command.status,
-    attemptCount: gate.attemptCount,
+    revisionCount: gate.revisionCount,
     maxRevisionAttempts: gate.maxRevisionAttempts
   })
   return {

@@ -1,8 +1,9 @@
-import { AlertTriangle, FileDiff, GitCommit, Loader2 } from 'lucide-react'
+import { AlertTriangle, FileDiff, GitCommit, Loader2, Play } from 'lucide-react'
 import { useState } from 'react'
 import type {
   MamRecoverAttemptInput,
-  MamSelectAttemptInput
+  MamSelectAttemptInput,
+  MamStartAttemptInput
 } from '../../../../shared/mam/application-command'
 import type {
   MamAttemptDiff,
@@ -20,6 +21,7 @@ export function MamAttemptPanel({
   latest,
   workflowRunId,
   pending,
+  onStartAttempt,
   onRecoverAttempt,
   onSelectAttempt,
   onGetAttemptDiff
@@ -29,6 +31,7 @@ export function MamAttemptPanel({
   latest: boolean
   workflowRunId: string
   pending: boolean
+  onStartAttempt(input: MamStartAttemptInput): Promise<void>
   onRecoverAttempt(input: MamRecoverAttemptInput): Promise<void>
   onSelectAttempt(input: MamSelectAttemptInput): Promise<void>
   onGetAttemptDiff(input: MamGetAttemptDiffInput): Promise<MamAttemptDiff>
@@ -61,6 +64,20 @@ export function MamAttemptPanel({
         <MamStateBadge status={attempt.status} />
       </div>
       {attempt.interruption && <AttemptInterruptionNotice interruption={attempt.interruption} />}
+      {latest &&
+        attempt.status === 'running' &&
+        attempt.interruption?.code === 'executor_timeout' && (
+          <div className="mt-3 border-t border-border pt-3">
+            <Button
+              variant="outline"
+              size="xs"
+              disabled={pending}
+              onClick={() => void onStartAttempt({ workflowRunId, taskId: attempt.taskId })}
+            >
+              <Play /> Continue Attempt
+            </Button>
+          </div>
+        )}
       {attempt.status === 'running' && !attempt.interruption && (
         <p
           className="mt-3 flex items-center gap-2 rounded-lg border border-border bg-primary/5 p-3 text-xs text-muted-foreground"

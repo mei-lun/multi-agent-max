@@ -48,6 +48,7 @@ export function preparedAttemptDraft(
       resources: prepared.resources
     }),
     activeRuntimeMs,
+    continuationAttempts: prepared.continuationAttempts ?? previous?.continuationAttempts ?? 0,
     ...(state === 'running' ? { activeStartedAt: now } : {}),
     ...(errorCode ? { lastErrorCode: errorCode, lastErrorAt: now } : {}),
     createdAt: previous?.createdAt ?? now,
@@ -88,10 +89,8 @@ export function recordPreparedAttemptRunning(
 }
 
 export function remainingPreparedAttemptRuntimeMs(
-  store: LocalExecutionDraftStore | undefined,
+  _store: LocalExecutionDraftStore | undefined,
   prepared: PreparedAttempt
 ): number {
-  const total = prepared.snapshot.budget.maxDurationSeconds * 1000
-  if (!store || !prepared.draftId) return total
-  return Math.max(0, total - (store.get(prepared.draftId)?.activeRuntimeMs ?? 0))
+  return prepared.snapshot.budget.maxDurationSeconds * 1000
 }

@@ -256,7 +256,7 @@ export class GitCommandRetryCoordinator {
                     subject,
                     revisionTargetNodeId: node.revisionTargetNodeId,
                     revisionTargetTaskId: task.id,
-                    attemptCount: currentTaskDeliveryAttemptId(
+                    revisionCount: currentTaskDeliveryAttemptId(
                       projection.tasks[task.id],
                       projection.attempts
                     )
@@ -266,7 +266,7 @@ export class GitCommandRetryCoordinator {
                             projection.attempts
                           )!,
                           attempts: projection.attempts
-                        }) + 1
+                        })
                       : 0,
                     maxRevisionAttempts: node.maxRevisionAttempts
                   }

@@ -36,7 +36,7 @@ describe('automatic Review submission', () => {
     })
   })
 
-  it('rejects changes requested without actionable findings', () => {
+  it('converts a generic non-fatal change request into an approval without findings', () => {
     const prepared = {
       workflowRunId: 'run.review',
       taskId: 'review-task.1',
@@ -47,7 +47,10 @@ describe('automatic Review submission', () => {
       records: [{ content: { status: 'changes_requested', summary: 'Needs work.', findings: [] } }]
     } as unknown as ValidatedAttemptArtifacts
 
-    expect(automaticReviewSubmission(prepared, validated)).toBeUndefined()
+    expect(automaticReviewSubmission(prepared, validated)).toMatchObject({
+      status: 'approved',
+      findings: []
+    })
   })
 
   it('turns an actionable structured summary into a finding', () => {
@@ -61,7 +64,7 @@ describe('automatic Review submission', () => {
         })
       )
     ).toMatchObject({
-      status: 'changes_requested',
+      status: 'approved',
       findings: [expect.objectContaining({ summary: 'Empty input has no validation message.' })]
     })
   })
@@ -85,7 +88,7 @@ describe('automatic Review submission', () => {
         validatedReview('审核不通过，需要修改：\n- 输入为空时缺少校验提示\n- 键盘回车无法提交猜测')
       )
     ).toMatchObject({
-      status: 'changes_requested',
+      status: 'approved',
       findings: [
         expect.objectContaining({ category: 'validation', summary: '输入为空时缺少校验提示' }),
         expect.objectContaining({ summary: '键盘回车无法提交猜测' })
@@ -104,7 +107,7 @@ describe('automatic Review submission', () => {
         })
       )
     ).toMatchObject({
-      status: 'changes_requested',
+      status: 'approved',
       findings: [expect.objectContaining({ summary: 'Empty input has no validation message.' })]
     })
   })

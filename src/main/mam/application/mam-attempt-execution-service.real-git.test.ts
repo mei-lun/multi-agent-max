@@ -332,13 +332,7 @@ describe('MAM Attempt execution with real Git state', () => {
     expect(
       JSON.stringify(fixture.repository.events.listEvents(fixture.bundle.run.id))
     ).not.toContain('do-not-persist')
-    const resumed = executionService(
-      fixture,
-      ids,
-      vi.fn(),
-      fakeExecution,
-      'claimant.attention'
-    )
+    const resumed = executionService(fixture, ids, vi.fn(), fakeExecution, 'claimant.attention')
     await expect(
       resumed.start({ workflowRunId: fixture.bundle.run.id, taskId: fixture.taskId })
     ).rejects.toThrow('local_draft_needs_attention')
@@ -380,8 +374,9 @@ describe('MAM Attempt execution with real Git state', () => {
     await vi.waitFor(
       () =>
         expect(
-          new LocalExecutionDraftStore(join(fixture.root, 'worktrees', 'drafts'))
-            .listRecoverable()[0]?.state
+          new LocalExecutionDraftStore(
+            join(fixture.root, 'worktrees', 'drafts')
+          ).listRecoverable()[0]?.state
         ).toBe('waiting_for_resume'),
       { timeout: 10_000 }
     )
@@ -406,6 +401,46 @@ describe('MAM Attempt execution with real Git state', () => {
       { timeout: 10_000 }
     )
     expect(Object.keys(fixture.repository.rebuild(fixture.bundle.run.id).attempts)).toHaveLength(1)
+  })
+
+  it('automatically resumes the same Attempt after one Executor timeout', async () => {
+    const fixture = createAttemptExecutionAcceptanceFixture({ retryMaxAttempts: 2 })
+    fixtures.push(fixture)
+    const ids = sequentialIds('automatic-timeout')
+    let executions = 0
+    const completed = completionSignal()
+    await executionService(
+      fixture,
+      ids,
+      completed.resolve,
+      async (input) => {
+        executions += 1
+        if (executions === 1) {
+          throw Object.assign(new Error('Request timed out.'), { code: 'executor_timeout' })
+        }
+        return fakeExecution(input)
+      },
+      'claimant.automatic-timeout'
+    ).start({ workflowRunId: fixture.bundle.run.id, taskId: fixture.taskId })
+    await completed.promise
+    await vi.waitFor(
+      () =>
+        expect(
+          fixture.repository.rebuild(fixture.bundle.run.id).tasks[fixture.taskId]
+            ?.currentDeliveryAttemptId
+        ).toBeTruthy(),
+      { timeout: 10_000 }
+    )
+
+    const projection = fixture.repository.rebuild(fixture.bundle.run.id)
+    expect(executions).toBe(2)
+    expect(Object.keys(projection.attempts)).toHaveLength(1)
+    expect(projection.tasks[fixture.taskId]?.currentDeliveryAttemptId).toBeTruthy()
+    expect(
+      new LocalExecutionDraftStore(join(fixture.root, 'worktrees', 'drafts'))
+        .listUnfinished()
+        .filter((draft) => draft.workflowRunId === fixture.bundle.run.id)
+    ).toEqual([])
   })
 
   it('keeps an assigned Task retryable when local Executor preflight fails', async () => {

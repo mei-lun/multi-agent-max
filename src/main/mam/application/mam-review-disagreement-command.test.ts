@@ -45,7 +45,8 @@ describe('Review disagreement command', () => {
               type: 'review_gate',
               maxRevisionAttempts: 2
             }
-          ]
+          ],
+          edges: []
         }
       })
     }
@@ -72,6 +73,73 @@ describe('Review disagreement command', () => {
       commandId: 'command.3',
       issuedAt: '2026-09-15T10:00:00Z'
     })
+  })
+
+  it('uses the stricter return-edge revision limit', () => {
+    const aggregation = disagreementAggregation()
+    const repository = {
+      rebuild: () => ({
+        reviewAggregations: { [aggregation.id]: aggregation },
+        tasks: { [aggregation.subject.taskId]: { knownAttemptIds: [aggregation.attemptId] } },
+        attempts: {
+          [aggregation.attemptId]: {
+            taskId: aggregation.subject.taskId,
+            status: 'submitted',
+            previousAttemptId: 'attempt.revision-1',
+            lastEventId: 'event.delivery'
+          },
+          'attempt.revision-1': {
+            taskId: aggregation.subject.taskId,
+            status: 'submitted',
+            previousAttemptId: 'attempt.initial',
+            lastEventId: 'event.revision-1'
+          },
+          'attempt.initial': {
+            taskId: aggregation.subject.taskId,
+            status: 'submitted',
+            lastEventId: 'event.initial'
+          }
+        }
+      }),
+      loadRunBundle: () => ({
+        definition: {
+          nodes: [
+            {
+              id: aggregation.reviewNodeId,
+              type: 'review_gate',
+              maxRevisionAttempts: 3
+            }
+          ],
+          edges: [
+            {
+              from: aggregation.reviewNodeId,
+              to: 'producer',
+              when: 'changes_requested',
+              maxTraversals: 2
+            }
+          ]
+        }
+      })
+    }
+
+    resolveReviewDisagreementAndPublishMerge({
+      request: {
+        workflowRunId: aggregation.workflowRunId,
+        aggregationId: aggregation.id,
+        selectedStatus: 'changes_requested'
+      },
+      repository: repository as never,
+      schedulerId: 'scheduler.desktop',
+      userId: 'user.owner',
+      nextCommandId: sequentialCommandIds(),
+      now: () => '2026-09-15T10:00:00Z'
+    })
+
+    expect(calls.executeAndPush).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        command: expect.objectContaining({ option: 'blocked' })
+      })
+    )
   })
 })
 

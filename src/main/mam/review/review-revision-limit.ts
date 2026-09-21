@@ -1,9 +1,9 @@
 export function boundedReviewStatus(input: {
   status: 'approved' | 'changes_requested' | 'blocked'
-  attemptCount: number
+  revisionCount: number
   maxRevisionAttempts: number
 }): 'approved' | 'changes_requested' | 'blocked' {
-  if (input.status === 'changes_requested' && input.attemptCount >= input.maxRevisionAttempts) {
+  if (input.status === 'changes_requested' && input.revisionCount >= input.maxRevisionAttempts) {
     return 'blocked'
   }
   return input.status
@@ -23,5 +23,5 @@ export function effectiveReviewRevisionLimit(input: {
   )
   return returnEdge?.maxTraversals === undefined
     ? input.maxRevisionAttempts
-    : Math.min(input.maxRevisionAttempts, returnEdge.maxTraversals + 1)
+    : Math.min(input.maxRevisionAttempts, returnEdge.maxTraversals)
 }

@@ -134,7 +134,7 @@ describe('SchedulerKernel', () => {
               subject,
               revisionTargetNodeId: 'node.implementation',
               revisionTargetTaskId: 'task.1',
-              attemptCount: 2,
+              revisionCount: 2,
               maxRevisionAttempts: 2
             }
           ]

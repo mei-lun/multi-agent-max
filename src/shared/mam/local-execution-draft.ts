@@ -5,10 +5,7 @@ import {
   MamSchemaVersionSchema,
   Sha256Schema
 } from './domain/primitives'
-import {
-  ExecutorProfileSchema,
-  LocalExecutorBindingSchema
-} from './domain/execution-profile'
+import { ExecutorProfileSchema, LocalExecutorBindingSchema } from './domain/execution-profile'
 import { EffectiveRoleConfigSnapshotSchema } from './domain/role'
 import { MamLocalSkillBindingSchema, MamSkillDefinitionSchema } from './domain/skill-definition'
 import {
@@ -93,6 +90,7 @@ export const LocalExecutionDraftSchema = z
     ]),
     frozenExecution: FrozenExecutionContextSchema.optional(),
     activeRuntimeMs: z.number().int().nonnegative(),
+    continuationAttempts: z.number().int().nonnegative().optional(),
     activeStartedAt: IsoTimestampSchema.optional(),
     lastErrorCode: z.string().min(1).max(120).optional(),
     lastErrorAt: IsoTimestampSchema.optional(),

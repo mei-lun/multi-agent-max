@@ -42,7 +42,7 @@ export function automaticReviewSubmission(
     workflowRunId: prepared.workflowRunId,
     reviewerTaskId: prepared.taskId,
     reviewerAttemptId: prepared.attemptId,
-    status: report.status,
+    status: automaticReviewStatus(report),
     summary: report.summary,
     findings: report.findings.map((finding) => ({
       severity: finding.severity,
@@ -54,6 +54,18 @@ export function automaticReviewSubmission(
   }
   const parsed = MamSubmitReviewInputSchema.safeParse(request)
   return parsed.success ? parsed.data : undefined
+}
+
+function automaticReviewStatus(
+  report: z.infer<typeof automaticReviewReportSchema>
+): 'approved' | 'changes_requested' | 'blocked' {
+  if (
+    report.status === 'changes_requested' &&
+    !report.findings.some((finding) => finding.severity === 'blocker')
+  ) {
+    return 'approved'
+  }
+  return report.status
 }
 
 export function normalizeAutomaticReviewReport(
@@ -119,7 +131,6 @@ function finalizeReport(
     status === 'changes_requested' && findings.length === 0 && !isGenericChangeSummary(summary)
       ? [reviewFinding(summary)]
       : findings
-  if (status === 'changes_requested' && actionable.length === 0) return undefined
   const parsed = automaticReviewReportSchema.safeParse({ status, summary, findings: actionable })
   return parsed.success ? parsed.data : undefined
 }

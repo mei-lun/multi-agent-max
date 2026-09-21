@@ -14,6 +14,7 @@ import { createWorkflowRunBundle, createWorkflowRunCommand } from '../workflow-r
 export function createAttemptExecutionAcceptanceFixture(input?: {
   mergeValidations?: readonly string[]
   executorKind?: 'codex-cli' | 'pi-rpc'
+  retryMaxAttempts?: number
 }) {
   const root = mkdtempSync(join(tmpdir(), 'mam-attempt-execution-'))
   const origin = join(root, 'origin.git')
@@ -56,9 +57,11 @@ export function createAttemptExecutionAcceptanceFixture(input?: {
       supportsStructuredOutput: true
     }
   })
-  const role = catalog.roles.save(roleProfile('role.builder', 'Builder', executor.id, model.id))
+  const role = catalog.roles.save(
+    roleProfile('role.builder', 'Builder', executor.id, model.id, input?.retryMaxAttempts)
+  )
   const reviewerRole = catalog.roles.save(
-    roleProfile('role.reviewer', 'Reviewer', executor.id, model.id)
+    roleProfile('role.reviewer', 'Reviewer', executor.id, model.id, input?.retryMaxAttempts)
   )
   const definition = catalog.workflows.save(workflow(input?.mergeValidations))
   const settings = new MamLocalSettingsStore(join(root, 'local-settings.json'), 'machine.test')
@@ -143,7 +146,8 @@ function roleProfile(
   id: string,
   displayName: string,
   executorProfileId: string,
-  modelProfileId: string
+  modelProfileId: string,
+  retryMaxAttempts = 1
 ): RoleProfile {
   return {
     schemaVersion: '1.0.0',
@@ -170,7 +174,7 @@ function roleProfile(
       maxCostUsd: 1,
       maxDurationSeconds: 600
     },
-    retry: { maxAttempts: 1, initialBackoffMs: 0, maxBackoffMs: 0 },
+    retry: { maxAttempts: retryMaxAttempts, initialBackoffMs: 0, maxBackoffMs: 0 },
     contextPolicy: {
       maxContextTokens: 10_000,
       compaction: 'disabled',

@@ -12,7 +12,7 @@ describe('ReviewAggregationPolicy', () => {
         maxRevisionAttempts: 4,
         edges: [{ from: 'review', when: 'changes_requested', maxTraversals: 1 }]
       })
-    ).toBe(2)
+    ).toBe(1)
   })
 
   it('classifies consensus and mergeable finding differences without a user gate', () => {

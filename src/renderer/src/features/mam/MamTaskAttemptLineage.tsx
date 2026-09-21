@@ -2,7 +2,8 @@ import { History } from 'lucide-react'
 import { useState } from 'react'
 import type {
   MamRecoverAttemptInput,
-  MamSelectAttemptInput
+  MamSelectAttemptInput,
+  MamStartAttemptInput
 } from '../../../../shared/mam/application-command'
 import type {
   MamAttemptDiff,
@@ -19,6 +20,7 @@ export function MamTaskAttemptLineage({
   selectedAttemptId,
   workflowRunId,
   pending,
+  onStartAttempt,
   onRecoverAttempt,
   onSelectAttempt,
   onGetAttemptDiff
@@ -27,6 +29,7 @@ export function MamTaskAttemptLineage({
   selectedAttemptId?: string
   workflowRunId: string
   pending: boolean
+  onStartAttempt(input: MamStartAttemptInput): Promise<void>
   onRecoverAttempt(input: MamRecoverAttemptInput): Promise<void>
   onSelectAttempt(input: MamSelectAttemptInput): Promise<void>
   onGetAttemptDiff(input: MamGetAttemptDiffInput): Promise<MamAttemptDiff>
@@ -44,6 +47,7 @@ export function MamTaskAttemptLineage({
         selected={selectedAttemptId === latest.id}
         latest
         pending={pending}
+        onStartAttempt={onStartAttempt}
         onRecoverAttempt={onRecoverAttempt}
         onSelectAttempt={onSelectAttempt}
         onGetAttemptDiff={onGetAttemptDiff}
@@ -72,6 +76,7 @@ export function MamTaskAttemptLineage({
                   selected={selectedAttemptId === attempt.id}
                   latest={false}
                   pending={pending}
+                  onStartAttempt={onStartAttempt}
                   onRecoverAttempt={onRecoverAttempt}
                   onSelectAttempt={onSelectAttempt}
                   onGetAttemptDiff={onGetAttemptDiff}
