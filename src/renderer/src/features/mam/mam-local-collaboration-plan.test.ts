@@ -208,6 +208,45 @@ describe('local collaboration plan', () => {
     })
   })
 
+  it('automatically resumes an interrupted Review Draft on the same Attempt', () => {
+    const run = mamUiRunFixture()
+    run.tasks.push({
+      id: 'review-task.design',
+      title: 'Review design',
+      kind: 'review',
+      status: 'running',
+      roleProfileId: 'role.reviewer',
+      roleProfileVersion: 1,
+      dependencies: [],
+      recommendedRoleProfileIds: ['role.reviewer'],
+      allowedRoleProfileIds: ['role.reviewer'],
+      attemptIds: ['attempt.review'],
+      reviewIds: [],
+      executionWarningCount: 0
+    })
+    run.attempts.push({
+      id: 'attempt.review',
+      taskId: 'review-task.design',
+      status: 'running',
+      interruption: {
+        stage: 'executor',
+        code: 'execution_error',
+        summary: 'The local Review could not be published.',
+        nextStep: 'Resume the retained final answer.',
+        worktreeRetained: true
+      }
+    })
+
+    expect(nextMamLocalCollaborationAction(run, ['role.reviewer'])).toEqual({
+      kind: 'start',
+      input: {
+        workflowRunId: run.run.id,
+        taskId: 'review-task.design',
+        resumeNeedsAttention: true
+      }
+    })
+  })
+
   it('adds a reviewed queued result to the project', () => {
     const run = mamUiRunFixture()
     run.mergeQueueEntries.push({

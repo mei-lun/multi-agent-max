@@ -32,6 +32,7 @@ export function restoredPreparedFields(draft: LocalExecutionDraft, reviewTask = 
     claimId: draft.claimId,
     claimGeneration: draft.claimGeneration,
     formalRevisionNumber: draft.formalRevisionNumber,
+    continuationAttempts: draft.continuationAttempts ?? 0,
     roleInstanceId: draft.roleInstanceId,
     prompt: 'Continue the existing Task from the persisted session and current workspace state.',
     draftId: draft.id,

@@ -26,6 +26,7 @@ import { continuePreparedAttempt } from './pi-session-continuation'
 import type { LocalExecutionDraft } from '../../../shared/mam/local-execution-draft'
 import { preparedAttemptMatchesActiveClaim, recoverableDraftForActiveClaim, restoredAttemptIdentity, restoredExecutionContext, restoredPreparedFields, restoredWorktree } from './local-execution-draft-restore'
 import { discardSupersededLocalDrafts } from './superseded-local-draft-discard'
+import { resumeAutomaticExecutionDrafts } from './automatic-draft-resume'
 
 export class MamAttemptExecutionService {
   private readonly query: MamUiQueryService; private readonly catalog: ProfileCatalog; private readonly settings: MamLocalSettingsStore; private readonly executor: ExecutorRouter
@@ -33,7 +34,7 @@ export class MamAttemptExecutionService {
   private readonly schedulerId: string; private readonly claimantInstanceId: string; private readonly secretValues: AttemptSecretValueProvider; private readonly now: () => string
   private readonly createId: (kind: string) => string; private onStateChanged: () => void; private readonly preflight: ExecutorLocalPreflight; private readonly drafts: LocalExecutionDraftStore
   private readonly enabledExecutorKinds: ReadonlySet<ExecutorKind> | undefined
-  private readonly localTaskExecutions = new LocalTaskExecutionRegistry<MamUiSnapshot>(); private readonly preparedDrafts = new Map<string, PreparedAttempt>(); private repository: GitStateRepository | undefined
+  private readonly localTaskExecutions = new LocalTaskExecutionRegistry<MamUiSnapshot>(); private readonly preparedDrafts = new Map<string, PreparedAttempt>(); private repository: GitStateRepository | undefined; private readonly automaticallyResumedDraftIds = new Set<string>()
 
   constructor(input: MamAttemptExecutionServiceOptions) {
     this.query = input.query
@@ -58,6 +59,8 @@ export class MamAttemptExecutionService {
 
   setRepository(repository: GitStateRepository): void { this.repository = repository }
 
+  async resumeAutomaticDrafts(): Promise<void> { await resumeAutomaticExecutionDrafts({ repository: this.repository, settings: this.settings, drafts: this.drafts, claimantInstanceId: this.claimantInstanceId, resumedDraftIds: this.automaticallyResumedDraftIds, start: (next) => this.start(next), onStateChanged: this.onStateChanged }) }
+
   async start(input: unknown): Promise<MamUiSnapshot> {
     const parsed = MamStartAttemptInputSchema.parse(input)
     const key = [this.requireRepository().stateDirectory, parsed.workflowRunId, parsed.taskId].join(
@@ -67,78 +70,31 @@ export class MamAttemptExecutionService {
       let prepared: PreparedAttempt | undefined
       try {
         const retainedCandidate = this.preparedDrafts.get(key)
-        const activeClaim = this.requireRepository().rebuild(parsed.workflowRunId).tasks[
-          parsed.taskId
-        ]?.activeClaim
+        const activeClaim = this.requireRepository().rebuild(parsed.workflowRunId).tasks[parsed.taskId]?.activeClaim
         discardSupersededLocalDrafts({ store: this.drafts, worktrees: this.worktrees(), repositoryPath: this.requireRepository().projectDirectory, workflowRunId: parsed.workflowRunId, taskId: parsed.taskId, activeClaim, claimantInstanceId: this.claimantInstanceId })
-        const retained = preparedAttemptMatchesActiveClaim(
-          retainedCandidate,
-          activeClaim,
-          this.claimantInstanceId
-        )
-          ? retainedCandidate
-          : undefined
+        const retained = preparedAttemptMatchesActiveClaim(retainedCandidate, activeClaim, this.claimantInstanceId)
+          ? retainedCandidate : undefined
         if (retainedCandidate && !retained) this.preparedDrafts.delete(key)
         const unfinished = recoverableDraftForActiveClaim({ drafts: this.drafts.listUnfinished(), workflowRunId: parsed.workflowRunId, taskId: parsed.taskId, activeClaim, claimantInstanceId: this.claimantInstanceId })
-        if (unfinished?.state === 'needs_attention' && !parsed.resumeNeedsAttention) {
-          throw new Error('local_draft_needs_attention')
-        }
+        if (unfinished?.state === 'needs_attention' && !parsed.resumeNeedsAttention) throw new Error('local_draft_needs_attention')
         const persisted = unfinished
         const retainedDraft = retained?.draftId ? this.drafts.get(retained.draftId) : undefined
-        if (retainedDraft?.state === 'needs_attention' && !parsed.resumeNeedsAttention) {
-          throw new Error('local_draft_needs_attention')
-        }
-        const local = retained
-          ? continuePreparedAttempt(retained, this.drafts, this.createId('executor-invocation'))
-          : await this.prepare(parsed.workflowRunId, parsed.taskId, persisted)
-        prepared = local
-        prepared = claimPreparedAttempt(
-          prepared,
-          this.requireRepository(),
-          this.claimantInstanceId,
-          this.schedulerId,
-          this.createId,
-          this.now()
-        )
+        if (retainedDraft?.state === 'needs_attention' && !parsed.resumeNeedsAttention) throw new Error('local_draft_needs_attention')
+        prepared = retained ? continuePreparedAttempt(retained, this.drafts, this.createId('executor-invocation')) : await this.prepare(parsed.workflowRunId, parsed.taskId, persisted)
+        prepared = claimPreparedAttempt(prepared, this.requireRepository(), this.claimantInstanceId, this.schedulerId, this.createId, this.now())
         prepared = { ...prepared, draftId: `draft.${prepared.attemptId}` }
         recordPreparedAttemptRunning(this.drafts, prepared, this.now())
         this.preparedDrafts.set(key, prepared)
       } catch (error) {
         this.localTaskExecutions.release(key)
-        if (prepared)
-          abandonPreparedAttempt({
-            prepared,
-            repository: this.requireRepository(),
-            worktrees: this.worktrees(),
-            conflicts: this.conflictWorktrees(),
-            workspaceRoot: this.workspaceRoot
-          })
+        if (prepared) abandonPreparedAttempt({ prepared, repository: this.requireRepository(), worktrees: this.worktrees(), conflicts: this.conflictWorktrees(), workspaceRoot: this.workspaceRoot })
         throw error
       }
-      launchPreparedAttempt(
-        {
-          prepared,
-          executor: this.executor,
-          artifacts: this.artifacts,
-          worktrees: this.worktrees(),
-          conflicts: this.conflictWorktrees(),
-          git: createGitCommandClient(this.settings.get().gitExecutable),
-          repository: this.requireRepository(),
-          diagnostics: this.diagnostics,
-          schedulerId: this.schedulerId,
-          now: this.now,
-          createId: this.createId,
-          onActivityChanged: this.onStateChanged,
-          drafts: this.drafts
-        },
-        () => {
-          this.localTaskExecutions.release(key)
-          if (prepared.draftId && this.drafts.get(prepared.draftId)?.state === 'delivered') {
-            this.preparedDrafts.delete(key)
-          }
-          this.onStateChanged()
-        }
-      )
+      launchPreparedAttempt({ prepared, executor: this.executor, artifacts: this.artifacts, worktrees: this.worktrees(), conflicts: this.conflictWorktrees(), git: createGitCommandClient(this.settings.get().gitExecutable), repository: this.requireRepository(), diagnostics: this.diagnostics, schedulerId: this.schedulerId, now: this.now, createId: this.createId, onActivityChanged: this.onStateChanged, drafts: this.drafts }, () => {
+        this.localTaskExecutions.release(key)
+        if (prepared!.draftId && this.drafts.get(prepared!.draftId)?.state === 'delivered') this.preparedDrafts.delete(key)
+        this.onStateChanged()
+      })
       return this.query.getSnapshot()
     }, () => this.query.getSnapshot())
   }
@@ -181,7 +137,8 @@ export class MamAttemptExecutionService {
       throw new Error('frozen_role_profile_hash_mismatch')
     }
     const frozen = persisted ? restoredExecutionContext(persisted) : undefined
-    const profile = frozen?.profile ?? this.catalog.executors.getActive(role.execution.executorProfileId)
+    const profile =
+      frozen?.profile ?? this.catalog.executors.getActive(role.execution.executorProfileId)
     if (!profile) throw new Error('executor_profile_not_found')
     if (this.enabledExecutorKinds && !this.enabledExecutorKinds.has(profile.kind)) {
       throw new Error(`executor_not_enabled:${profile.kind}`)
@@ -261,7 +218,10 @@ export class MamAttemptExecutionService {
             baseRef: task.baseRef,
             ...(task.baseBranch ? { baseBranch: task.baseBranch } : {})
           })
-    const roleInstanceId = persisted?.roleInstanceId ?? this.createId('role-instance'); const restoredFields = persisted ? restoredPreparedFields(persisted, Boolean(task.reviewTask)) : undefined
+    const roleInstanceId = persisted?.roleInstanceId ?? this.createId('role-instance')
+    const restoredFields = persisted
+      ? restoredPreparedFields(persisted, Boolean(task.reviewTask))
+      : undefined
     return {
       workflowRunId,
       taskId,
@@ -299,9 +259,19 @@ export class MamAttemptExecutionService {
     }
   }
 
-  private worktrees(): AttemptWorktreeManager { return new AttemptWorktreeManager(createGitCommandClient(this.settings.get().gitExecutable)) }
+  private worktrees(): AttemptWorktreeManager {
+    return new AttemptWorktreeManager(createGitCommandClient(this.settings.get().gitExecutable))
+  }
 
-  private conflictWorktrees(): ConflictResolutionWorktreeManager { return new ConflictResolutionWorktreeManager(createGitCommandClient(this.settings.get().gitExecutable)) }
+  private conflictWorktrees(): ConflictResolutionWorktreeManager {
+    return new ConflictResolutionWorktreeManager(
+      createGitCommandClient(this.settings.get().gitExecutable)
+    )
+  }
 
-  private requireRepository(): GitStateRepository { if (!this.repository) throw new Error('project_not_attached'); return this.repository }
+  private requireRepository(): GitStateRepository {
+    if (!this.repository) throw new Error('project_not_attached')
+    return this.repository
+  }
+
 }

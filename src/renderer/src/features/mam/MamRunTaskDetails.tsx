@@ -62,6 +62,7 @@ export function MamRunTaskDetails({
         {...(task.selectedAttemptId ? { selectedAttemptId: task.selectedAttemptId } : {})}
         workflowRunId={run.run.id}
         pending={pending}
+        allowDraftContinuation={task.kind === 'review'}
         onStartAttempt={onStartAttempt}
         onRecoverAttempt={onRecoverAttempt}
         onSelectAttempt={onSelectAttempt}

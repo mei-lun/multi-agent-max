@@ -89,8 +89,10 @@ export function recordPreparedAttemptRunning(
 }
 
 export function remainingPreparedAttemptRuntimeMs(
-  _store: LocalExecutionDraftStore | undefined,
+  store: LocalExecutionDraftStore | undefined,
   prepared: PreparedAttempt
 ): number {
-  return prepared.snapshot.budget.maxDurationSeconds * 1000
+  const total = prepared.snapshot.budget.maxDurationSeconds * 1000
+  if (!store || !prepared.draftId) return total
+  return Math.max(0, total - (store.get(prepared.draftId)?.activeRuntimeMs ?? 0))
 }

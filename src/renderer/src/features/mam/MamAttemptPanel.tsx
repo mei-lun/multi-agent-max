@@ -21,6 +21,7 @@ export function MamAttemptPanel({
   latest,
   workflowRunId,
   pending,
+  allowDraftContinuation = false,
   onStartAttempt,
   onRecoverAttempt,
   onSelectAttempt,
@@ -31,6 +32,7 @@ export function MamAttemptPanel({
   latest: boolean
   workflowRunId: string
   pending: boolean
+  allowDraftContinuation?: boolean
   onStartAttempt(input: MamStartAttemptInput): Promise<void>
   onRecoverAttempt(input: MamRecoverAttemptInput): Promise<void>
   onSelectAttempt(input: MamSelectAttemptInput): Promise<void>
@@ -66,13 +68,20 @@ export function MamAttemptPanel({
       {attempt.interruption && <AttemptInterruptionNotice interruption={attempt.interruption} />}
       {latest &&
         attempt.status === 'running' &&
-        attempt.interruption?.code === 'executor_timeout' && (
+        attempt.interruption &&
+        (attempt.interruption.code === 'executor_timeout' || allowDraftContinuation) && (
           <div className="mt-3 border-t border-border pt-3">
             <Button
               variant="outline"
               size="xs"
               disabled={pending}
-              onClick={() => void onStartAttempt({ workflowRunId, taskId: attempt.taskId })}
+              onClick={() =>
+                void onStartAttempt({
+                  workflowRunId,
+                  taskId: attempt.taskId,
+                  resumeNeedsAttention: true
+                })
+              }
             >
               <Play /> Continue Attempt
             </Button>

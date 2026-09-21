@@ -1,4 +1,4 @@
-import { MessagesSquare, ShieldCheck } from 'lucide-react'
+import { Lightbulb, MessagesSquare, ShieldCheck } from 'lucide-react'
 import type {
   MamResolveReviewDisagreementInput,
   MamSubmitReviewInput
@@ -150,6 +150,11 @@ function DecisionSection({
             />
             {decision.findings.length > 0 && (
               <div className="mt-4 space-y-2 border-t border-border pt-3">
+                {decision.status === 'approved' && (
+                  <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                    <Lightbulb className="size-3.5" /> Suggestions for a future version
+                  </p>
+                )}
                 {decision.findings.map((finding) => (
                   <div key={finding.id} className="flex items-start gap-3 text-xs">
                     <FindingSeverity severity={finding.severity} />

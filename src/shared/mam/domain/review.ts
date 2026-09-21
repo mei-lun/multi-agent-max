@@ -60,9 +60,7 @@ export const ReviewDecisionSchema = z
     }
     if (
       decision.status === 'approved' &&
-      decision.findings.some(
-        (finding) => finding.severity === 'blocker' || finding.severity === 'high'
-      )
+      decision.findings.some((finding) => finding.severity === 'blocker')
     ) {
       context.addIssue({
         code: 'custom',

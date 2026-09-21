@@ -59,12 +59,9 @@ export function automaticReviewSubmission(
 function automaticReviewStatus(
   report: z.infer<typeof automaticReviewReportSchema>
 ): 'approved' | 'changes_requested' | 'blocked' {
-  if (
-    report.status === 'changes_requested' &&
-    !report.findings.some((finding) => finding.severity === 'blocker')
-  ) {
-    return 'approved'
-  }
+  const hasBlockingFinding = report.findings.some((finding) => finding.severity === 'blocker')
+  if (hasBlockingFinding && report.status !== 'blocked') return 'changes_requested'
+  if (report.status === 'changes_requested') return 'approved'
   return report.status
 }
 

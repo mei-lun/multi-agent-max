@@ -10,9 +10,13 @@ describe('MamAttemptPanel', () => {
   it('keeps non-timeout Executor interruptions on the reconciliation path', () => {
     expect(renderAttempt('executor_error')).not.toContain('Continue Attempt')
   })
+
+  it('offers continuation for a retained Review final answer', () => {
+    expect(renderAttempt('execution_error', true)).toContain('Continue Attempt')
+  })
 })
 
-function renderAttempt(code: string): string {
+function renderAttempt(code: string, allowDraftContinuation = false): string {
   return renderToStaticMarkup(
     <MamAttemptPanel
       workflowRunId="run.test"
@@ -33,6 +37,7 @@ function renderAttempt(code: string): string {
       selected={false}
       latest
       pending={false}
+      allowDraftContinuation={allowDraftContinuation}
       onStartAttempt={async () => undefined}
       onRecoverAttempt={async () => undefined}
       onSelectAttempt={async () => undefined}

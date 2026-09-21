@@ -139,6 +139,40 @@ describe('automatic Review submission', () => {
     })
   })
 
+  it.each([
+    {
+      status: 'changes_requested' as const,
+      severity: 'high' as const,
+      expected: 'approved' as const
+    },
+    { status: 'approved' as const, severity: 'high' as const, expected: 'approved' as const },
+    {
+      status: 'approved' as const,
+      severity: 'blocker' as const,
+      expected: 'changes_requested' as const
+    }
+  ])(
+    'maps automatic $status with $severity findings to $expected',
+    ({ status, severity, expected }) => {
+      expect(
+        automaticReviewSubmission(
+          preparedReview(),
+          validatedReview({
+            status,
+            summary: 'A release-blocking issue remains.',
+            findings: [
+              {
+                severity,
+                category: 'correctness',
+                summary: 'The primary workflow cannot complete.'
+              }
+            ]
+          })
+        )
+      ).toMatchObject({ status: expected })
+    }
+  )
+
   it('supersedes an automatic Review after its subject has been replaced', () => {
     const request = automaticReviewSubmission(
       preparedReview(),

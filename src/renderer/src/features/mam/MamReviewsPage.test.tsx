@@ -199,7 +199,17 @@ describe('MamReviewsPage', () => {
       reviewerAttemptId: 'attempt.review',
       reviewerRoleInstanceId: 'role-instance.reviewer',
       status: 'approved',
-      findings: [],
+      findings: [
+        {
+          schemaVersion: '1.0.0',
+          id: 'finding.suggestion',
+          attemptId: 'attempt.build',
+          severity: 'medium',
+          category: 'maintainability',
+          summary: 'Consider extracting the input parser in a future version.',
+          evidence: []
+        }
+      ],
       summary: 'Ready to integrate.',
       createdAt: '2026-07-28T18:00:00Z'
     })
@@ -240,6 +250,8 @@ describe('MamReviewsPage', () => {
     )
 
     expect(markup).toContain('released commit abcdef1 to the develop integration stage')
+    expect(markup).toContain('Suggestions for a future version')
+    expect(markup).toContain('Consider extracting the input parser in a future version.')
     expect(markup).toContain('View integration activity')
   })
 })

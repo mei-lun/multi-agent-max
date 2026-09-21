@@ -177,6 +177,7 @@ function createMainWindow(): void {
     secretValues,
     ...(initialRepository ? { repository: initialRepository } : {})
   })
+  if (initialRepository) setImmediate(() => void attempts.resumeAutomaticDrafts())
   commands.setOnStateChanged(notifySnapshotChanged)
   workflowRuns.setOnStateChanged(notifySnapshotChanged)
   const attemptInspection = new MamAttemptInspectionService(initialRepository, () =>
@@ -216,6 +217,7 @@ function createMainWindow(): void {
       commands.setRepository(repository)
       workflowRuns.setRepository(repository)
       attempts.setRepository(repository)
+      setImmediate(() => void attempts.resumeAutomaticDrafts())
       attemptInspection.setRepository(repository)
       mergeQueue.setRepository(repository)
       return service.getSnapshot()

@@ -5,13 +5,13 @@ import {
 } from './prepared-attempt-draft'
 
 describe('remainingPreparedAttemptRuntimeMs', () => {
-  it('grants each resumed Executor invocation its configured runtime budget', () => {
+  it('uses the Draft cumulative active runtime across resumed invocations', () => {
     const store = { get: () => ({ activeRuntimeMs: 59_000 }) }
     const prepared = {
       draftId: 'draft.1',
       snapshot: { budget: { maxDurationSeconds: 60 } }
     }
-    expect(remainingPreparedAttemptRuntimeMs(store as never, prepared as never)).toBe(60_000)
+    expect(remainingPreparedAttemptRuntimeMs(store as never, prepared as never)).toBe(1_000)
   })
 
   it('adds the active interval when a running Draft is paused', () => {

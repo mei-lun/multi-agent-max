@@ -90,11 +90,11 @@ describe('MAM Review output recovery with real Git state', () => {
         throw new Error('model_must_not_run')
       })
       const recovered = completionSignal()
-      await service(fixture, ids, recovered.resolve, execute, diagnostics).start({
-        workflowRunId: fixture.bundle.run.id,
-        taskId: reviewTask.id,
-        resumeNeedsAttention: true
+      fixture.settings.save({
+        ...fixture.settings.get(),
+        automaticWorkflowRunIds: [fixture.bundle.run.id]
       })
+      await service(fixture, ids, recovered.resolve, execute, diagnostics).resumeAutomaticDrafts()
       await recovered.promise
 
       const projection = fixture.repository.rebuild(fixture.bundle.run.id)

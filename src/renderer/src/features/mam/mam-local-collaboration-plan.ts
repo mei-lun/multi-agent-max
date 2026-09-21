@@ -44,6 +44,30 @@ export function nextMamLocalCollaborationAction(
     if (recovery) return recovery
     return wait('human_decision', attentionTaskMessage(run, attentionTask))
   }
+  const interruptedReview = run.tasks.find(
+    (task) =>
+      task.kind === 'review' &&
+      task.status === 'running' &&
+      Boolean(task.roleProfileId) &&
+      participatingRoleProfileIds.includes(task.roleProfileId!) &&
+      [...task.attemptIds]
+        .reverse()
+        .map((attemptId) => run.attempts.find((attempt) => attempt.id === attemptId))
+        .some(
+          (attempt) =>
+            attempt?.status === 'running' && attempt.interruption?.worktreeRetained === true
+        )
+  )
+  if (interruptedReview) {
+    return {
+      kind: 'start',
+      input: {
+        workflowRunId: run.run.id,
+        taskId: interruptedReview.id,
+        resumeNeedsAttention: true
+      }
+    }
+  }
   const activeAttempt = run.attempts.find(
     (attempt) => attempt.status === 'announced' || attempt.status === 'running'
   )

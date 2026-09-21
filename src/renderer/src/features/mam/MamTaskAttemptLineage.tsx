@@ -20,6 +20,7 @@ export function MamTaskAttemptLineage({
   selectedAttemptId,
   workflowRunId,
   pending,
+  allowDraftContinuation,
   onStartAttempt,
   onRecoverAttempt,
   onSelectAttempt,
@@ -29,6 +30,7 @@ export function MamTaskAttemptLineage({
   selectedAttemptId?: string
   workflowRunId: string
   pending: boolean
+  allowDraftContinuation: boolean
   onStartAttempt(input: MamStartAttemptInput): Promise<void>
   onRecoverAttempt(input: MamRecoverAttemptInput): Promise<void>
   onSelectAttempt(input: MamSelectAttemptInput): Promise<void>
@@ -47,6 +49,7 @@ export function MamTaskAttemptLineage({
         selected={selectedAttemptId === latest.id}
         latest
         pending={pending}
+        allowDraftContinuation={allowDraftContinuation}
         onStartAttempt={onStartAttempt}
         onRecoverAttempt={onRecoverAttempt}
         onSelectAttempt={onSelectAttempt}
@@ -76,6 +79,7 @@ export function MamTaskAttemptLineage({
                   selected={selectedAttemptId === attempt.id}
                   latest={false}
                   pending={pending}
+                  allowDraftContinuation={false}
                   onStartAttempt={onStartAttempt}
                   onRecoverAttempt={onRecoverAttempt}
                   onSelectAttempt={onSelectAttempt}
