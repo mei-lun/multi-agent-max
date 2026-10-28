@@ -11,6 +11,89 @@ import {
 } from './mam-local-collaboration-plan'
 
 describe('local collaboration plan', () => {
+  it('keeps an independent Task moving while a connection retry awaits the user', () => {
+    const run = mamUiRunFixture()
+    run.tasks.push(
+      {
+        id: 'task.waiting',
+        title: 'Waiting for model',
+        kind: 'static',
+        status: 'running',
+        roleProfileId: 'role.builder',
+        roleProfileVersion: 1,
+        dependencies: [],
+        recommendedRoleProfileIds: ['role.builder'],
+        allowedRoleProfileIds: ['role.builder'],
+        attemptIds: [],
+        reviewIds: [],
+        executionWarningCount: 0,
+        activeClaim: {
+          schemaVersion: '1.0.0',
+          claimId: 'claim.waiting',
+          taskId: 'task.waiting',
+          roleProfileId: 'role.builder',
+          roleProfileVersion: 1,
+          claimantInstanceId: 'claimant.local',
+          generation: 1,
+          claimedAt: '2026-07-28T17:30:00Z'
+        }
+      },
+      {
+        id: 'task.independent',
+        title: 'Independent implementation',
+        kind: 'static',
+        status: 'ready',
+        roleProfileId: 'role.builder',
+        roleProfileVersion: 1,
+        dependencies: [],
+        recommendedRoleProfileIds: ['role.builder'],
+        allowedRoleProfileIds: ['role.builder'],
+        attemptIds: [],
+        reviewIds: [],
+        executionWarningCount: 0
+      }
+    )
+    expect(
+      nextMamLocalCollaborationAction(run, ['role.builder'], new Set(['task.waiting']))
+    ).toEqual({
+      kind: 'start',
+      input: { workflowRunId: run.run.id, taskId: 'task.independent' }
+    })
+  })
+  it('integrates a queued independent branch while another Task awaits retry', () => {
+    const run = runWithQueuedMerge('run.independent-merge', '2026-07-28T18:00:00Z')
+    run.tasks.push({ id: 'task.waiting', title: 'Waiting for model', kind: 'static',
+      status: 'running', roleProfileId: 'role.builder', roleProfileVersion: 1,
+      dependencies: [], recommendedRoleProfileIds: ['role.builder'],
+      allowedRoleProfileIds: ['role.builder'], attemptIds: [], reviewIds: [],
+      executionWarningCount: 0, activeClaim: {
+        schemaVersion: '1.0.0', claimId: 'claim.waiting', taskId: 'task.waiting',
+        roleProfileId: 'role.builder', roleProfileVersion: 1,
+        claimantInstanceId: 'claimant.local', generation: 1,
+        claimedAt: '2026-07-28T17:30:00Z'
+      } })
+    const snapshot = { ...mamUiSnapshotFixture(), runs: [run] }
+    snapshot.localRetryItems.push({ workflowRunId: run.run.id,
+      taskId: 'task.waiting', draftId: 'draft.waiting',
+      errorCode: 'executor_connection_failed', occurredAt: '2026-07-28T18:00:00Z',
+      automaticRetriesUsed: 1, automaticRetryLimit: 2, canRetry: true })
+    expect(nextMamLocalMergeRunId(snapshot, [run.run.id], ['role.builder'])).toBe(run.run.id)
+  })
+  it('does not start a dependent Task while its upstream Task needs attention', () => {
+    const run = mamUiRunFixture()
+    run.tasks.push(
+      { id: 'task.blocked', title: 'Blocked implementation', kind: 'static',
+        status: 'needs_attention', dependencies: [],
+        recommendedRoleProfileIds: ['role.builder'], allowedRoleProfileIds: ['role.builder'],
+        attemptIds: [], reviewIds: [], executionWarningCount: 0 },
+      { id: 'task.downstream', title: 'Dependent review', kind: 'static',
+        status: 'ready', roleProfileId: 'role.builder', roleProfileVersion: 1,
+        dependencies: ['task.blocked'], recommendedRoleProfileIds: ['role.builder'],
+        allowedRoleProfileIds: ['role.builder'], attemptIds: [], reviewIds: [],
+        executionWarningCount: 0 }
+    )
+    expect(nextMamLocalCollaborationAction(run, ['role.builder']).kind).toBe('wait')
+  })
   it('activates an unstarted Task with its participating fixed Workflow Role', () => {
     const run = mamUiRunFixture()
     run.run.roleCatalog = [

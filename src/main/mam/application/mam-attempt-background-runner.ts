@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs'
+import { isRetryableConnectionFailure } from '../executors/pi-rpc-connection-failure'
 import { diagnosticError } from '../diagnostics/diagnostic-error'
 import type { DiagnosticsRecorder } from '../diagnostics/diagnostics-recorder'
 import type { GitStateRepository } from '../state-store/git-state-repository'
@@ -58,7 +59,14 @@ export async function runPreparedAttempt(input: PreparedAttemptRunnerInput): Pro
   let executorCompleted = false
   try {
     recordAttemptRunnerStart(runnerInput)
-    const executionState = await executePreparedAttemptWithTimeoutRecovery(input, prepared)
+    const executionState = await executePreparedAttemptWithTimeoutRecovery(
+      input,
+      prepared,
+      (next) => {
+        prepared = next
+        runnerInput = { ...input, prepared: next }
+      }
+    )
     prepared = executionState.prepared
     runnerInput = { ...input, prepared }
     eventObserver = executionState.eventObserver
@@ -284,7 +292,9 @@ export async function runPreparedAttempt(input: PreparedAttemptRunnerInput): Pro
     recordPreparedAttemptDraftState({
       store: input.drafts,
       prepared,
-      state: errorCode(error) === 'executor_timeout' ? 'waiting_for_resume' : 'needs_attention',
+      state: isRetryableConnectionFailure(errorCode(error))
+        ? 'waiting_for_resume'
+        : 'needs_attention',
       at: input.now(),
       errorCode: errorCode(error)
     })

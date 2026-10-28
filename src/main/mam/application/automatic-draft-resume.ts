@@ -3,6 +3,7 @@ import type { MamLocalSettingsStore } from '../profiles/mam-local-settings-store
 import type { GitStateRepository } from '../state-store/git-state-repository'
 import type { LocalExecutionDraftStore } from './local-execution-draft-store'
 import { recoverablePiSessionText } from './pi-session-continuation'
+import { isRetryableConnectionFailure } from '../executors/pi-rpc-connection-failure'
 
 export async function resumeAutomaticExecutionDrafts(input: {
   repository: GitStateRepository | undefined
@@ -50,6 +51,7 @@ function canResume(
     return false
   }
   if (draft.state === 'waiting_for_resume') {
+    if (!isRetryableConnectionFailure(draft.lastErrorCode)) return false
     const retryLimit = draft.frozenExecution?.resolvedConfig.snapshot.retry.maxAttempts ?? 1
     return (draft.continuationAttempts ?? 0) + 1 < retryLimit
   }

@@ -474,6 +474,7 @@ created
 - Task 取得 Claim 后先创建本机 `LocalExecutionDraft`；普通执行、Provider 重试、请求超时后的继续和进程重启恢复都复用同一 Draft 及其预分配 Attempt ID。
 - Draft 启动前在本地持久化 `EffectiveRoleConfigSnapshot` 及其 hash；快照不得包含 secret value，正式交付前不得写入共享 `mam-state`。
 - Provider 单次请求期限按剩余活动预算自动限制在 60 至 300 秒；Pi agent-level 自动重试最多一次。上游更早返回超时时，Draft 进入 `waiting_for_resume`，用户可以继续、从头重置本地草稿或丢弃并释放 Claim。
+- Pi 的可识别超时、连接中断、限流和临时服务错误在同一 Draft、Attempt ID、配置、会话与 worktree 内按冻结的 Role retry 上限自动续跑。自动次数耗尽后，持有有效 Claim 的本机在“待我处理”展示重试事项；用户明确点击后才继续原 Draft。会话、worktree 或剩余运行预算不可用时显示原因并转入恢复核对，不提供盲目重试；其他机器不展示本机事项。无法确认外部副作用的错误仍按下一条的人工核对规则处理。等待此 Task 时，独立且已就绪的分支仍可推进。
 - Executor 必须产生符合统一 JSON Schema 的结果对象；缺失或校验失败时 Attempt 不能进入 `submitted`。
 - 已提交的 Artifact 和 commit SHA 不可修改。
 - 只有 Result、Artifact、commit 和 Claim generation 全部校验通过后，才以一个权威批次创建正式 Attempt、保存 Effective Config、更新 `currentDeliveryAttemptId` 并完成 Claim。本地失败或放弃的 Draft 不进入正式 Attempt 历史。

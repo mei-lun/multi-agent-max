@@ -37,7 +37,16 @@ export function useMamLocalCollaboration(state: MamSnapshotState): ReadonlyMap<s
           currentRunId = workflowRunId
           const run = snapshot.runs.find((candidate) => candidate.run.id === workflowRunId)
           if (!run) continue
-          const action = nextMamLocalCollaborationAction(run, participatingRoleIds)
+          const manualRetryTaskIds = new Set(
+            (snapshot.localRetryItems ?? [])
+              .filter((item) => item.workflowRunId === workflowRunId)
+              .map((item) => item.taskId)
+          )
+          const action = nextMamLocalCollaborationAction(
+            run,
+            participatingRoleIds,
+            manualRetryTaskIds
+          )
           const actionKey = localActionKey(action, run.run.updatedAt, snapshot.localSettings)
           if (failedActions.current.get(workflowRunId) === actionKey) continue
           if (action.kind === 'assign') {
@@ -83,7 +92,15 @@ export function useMamLocalCollaboration(state: MamSnapshotState): ReadonlyMap<s
             failedActions.current.set(
               currentRunId,
               localActionKey(
-                nextMamLocalCollaborationAction(run, participatingRoleIds),
+                nextMamLocalCollaborationAction(
+                  run,
+                  participatingRoleIds,
+                  new Set(
+                    (snapshot.localRetryItems ?? [])
+                      .filter((item) => item.workflowRunId === currentRunId)
+                      .map((item) => item.taskId)
+                  )
+                ),
                 run.run.updatedAt,
                 snapshot.localSettings
               )

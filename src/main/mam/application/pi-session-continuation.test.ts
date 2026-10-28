@@ -6,6 +6,8 @@ import type { LocalExecutionDraft } from '../../../shared/mam/local-execution-dr
 import type { PreparedAttempt } from './mam-attempt-execution-types'
 import { LocalExecutionDraftStore } from './local-execution-draft-store'
 import { continuePreparedAttempt } from './pi-session-continuation'
+import { projectLocalRetryItems } from './local-retry-projection'
+import { emptyWorkflowRunProjection } from '../state-store/git-event-projection'
 
 const directories: string[] = []
 
@@ -14,6 +16,37 @@ afterEach(async () => {
 })
 
 describe('Pi session continuation', () => {
+  it('offers a local manual retry after the frozen retry limit', async () => {
+    const fixture = await recoveryFixture(reviewFinalAnswer(), 'waiting_for_resume')
+    const saved = fixture.store.get('draft.attempt.review')!
+    await mkdir(saved.worktreePath)
+    const draft = {
+      ...saved,
+      lastErrorCode: 'executor_connection_failed',
+      continuationAttempts: 1,
+      frozenExecution: {
+        resolvedConfig: {
+          snapshot: { retry: { maxAttempts: 2 }, budget: { maxDurationSeconds: 600 } }
+        }
+      }
+    } as unknown as LocalExecutionDraft
+    const projection = {
+      ...emptyWorkflowRunProjection(draft.workflowRunId),
+      tasks: { [draft.taskId]: { activeClaim: {
+        claimId: draft.claimId,
+        generation: draft.claimGeneration,
+        claimantInstanceId: 'claimant.local'
+      } } as never }
+    }
+    expect(
+      projectLocalRetryItems({
+        drafts: [draft],
+        workflowRunId: draft.workflowRunId,
+        projection,
+        claimantInstanceId: 'claimant.local'
+      })
+    ).toMatchObject([{ canRetry: true, automaticRetriesUsed: 1 }])
+  })
   it('preserves the original invocation only for deterministic Review recovery', async () => {
     const fixture = await recoveryFixture(reviewFinalAnswer())
     const continued = continuePreparedAttempt(

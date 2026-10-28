@@ -94,6 +94,7 @@ describe('MamMyRolePage', () => {
         snapshot={{
           schemaVersion: '1.0.0',
           generatedAt: '2026-07-28T18:00:00Z',
+          localRetryItems: [],
           roles: [mamUiRoleFixture()],
           executors: [],
           providers: [],

@@ -36,7 +36,7 @@ export function preparedAttemptDraft(
     effectiveConfigHash: prepared.snapshot.contentHash,
     executorKind: prepared.profile.kind,
     invocationDirectory,
-    sessionDirectory: join(invocationDirectory, 'sessions'),
+    sessionDirectory: previous?.sessionDirectory ?? join(invocationDirectory, 'sessions'),
     worktreePath: prepared.worktree.path,
     worktreeBranch: prepared.worktree.branch,
     baseCommit: prepared.worktree.baseCommit,

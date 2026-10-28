@@ -88,6 +88,7 @@ export function App(): React.JSX.Element {
         run.humanReviewGates.filter((gate) => gate.status === 'pending').length,
       0
     ) ?? 0
+  const attentionCount = humanAttentionCount + (state.snapshot?.localRetryItems?.length ?? 0)
   return (
     <div className="flex h-dvh flex-col bg-background text-foreground">
       <LocalizedUiText />
@@ -180,7 +181,7 @@ export function App(): React.JSX.Element {
             current={page === 'attention'}
             icon={MessageCircleQuestion}
             label="Needs Attention"
-            count={humanAttentionCount}
+            count={attentionCount}
             onClick={() => setPage('attention')}
           />
           <NavigationButton
@@ -489,6 +490,7 @@ function ActivePage({
         onConfirm={onConfirmHumanUnderstanding}
         onRevise={onReviseHumanUnderstanding}
         onResolveReview={onResolveHumanReview}
+        onRetry={onStartAttempt}
       />
     )
   }

@@ -390,7 +390,10 @@ describe('MAM Attempt execution with real Git state', () => {
       fakeExecution,
       'claimant.restart'
     )
-    await restarted.start({ workflowRunId: fixture.bundle.run.id, taskId: fixture.taskId })
+    await expect(restarted.start({ workflowRunId: fixture.bundle.run.id, taskId: fixture.taskId }))
+      .rejects.toThrow('local_connection_retry_requires_user')
+    await restarted.start({ workflowRunId: fixture.bundle.run.id, taskId: fixture.taskId,
+      resumeNeedsAttention: true })
     await completed.promise
     await vi.waitFor(
       () =>

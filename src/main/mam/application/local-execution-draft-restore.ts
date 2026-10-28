@@ -28,6 +28,8 @@ export function restoredPreparedFields(draft: LocalExecutionDraft, reviewTask = 
   if (requiresReviewRecovery && !recoveredAssistantText) {
     throw new Error('review_output_recovery_unavailable')
   }
+  if (draft.state === 'waiting_for_resume' && draft.executorKind === 'pi-rpc' && !resumeSessionFile)
+    throw new Error('pi_session_unavailable')
   return {
     claimId: draft.claimId,
     claimGeneration: draft.claimGeneration,

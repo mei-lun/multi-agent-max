@@ -27,6 +27,7 @@ import type { LocalExecutionDraft } from '../../../shared/mam/local-execution-dr
 import { preparedAttemptMatchesActiveClaim, recoverableDraftForActiveClaim, restoredAttemptIdentity, restoredExecutionContext, restoredPreparedFields, restoredWorktree } from './local-execution-draft-restore'
 import { discardSupersededLocalDrafts } from './superseded-local-draft-discard'
 import { resumeAutomaticExecutionDrafts } from './automatic-draft-resume'
+import { requireLocalConnectionRetryDecision } from './local-connection-retry-guard'
 
 export class MamAttemptExecutionService {
   private readonly query: MamUiQueryService; private readonly catalog: ProfileCatalog; private readonly settings: MamLocalSettingsStore; private readonly executor: ExecutorRouter
@@ -76,9 +77,11 @@ export class MamAttemptExecutionService {
           ? retainedCandidate : undefined
         if (retainedCandidate && !retained) this.preparedDrafts.delete(key)
         const unfinished = recoverableDraftForActiveClaim({ drafts: this.drafts.listUnfinished(), workflowRunId: parsed.workflowRunId, taskId: parsed.taskId, activeClaim, claimantInstanceId: this.claimantInstanceId })
+        requireLocalConnectionRetryDecision(unfinished, parsed.resumeNeedsAttention)
         if (unfinished?.state === 'needs_attention' && !parsed.resumeNeedsAttention) throw new Error('local_draft_needs_attention')
         const persisted = unfinished
         const retainedDraft = retained?.draftId ? this.drafts.get(retained.draftId) : undefined
+        requireLocalConnectionRetryDecision(retainedDraft, parsed.resumeNeedsAttention)
         if (retainedDraft?.state === 'needs_attention' && !parsed.resumeNeedsAttention) throw new Error('local_draft_needs_attention')
         prepared = retained ? continuePreparedAttempt(retained, this.drafts, this.createId('executor-invocation')) : await this.prepare(parsed.workflowRunId, parsed.taskId, persisted)
         prepared = claimPreparedAttempt(prepared, this.requireRepository(), this.claimantInstanceId, this.schedulerId, this.createId, this.now())

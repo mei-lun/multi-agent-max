@@ -97,7 +97,7 @@ function createMainWindow(): void {
     ],
     previousLogDirectories
   )
-  const initialRepository = configuredStateRepository(localSettings)
+  const initialRepository = configuredStateRepository(localSettings); const executionDrafts = new LocalExecutionDraftStore(join(mamRoot, 'execution-drafts'))
   let activeProjectDirectory =
     initialRepository?.projectDirectory ??
     localSettings.get().defaultProjectDirectory ??
@@ -128,7 +128,9 @@ function createMainWindow(): void {
     },
     initialRepository,
     undefined,
-    diagnostics
+    diagnostics,
+    executionDrafts,
+    () => 'claimant.' + localSettings.get().bindingIdentity
   )
   const commands = new MamUiCommandService(
     service,
@@ -172,7 +174,7 @@ function createMainWindow(): void {
     ),
     diagnostics,
     workspaceRoot: join(app.getPath('userData'), 'mam', 'attempt-worktrees'),
-    drafts: new LocalExecutionDraftStore(join(app.getPath('userData'), 'mam', 'execution-drafts')),
+    drafts: executionDrafts,
     onStateChanged: notifySnapshotChanged,
     secretValues,
     ...(initialRepository ? { repository: initialRepository } : {})

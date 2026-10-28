@@ -5,7 +5,8 @@ import { AttemptExecutorEventObserver } from './attempt-executor-event-observer'
 import { continuePreparedAttempt } from './pi-session-continuation'
 import { recoveredReviewExecution } from './review-output-recovery'
 import { executePreparedAttempt } from './prepared-attempt-executor'
-import { recordPreparedAttemptDraftState } from './prepared-attempt-draft'
+import { recordPreparedAttemptDraftState, recordPreparedAttemptRunning } from './prepared-attempt-draft'
+import { isRetryableConnectionFailure } from '../executors/pi-rpc-connection-failure'
 import {
   attemptRunnerErrorCode as errorCode,
   recordAttemptRunnerEvent as record
@@ -20,7 +21,8 @@ export type PreparedAttemptExecutionLoopResult = Readonly<{
 
 export async function executePreparedAttemptWithTimeoutRecovery(
   input: PreparedAttemptRunnerInput,
-  initialPrepared: PreparedAttempt
+  initialPrepared: PreparedAttempt,
+  onContinuation: (prepared: PreparedAttempt) => void = () => undefined
 ): Promise<PreparedAttemptExecutionLoopResult> {
   let prepared = initialPrepared
   let eventObserver = new AttemptExecutorEventObserver({ ...input, prepared })
@@ -36,15 +38,10 @@ export async function executePreparedAttemptWithTimeoutRecovery(
       eventObserver.flush()
       const retryLimit = prepared.retryMaxAttempts ?? 1
       const continuationAttempts = prepared.continuationAttempts ?? 0
-      if (
-        errorCode(error) !== 'executor_timeout' ||
-        !input.drafts ||
-        continuationAttempts + 1 >= retryLimit
-      ) {
-        throw error
-      }
+      if (!isRetryableConnectionFailure(errorCode(error)) || !input.drafts) throw error
+      if (continuationAttempts + 1 >= retryLimit) throw error
       record(input, 'scheduler', {
-        status: 'executor_timeout_retrying',
+        status: 'executor_connection_retrying',
         retryAttempt: continuationAttempts + 2,
         retryLimit
       })
@@ -53,13 +50,17 @@ export async function executePreparedAttemptWithTimeoutRecovery(
         prepared,
         state: 'waiting_for_resume',
         at: input.now(),
-        errorCode: 'executor_timeout'
+        errorCode: errorCode(error)
       })
-      prepared = continuePreparedAttempt(
-        prepared,
-        input.drafts,
-        input.createId('executor-invocation')
-      )
+      try {
+        prepared = continuePreparedAttempt(
+          prepared, input.drafts, input.createId('executor-invocation')
+        )
+      } catch {
+        throw error
+      }
+      recordPreparedAttemptRunning(input.drafts, prepared, input.now())
+      onContinuation(prepared)
     }
   }
 }

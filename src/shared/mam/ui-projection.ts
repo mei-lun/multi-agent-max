@@ -190,6 +190,23 @@ export const MamUiSnapshotSchema = z
   .object({
     schemaVersion: MamSchemaVersionSchema,
     generatedAt: IsoTimestampSchema,
+    localRetryItems: z
+      .array(
+        z
+          .object({
+            workflowRunId: MamEntityIdSchema,
+            taskId: MamEntityIdSchema,
+            draftId: MamEntityIdSchema,
+            errorCode: z.string().min(1),
+            occurredAt: IsoTimestampSchema,
+            automaticRetriesUsed: z.number().int().nonnegative(),
+            automaticRetryLimit: z.number().int().positive(),
+            canRetry: z.boolean(),
+            unavailableReason: z.string().min(1).optional()
+          })
+          .strict()
+      )
+      .default([]),
     roles: z.array(RoleProfileSchema),
     executors: z.array(ExecutorProfileSchema),
     providers: z.array(ProviderProfileSchema),

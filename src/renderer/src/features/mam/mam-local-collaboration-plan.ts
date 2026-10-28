@@ -5,6 +5,7 @@ import type {
   MamStartAttemptInput
 } from '../../../../shared/mam/application-command'
 import type { MamUiRunSnapshot, MamUiSnapshot } from '../../../../shared/mam/ui-projection'
+import { dependsOnBlockedTask, hasOtherStartableTask, selectedRoleForTask } from './mam-local-task-readiness'
 
 export type MamLocalCollaborationAction =
   | Readonly<{ kind: 'assign'; input: MamAssignTaskInput }>
@@ -19,15 +20,13 @@ export type MamLocalCollaborationAction =
 
 export function nextMamLocalCollaborationAction(
   run: MamUiRunSnapshot,
-  participatingRoleProfileIds: readonly string[]
+  participatingRoleProfileIds: readonly string[],
+  manualRetryTaskIds: ReadonlySet<string> = new Set()
 ): MamLocalCollaborationAction {
   if (run.run.status === 'completed' || run.run.status === 'cancelled') {
     return wait('complete', 'This Run has finished local collaboration.')
   }
   const pendingGate = run.approvalGates?.find((gate) => gate.status === 'pending')
-  if (pendingGate) {
-    return wait('human_decision', `Your decision is needed: ${pendingGate.prompt}`)
-  }
   const disagreement = run.reviewAggregations.find(
     (aggregation) =>
       aggregation.requiresHumanDecision &&
@@ -35,11 +34,16 @@ export function nextMamLocalCollaborationAction(
         (resolution) => resolution.aggregationId === aggregation.id
       )
   )
-  if (disagreement) {
-    return wait('human_decision', 'Reviewers disagree. Choose the result to continue.')
-  }
   const attentionTask = run.tasks.find((task) => task.status === 'needs_attention')
-  if (attentionTask) {
+  const currentWork = run.tasks.find(
+    (task) =>
+      Boolean(task.activeClaim) &&
+      ['ready', 'running', 'in_review', 'changes_requested'].includes(task.status)
+  )
+  if (
+    attentionTask &&
+    !hasOtherStartableTask(run, attentionTask.id, manualRetryTaskIds, participatingRoleProfileIds)
+  ) {
     const recovery = safeResultRecovery(run, attentionTask)
     if (recovery) return recovery
     return wait('human_decision', attentionTaskMessage(run, attentionTask))
@@ -48,6 +52,7 @@ export function nextMamLocalCollaborationAction(
     (task) =>
       task.kind === 'review' &&
       task.status === 'running' &&
+      !manualRetryTaskIds.has(task.id) &&
       Boolean(task.roleProfileId) &&
       participatingRoleProfileIds.includes(task.roleProfileId!) &&
       [...task.attemptIds]
@@ -68,6 +73,9 @@ export function nextMamLocalCollaborationAction(
       }
     }
   }
+  if (run.mergeQueueEntries.some((entry) => entry.status === 'queued')) {
+    return { kind: 'merge', input: { workflowRunId: run.run.id } }
+  }
   const activeAttempt = run.attempts.find(
     (attempt) => attempt.status === 'announced' || attempt.status === 'running'
   )
@@ -78,15 +86,20 @@ export function nextMamLocalCollaborationAction(
           Boolean(task.activeClaim) &&
           ['ready', 'running', 'in_review', 'changes_requested'].includes(task.status)
       )
-  if (activeAttempt || activeTask) {
+  if (
+    (activeAttempt || activeTask) &&
+    !hasOtherStartableTask(
+      run,
+      activeAttempt?.taskId ?? activeTask?.id,
+      manualRetryTaskIds,
+      participatingRoleProfileIds
+    )
+  ) {
     const taskTitle = activeTask?.title ?? activeAttempt?.taskId ?? 'the active Task'
     return wait(
       'active',
       `Local Role is working on ${taskTitle}. This may take several minutes. No action is needed; the next Task will start automatically.`
     )
-  }
-  if (run.mergeQueueEntries.some((entry) => entry.status === 'queued')) {
-    return { kind: 'merge', input: { workflowRunId: run.run.id } }
   }
   if (run.mergeQueueEntries.some((entry) => entry.status === 'failed')) {
     return wait(
@@ -94,28 +107,34 @@ export function nextMamLocalCollaborationAction(
       'The reviewed result could not be added to the project. Open Merge Queue for the reason, fix the project state, then use Clear and restart.'
     )
   }
-  const unassigned = run.tasks.find((task) => task.status === 'waiting_role_assignment')
+  const unassigned = run.tasks.find(
+    (task) =>
+      task.status === 'waiting_role_assignment' &&
+      !manualRetryTaskIds.has(task.id) &&
+      !dependsOnBlockedTask(task, run) &&
+      Boolean(selectedRoleForTask(run, task, participatingRoleProfileIds))
+  )
   if (unassigned) {
     const role = selectedRoleForTask(run, unassigned, participatingRoleProfileIds)
-    if (!role) {
-      return wait(
-        'local_setup',
-        `Activate the fixed Workflow Role for ${unassigned.title} on this machine to continue.`
-      )
-    }
-    return {
-      kind: 'assign',
-      input: {
-        workflowRunId: run.run.id,
-        taskId: unassigned.id,
-        roleProfileId: role.roleProfileId,
-        roleProfileVersion: role.roleProfileVersion
+    if (role) {
+      return {
+        kind: 'assign',
+        input: {
+          workflowRunId: run.run.id,
+          taskId: unassigned.id,
+          roleProfileId: role.roleProfileId,
+          roleProfileVersion: role.roleProfileVersion
+        }
       }
     }
   }
   const startable = run.tasks.find(
     (task) =>
       (task.status === 'ready' || task.status === 'changes_requested') &&
+      !manualRetryTaskIds.has(task.id) &&
+      task.id !== currentWork?.id &&
+      !task.activeClaim &&
+      !dependsOnBlockedTask(task, run) &&
       Boolean(task.roleProfileId) &&
       participatingRoleProfileIds.includes(task.roleProfileId!)
   )
@@ -137,9 +156,26 @@ export function nextMamLocalCollaborationAction(
       `${remoteAssignment.title} is fixed to a Role that is not active on this machine.`
     )
   }
+  const inactiveUnassigned = run.tasks.find(
+    (task) =>
+      task.status === 'waiting_role_assignment' &&
+      !manualRetryTaskIds.has(task.id) &&
+      !dependsOnBlockedTask(task, run)
+  )
+  if (inactiveUnassigned) {
+    return wait(
+      'local_setup',
+      'Activate the fixed Workflow Role for ' +
+        inactiveUnassigned.title +
+        ' on this machine to continue.'
+    )
+  }
   if (run.tasks.some((task) => task.status === 'approved') || hasMissingPromotionReadiness(run)) {
     return { kind: 'merge', input: { workflowRunId: run.run.id } }
   }
+  if (pendingGate) return wait('human_decision', `Your decision is needed: ${pendingGate.prompt}`)
+  if (disagreement)
+    return wait('human_decision', 'Reviewers disagree. Choose the result to continue.')
   return wait(
     'workflow',
     run.run.status === 'blocked'
@@ -216,9 +252,10 @@ export function nextMamLocalMergeRunId(
 ): string | undefined {
   const candidates = snapshot.runs
     .filter((run) => activeRunIds.includes(run.run.id))
-    .filter(
-      (run) => nextMamLocalCollaborationAction(run, participatingRoleProfileIds).kind === 'merge'
-    )
+    .filter((run) => nextMamLocalCollaborationAction(run, participatingRoleProfileIds,
+      new Set((snapshot.localRetryItems ?? [])
+        .filter((item) => item.workflowRunId === run.run.id)
+        .map((item) => item.taskId))).kind === 'merge')
   const queued = candidates
     .flatMap((run) =>
       run.mergeQueueEntries
@@ -234,16 +271,6 @@ export function nextMamLocalMergeRunId(
   return (
     queued ?? candidates.sort((left, right) => left.run.id.localeCompare(right.run.id))[0]?.run.id
   )
-}
-
-function selectedRoleForTask(
-  run: MamUiRunSnapshot,
-  task: MamUiRunSnapshot['tasks'][number],
-  participatingRoleProfileIds: readonly string[]
-) {
-  const roleProfileId = task.allowedRoleProfileIds[0]
-  if (!roleProfileId || !participatingRoleProfileIds.includes(roleProfileId)) return undefined
-  return run.run.roleCatalog.find((entry) => entry.roleProfileId === roleProfileId)
 }
 
 function wait(

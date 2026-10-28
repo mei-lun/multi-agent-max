@@ -7,7 +7,7 @@ Multi-Agent Max（MAM）是一款本地运行、由 Git 驱动的多 Agent 工�
 MAM 不是新的 Agent Runtime，也不是远程机器管理器。它负责协调结构化 Executor，并以 Git 作为共享工作流状态的权威来源。
 
 > [!IMPORTANT]
-> MAM 仍在积极开发中（`0.1.2`）。macOS 是首个正式支持的发布目标。当前应用只通过 Pi RPC 执行生产 Attempt；Codex CLI 和 Grok CLI Adapter 仍保留在仓库中，等待后续启用。
+> MAM 仍在积极开发中（`0.1.32`）。macOS 是首个正式支持的发布目标。当前应用只通过 Pi RPC 执行生产 Attempt；Codex CLI 和 Grok CLI Adapter 仍保留在仓库中，等待后续启用。
 
 ## 核心能力
 
@@ -318,7 +318,7 @@ Codex CLI 和 Grok CLI 仍是计划中的结构化 Executor。启用前必须通
 
 - [最终产品设计与代码复用方案](docs/final-reuse-integration-plan.md)：当前产品权威
 - [需求差异与追踪表](docs/readme/MAM_REQUIREMENTS_DELTA_2026-07-27.md)：稳定 Requirement ID 与已废弃语义
-- [0.1.2 版本功能档案](docs/versions/0.1.2.md)：当前阶段的完整能力、优化演进、限制与验证基线
+- [0.1.32 版本功能档案](docs/versions/0.1.32.md)：当前阶段的完整能力、优化演进、限制与验证基线
 - [版本记录规则](docs/versions/README.md)：所有后续改动必须遵循的记录格式与更新流程
 - [人工审核与角色澄清产品设计](docs/readme/HUMAN_REVIEW_AND_CLARIFICATION_DESIGN.md)：审核门禁、统一待处理队列和多轮沟通
 - [迁移状态](docs/MIGRATION_STATUS.md)：已实现链路与后置 Executor 工作
@@ -329,7 +329,7 @@ Codex CLI 和 Grok CLI 仍是计划中的结构化 Executor。启用前必须通
 
 ## 参与贡献
 
-所有改动都应遵循 [`AGENTS.md`](AGENTS.md) 和上述产品权威文档。每一组功能、优化、修复、重构、文档或配置改动，还必须在同一变更集中同步更新与 `package.json` 版本一致的版本档案；当前文件是 [`docs/versions/0.1.2.md`](docs/versions/0.1.2.md)。提交 Pull Request 前请运行：
+所有改动都应遵循 [`AGENTS.md`](AGENTS.md) 和上述产品权威文档。每一组功能、优化、修复、重构、文档或配置改动，还必须在同一变更集中同步更新与 `package.json` 版本一致的版本档案；当前文件是 [`docs/versions/0.1.32.md`](docs/versions/0.1.32.md)。提交 Pull Request 前请运行：
 
 ```bash
 pnpm verify

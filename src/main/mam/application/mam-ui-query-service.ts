@@ -30,10 +30,11 @@ import { projectBinding } from './mam-ui-project-binding'
 import { collectMamUiTaskDefinitions } from './mam-ui-task-definitions'
 import { projectExecutionActivities } from './execution-activity-projection'
 import { latestSubmittedReviewSubject } from './review-route-projection'
+import { projectLocalRetryItems } from './local-retry-projection'
+import type { LocalExecutionDraft } from '../../../shared/mam/local-execution-draft'
 import type { ResourceHealthResult } from '../../../shared/mam/resource-health'
 
 type ActiveRegistry<T> = Readonly<{ listActive(): readonly T[] }>
-
 export type MamUiProfileSource = Readonly<{
   roles: ActiveRegistry<RoleProfile>
   workflows: ActiveRegistry<WorkflowDefinition>
@@ -46,7 +47,6 @@ export type MamUiProfileSource = Readonly<{
   localSettings?: Readonly<{ get(): MamLocalSettings }>
   resourceHealth?: Readonly<{ listCurrent(): readonly ResourceHealthResult[] }>
 }>
-
 export type MamUiRunSource = Readonly<{
   listWorkflowRunIds(): readonly string[]
   loadRunBundle(workflowRunId: string): WorkflowRunBundle | undefined
@@ -57,14 +57,14 @@ export type MamUiRunSource = Readonly<{
   collaborationMode?: 'local' | 'distributed'
   branch?: string
 }>
-
 export class MamUiQueryService {
   constructor(
     private readonly profiles: MamUiProfileSource,
     private runs: MamUiRunSource | undefined,
     private readonly now: () => string = () => new Date().toISOString(),
     private readonly diagnostics?: Pick<DiagnosticsRecorder, 'list'> &
-      Partial<Pick<DiagnosticsRecorder, 'listInterruptionEvents'>>
+      Partial<Pick<DiagnosticsRecorder, 'listInterruptionEvents'>>,
+    private readonly localDrafts?: Readonly<{ listUnfinished(): readonly LocalExecutionDraft[] }>, private readonly claimantInstanceId?: () => string
   ) {}
 
   setRunSource(runs: MamUiRunSource): void {
@@ -78,6 +78,7 @@ export class MamUiQueryService {
       this.diagnostics?.listInterruptionEvents?.() ?? diagnosticEvents
     )
     const runSnapshots: MamUiRunSnapshot[] = []
+    const localRetryItems: MamUiSnapshot['localRetryItems'][number][] = []; const unfinishedDrafts = this.localDrafts?.listUnfinished() ?? []
     const issues: MamUiSnapshot['issues'][number][] = []
     for (const workflowRunId of this.runs?.listWorkflowRunIds() ?? []) {
       try {
@@ -90,14 +91,12 @@ export class MamUiQueryService {
           })
           continue
         }
+        const projection = this.runs!.rebuild(workflowRunId)
+        if (this.localDrafts && this.claimantInstanceId) {
+          localRetryItems.push(...projectLocalRetryItems({ drafts: unfinishedDrafts, workflowRunId, projection, claimantInstanceId: this.claimantInstanceId() }))
+        }
         runSnapshots.push(
-          createRunSnapshot(
-            bundle,
-            this.runs!.rebuild(workflowRunId),
-            generatedAt,
-            interruptions,
-            diagnosticEvents
-          )
+          createRunSnapshot(bundle, projection, generatedAt, interruptions, diagnosticEvents)
         )
       } catch (error) {
         issues.push({
@@ -110,6 +109,7 @@ export class MamUiQueryService {
     return MamUiSnapshotSchema.parse({
       schemaVersion: '1.0.0',
       generatedAt,
+      localRetryItems,
       roles: this.profiles.roles.listActive(),
       executors: this.profiles.executors?.listActive() ?? [],
       providers: this.profiles.providers?.listActive() ?? [],

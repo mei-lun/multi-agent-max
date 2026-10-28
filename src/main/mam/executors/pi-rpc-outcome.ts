@@ -1,5 +1,6 @@
 import type { AgentSessionEvent } from '@earendil-works/pi-coding-agent'
 import { redactPiRpcValue } from './pi-rpc-event-normalizer'
+import { classifyPiRpcFailure } from './pi-rpc-connection-failure'
 
 type PiFailure = Readonly<{ code: string; message: string }>
 
@@ -37,9 +38,7 @@ export class PiRpcOutcome {
 
   private failed(message: string, code?: string): PiFailure {
     return {
-      code:
-        code ??
-        (/time(?:d\s*out|out)/i.test(message) ? 'executor_timeout' : 'executor_process_failed'),
+      code: code ?? classifyPiRpcFailure(message),
       message: String(redactPiRpcValue(message, this.secrets))
     }
   }

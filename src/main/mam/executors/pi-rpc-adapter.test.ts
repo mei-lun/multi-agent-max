@@ -45,6 +45,7 @@ describe('PiRpcAdapter', () => {
 
   it.each([
     ['Request timed out.', 'executor_timeout'],
+    ['fetch failed: ECONNRESET', 'executor_connection_failed'],
     ['Provider rejected request plainCredentialForRegression123', 'executor_process_failed']
   ])('rejects a settled model failure: %s', async (message, code) => {
     const fixture = await createFixture()

@@ -18,6 +18,7 @@ import { normalizePiRpcEvent, normalizePiRpcUsage } from './pi-rpc-event-normali
 import { preparePiRpcInvocation, type PiRpcInvocation } from './pi-rpc-invocation'
 import { PiRpcLogWriter } from './pi-rpc-log-writer'
 import { PiRpcOutcome } from './pi-rpc-outcome'
+import { classifyPiRpcFailure } from './pi-rpc-connection-failure'
 import type { ExecutorCapabilityBridge } from '../application/executor-capability-bridge'
 import { startPiApplicationApiBridge } from './pi-application-api-bridge-server'
 import { emitObservedExecutorEvent, type ExecutorEventListener } from './executor-event-listener'
@@ -197,8 +198,7 @@ export class PiRpcAdapter {
         if (stderr) await logger.append('stderr', stderr)
         if (error instanceof PiRpcAdapterError) throw error
         const message = error instanceof Error ? error.message : String(error)
-        if (/timeout/i.test(message)) fail('executor_timeout', message)
-        fail('executor_process_failed', `${message}${stderr ? `; ${firstLine(stderr)}` : ''}`)
+        fail(classifyPiRpcFailure(message), `${message}${stderr ? `; ${firstLine(stderr)}` : ''}`)
       } finally {
         this.activeInvocations.delete(input.executorInvocationId)
         unsubscribe()

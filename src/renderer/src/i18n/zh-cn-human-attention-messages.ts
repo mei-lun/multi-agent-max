@@ -1,6 +1,26 @@
 export const ZH_CN_HUMAN_ATTENTION_MESSAGES: Readonly<Record<string, string>> = {
   'Needs Attention': '待我处理',
   'Needs your attention': '待我处理',
+  'Role questions, human decisions, and local connection retries.':
+    '处理角色提问、人工决定和本机连接重试。',
+  'Model connection interrupted ·': '模型连接中断 ·',
+  'Retrying…': '正在重试…',
+  'Continue Attempt': '继续本次尝试',
+  'Reasoning strength': '推理强度',
+  'Sent as the provider reasoning effort for this model.': '作为此模型的推理强度发送给服务商。',
+  'Suggestions for a future version': '后续版本建议',
+  'automatic continuations': '次自动续跑',
+  'automatic continuations ·': '次自动续跑 ·',
+  'dependent tasks · since': '个依赖任务 · 开始于',
+  'This Executor cannot continue its local session. Open Run recovery to inspect this Task.':
+    '此执行器无法继续本机会话。请打开运行记录检查该任务的恢复选项。',
+  'The retained worktree is unavailable. Open Run recovery to inspect this Task.':
+    '保留的工作区不可用。请打开运行记录检查该任务的恢复选项。',
+  'The Pi session is unavailable. Open Run recovery to inspect this Task.':
+    'Pi 会话不可用。请打开运行记录检查该任务的恢复选项。',
+  'The Attempt runtime budget is exhausted. Open Run recovery to inspect this Task.':
+    '本次尝试的运行时间预算已耗尽。请打开运行记录检查该任务的恢复选项。',
+  local: '本机',
   'Role questions, revision consultations, and human decisions in deterministic priority order.':
     '按确定性优先级处理角色提问、返工沟通和人工决定。',
   'Nothing is waiting for you.': '当前没有需要你处理的事项。',
