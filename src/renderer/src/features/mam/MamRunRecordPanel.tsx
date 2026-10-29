@@ -24,6 +24,7 @@ import { MamResetRunDialog } from './MamResetRunDialog'
 import { MamRunOutcomePanel } from './MamRunOutcomePanel'
 import { MamRunIntegrationPanel } from './MamRunIntegrationPanel'
 import { MamRunArtifactFlows } from './MamRunArtifactFlows'
+import { MamRunWorkflowGraph } from './MamRunWorkflowGraph'
 import { MamRunTaskDetails } from './MamRunTaskDetails'
 import { MamStateBadge } from './MamStateBadge'
 import { frozenRoleName } from './mam-task-role-candidates'
@@ -107,6 +108,7 @@ export function MamRunRecordPanel({
             {...(definition ? { definition } : {})}
             {...(onOpenIntegration ? { onOpenIntegration } : {})}
           />
+          {frozenDefinition && <MamRunWorkflowGraph run={run} definition={frozenDefinition} />}
           {frozenDefinition && <MamRunArtifactFlows run={run} definition={frozenDefinition} />}
           {!['completed', 'cancelled'].includes(run.run.status) && (
             <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">

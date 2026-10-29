@@ -1,5 +1,6 @@
 import { MarkerType, type Edge, type Node } from '@xyflow/react'
 import type { RoleProfile } from '../../../../shared/mam/domain/role'
+import type { NodeRun } from '../../../../shared/mam/domain/workflow'
 import { analyzeWorkflowVisual } from './mam-workflow-visual-analysis'
 import { layoutWorkflow } from './mam-workflow-layout'
 import { returnEdgeChannels } from './mam-workflow-return-channels'
@@ -10,7 +11,7 @@ import type {
 } from '../../../../shared/mam/domain/workflow'
 
 export type MamWorkflowCanvasData = Record<string, unknown> &
-  Readonly<{ node: WorkflowNode; roleName?: string }>
+  Readonly<{ node: WorkflowNode; roleName?: string; status?: NodeRun['status'] }>
 export type MamWorkflowCanvasNode = Node<MamWorkflowCanvasData, 'mam-workflow'>
 export type MamWorkflowCanvasEdge = Edge<Readonly<{ edge?: WorkflowEdge; returnChannelY?: number }>>
 

@@ -10,6 +10,7 @@ import {
   Workflow
 } from 'lucide-react'
 import { cn } from '../../lib/class-name'
+import { MamStateBadge } from './MamStateBadge'
 import type { MamWorkflowCanvasNode } from './mam-workflow-canvas-model'
 
 const nodeLabels: Record<string, string> = {
@@ -69,6 +70,11 @@ export function MamWorkflowCanvasNodeView({
         <Icon className="size-3.5 shrink-0 text-muted-foreground" />
         <span className="truncate text-xs font-medium">{node.id}</span>
       </div>
+      {data.status && (
+        <div className="mt-1">
+          <MamStateBadge status={data.status} />
+        </div>
+      )}
       <p className="mt-1 text-[11px] text-muted-foreground">{nodeLabels[node.type] ?? node.type}</p>
       {data.roleName && (
         <p className="mt-1 truncate text-[11px] text-muted-foreground">{data.roleName}</p>
