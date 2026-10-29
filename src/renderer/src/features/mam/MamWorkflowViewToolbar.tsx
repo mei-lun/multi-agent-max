@@ -9,6 +9,8 @@ export function MamWorkflowViewToolbar({
   selectedNodeId,
   traceDirection,
   nodeQuery,
+  motionLive,
+  onMotionChange,
   onModeChange,
   onTraceChange,
   onNodeQueryChange,
@@ -19,6 +21,8 @@ export function MamWorkflowViewToolbar({
   selectedNodeId?: string
   traceDirection?: 'upstream' | 'downstream'
   nodeQuery: string
+  motionLive: boolean
+  onMotionChange(value: boolean): void
   onModeChange(mode: 'control' | 'data'): void
   onTraceChange(direction?: 'upstream' | 'downstream'): void
   onNodeQueryChange(value: string): void
@@ -45,8 +49,8 @@ export function MamWorkflowViewToolbar({
       </Button>
       <span className="text-muted-foreground">
         {mode === 'data'
-          ? '虚线表示定义时可能提供，不代表已发生传输。'
-          : '返工线标出条件和最大次数。'}
+          ? '虚线表示定义时可能提供；动效仅演示方向。'
+          : '返工线标出条件和最大次数；动效仅演示方向。'}
       </span>
       <label className="ml-auto flex items-center gap-1">
         <Search className="size-3.5 text-muted-foreground" />
@@ -60,6 +64,13 @@ export function MamWorkflowViewToolbar({
       </label>
       <Button variant="ghost" size="xs" onClick={onFitView}>
         <Maximize2 /> 适合画布
+      </Button>
+      <Button
+        variant={motionLive ? 'secondary' : 'ghost'}
+        size="xs"
+        onClick={() => onMotionChange(!motionLive)}
+      >
+        {motionLive ? '暂停动效' : '播放动效'}
       </Button>
       {selectedNodeId && (
         <div className="flex gap-1" aria-label="路径追踪">

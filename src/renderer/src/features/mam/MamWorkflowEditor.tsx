@@ -28,7 +28,9 @@ import {
 } from '../../components/ui/select'
 import { MamWorkflowCanvasNodeView } from './MamWorkflowCanvasNode'
 import { MamWorkflowReturnEdge } from './MamWorkflowReturnEdge'
+import { MamWorkflowMotionEdge } from './MamWorkflowMotionEdge'
 import { MamWorkflowViewToolbar } from './MamWorkflowViewToolbar'
+import { useMamWorkflowMotion } from './use-mam-workflow-motion'
 import { workflowArtifactRelations } from './mam-workflow-artifact-relations'
 import { analyzeWorkflowVisual } from './mam-workflow-visual-analysis'
 import { workflowParallelRegions } from './mam-workflow-parallel-regions'
@@ -52,7 +54,7 @@ import {
 } from './mam-workflow-canvas-model'
 
 const nodeTypes = { 'mam-workflow': MamWorkflowCanvasNodeView }
-const edgeTypes = { 'mam-return': MamWorkflowReturnEdge }
+const edgeTypes = { 'mam-return': MamWorkflowReturnEdge, 'mam-motion': MamWorkflowMotionEdge }
 
 export function MamWorkflowEditor({
   workflow,
@@ -72,6 +74,7 @@ export function MamWorkflowEditor({
   versionLabel?: string
 }>): React.JSX.Element {
   const [definition, setDefinition] = useState(workflow)
+  const motion = useMamWorkflowMotion()
   const [nodes, setNodes, onNodesChange] = useNodesState<MamWorkflowCanvasNode>(
     toCanvasNodes(workflow, roles)
   )
@@ -143,7 +146,8 @@ export function MamWorkflowEditor({
                 id: relation.id,
                 source: relation.sourceId!,
                 target: relation.targetId,
-                type: 'smoothstep',
+                type: 'mam-motion',
+                data: { motionKind: 'artifact' as const },
                 label: `${relation.artifactId} · 可能提供`,
                 style: { strokeDasharray: '5 4', stroke: 'var(--foreground)' },
                 markerEnd: { type: MarkerType.ArrowClosed, color: 'var(--foreground)' },
@@ -160,10 +164,18 @@ export function MamWorkflowEditor({
           tracedNodes && (!tracedNodes.has(edge.source) || !tracedNodes.has(edge.target))
         return {
           ...edge,
+          data: {
+            ...edge.data,
+            motionEnabled:
+              motion.enabled &&
+              (viewMode === 'control'
+                ? Boolean(edge.data?.edge)
+                : edge.data?.motionKind === 'artifact')
+          },
           style: { ...edge.style, opacity: dimmed ? 0.2 : (edge.style?.opacity ?? 1) }
         }
       }),
-    [visibleEdges, tracedNodes]
+    [visibleEdges, tracedNodes, motion.enabled, viewMode]
   )
   const save = async (): Promise<void> => {
     if (visualDiagnostics.some((message) => message.startsWith('固定节点'))) {
@@ -295,6 +307,8 @@ export function MamWorkflowEditor({
         mode={viewMode}
         relations={artifactRelations}
         nodeQuery={nodeQuery}
+        motionLive={motion.live}
+        onMotionChange={motion.setLive}
         onNodeQueryChange={setNodeQuery}
         onFitView={() => void flowInstance?.fitView({ padding: 0.15 })}
         {...(selectedNodeId ? { selectedNodeId } : {})}
@@ -303,7 +317,11 @@ export function MamWorkflowEditor({
         onTraceChange={setTraceDirection}
       />
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_21rem]">
-        <div className="min-h-0 bg-background">
+        <div
+          className={
+            motion.enabled ? 'mam-flow-live min-h-0 bg-background' : 'min-h-0 bg-background'
+          }
+        >
           <ReactFlow
             nodes={displayNodes}
             edges={displayEdges}

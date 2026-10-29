@@ -14,7 +14,12 @@ export type MamWorkflowCanvasData = Record<string, unknown> &
   Readonly<{ node: WorkflowNode; roleName?: string; status?: NodeRun['status'] }>
 export type MamWorkflowCanvasNode = Node<MamWorkflowCanvasData, 'mam-workflow'>
 export type MamWorkflowCanvasEdge = Edge<
-  Readonly<{ edge?: WorkflowEdge; returnChannel?: ReturnChannel }>
+  Readonly<{
+    edge?: WorkflowEdge
+    returnChannel?: ReturnChannel
+    motionKind?: 'artifact'
+    motionEnabled?: boolean
+  }>
 >
 
 export const workflowNodeTypes: WorkflowNode['type'][] = [
@@ -67,7 +72,7 @@ export function toCanvasEdges(definition: WorkflowDefinition): MamWorkflowCanvas
       edge,
       ...(edge.maxTraversals && channels.has(index) ? { returnChannel: channels.get(index)! } : {})
     },
-    type: edge.maxTraversals ? 'mam-return' : 'smoothstep',
+    type: edge.maxTraversals ? 'mam-return' : 'mam-motion',
     markerEnd: {
       type: MarkerType.ArrowClosed,
       color: edge.maxTraversals ? 'var(--ring)' : 'var(--muted-foreground)'

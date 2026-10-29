@@ -82,6 +82,9 @@ async function captureWorkflowList(window: BrowserWindow, chinese: boolean): Pro
     if (!button) throw new Error('Missing Workflows navigation button');
     button.click();
     await new Promise((resolve) => setTimeout(resolve, 300));
+    if (!document.querySelector('.mam-flow-live .mam-flow-head')) {
+      throw new Error('Workflow flow head did not render');
+    }
   })()`)
   writeFileSync(capturePath, (await window.webContents.capturePage()).toPNG())
 }

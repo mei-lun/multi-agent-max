@@ -3388,6 +3388,52 @@ html.onboarding-tour-start-transition::view-transition-new(root) {
   stroke: var(--muted-foreground);
 }
 
+.mam-flow-live .mam-flow-trace {
+  stroke: var(--foreground);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-dasharray: 7 48;
+  pointer-events: none;
+  animation: mam-flow-trace 3.6s linear infinite;
+}
+
+.mam-flow-live .mam-flow-trace-artifact {
+  stroke-width: 2;
+  stroke-dasharray: 12 42;
+}
+
+.mam-flow-live .mam-flow-trace-return {
+  stroke: var(--ring);
+}
+
+.mam-flow-packet {
+  fill: var(--foreground);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.mam-flow-head {
+  fill: var(--foreground);
+  opacity: 0;
+  pointer-events: none;
+  filter: drop-shadow(0 0 3px var(--foreground));
+}
+
+.mam-flow-head-return {
+  fill: var(--ring);
+  filter: drop-shadow(0 0 3px var(--ring));
+}
+
+@keyframes mam-flow-trace {
+  to { stroke-dashoffset: 55; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mam-flow-live .mam-flow-trace { animation: none; opacity: 0; }
+  .mam-flow-live .mam-flow-packet { opacity: 0; }
+  .mam-flow-live .mam-flow-head { opacity: 0; }
+}
+
 .react-flow__controls {
   overflow: hidden;
   border: 1px solid var(--border);

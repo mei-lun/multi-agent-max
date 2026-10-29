@@ -5,6 +5,8 @@ import type { WorkflowDefinition } from '../../../../shared/mam/domain/workflow'
 import { Button } from '../../components/ui/button'
 import { MamWorkflowCanvasNodeView } from './MamWorkflowCanvasNode'
 import { MamWorkflowReturnEdge } from './MamWorkflowReturnEdge'
+import { MamWorkflowMotionEdge } from './MamWorkflowMotionEdge'
+import { useMamWorkflowMotion } from './use-mam-workflow-motion'
 import { workflowArtifactRelations } from './mam-workflow-artifact-relations'
 import {
   toCanvasEdges,
@@ -14,13 +16,14 @@ import {
 import { workflowParallelRegions } from './mam-workflow-parallel-regions'
 
 const nodeTypes = { 'mam-workflow': MamWorkflowCanvasNodeView }
-const edgeTypes = { 'mam-return': MamWorkflowReturnEdge }
+const edgeTypes = { 'mam-return': MamWorkflowReturnEdge, 'mam-motion': MamWorkflowMotionEdge }
 
 export function MamWorkflowDefinitionPreview({
   definition,
   roles
 }: Readonly<{ definition: WorkflowDefinition; roles: readonly RoleProfile[] }>): React.JSX.Element {
   const [mode, setMode] = useState<'control' | 'artifact'>('control')
+  const motion = useMamWorkflowMotion()
   const nodes = useMemo(() => toCanvasNodes(definition, roles), [definition, roles])
   const controlEdges = useMemo(() => toCanvasEdges(definition), [definition])
   const relations = useMemo(() => workflowArtifactRelations(definition), [definition])
@@ -31,7 +34,8 @@ export function MamWorkflowDefinitionPreview({
       id: relation.id,
       source: relation.sourceId!,
       target: relation.targetId,
-      type: 'smoothstep',
+      type: 'mam-motion',
+      data: { motionKind: 'artifact' as const },
       label: `${relation.artifactId} · 可能提供`,
       style: { stroke: 'var(--foreground)', strokeDasharray: '5 4' },
       markerEnd: { type: MarkerType.ArrowClosed, color: 'var(--foreground)' },
@@ -49,6 +53,15 @@ export function MamWorkflowDefinitionPreview({
           })),
           ...artifactEdges
         ]
+  const displayEdges = edges.map((edge) => ({
+    ...edge,
+    data: {
+      ...edge.data,
+      motionEnabled:
+        motion.enabled &&
+        (mode === 'control' ? Boolean(edge.data?.edge) : edge.data?.motionKind === 'artifact')
+    }
+  }))
   return (
     <section className="border-t border-border bg-background p-4" aria-label="工作流流程图">
       <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
@@ -67,16 +80,29 @@ export function MamWorkflowDefinitionPreview({
         >
           产物关系
         </Button>
+        <Button
+          size="xs"
+          variant={motion.live ? 'secondary' : 'ghost'}
+          onClick={() => motion.setLive(!motion.live)}
+        >
+          {motion.live ? '暂停动效' : '播放动效'}
+        </Button>
       </div>
       <p className="mb-2 text-xs text-muted-foreground">
         {mode === 'artifact'
-          ? '虚线表示定义时可能提供；来源不确定的输入需在节点检查器中核对。'
-          : '并行、条件和有界返工按现有工作流定义绘制。'}
+          ? '虚线表示定义时可能提供；动效只演示方向，不表示数据正在传输。'
+          : '并行、条件和有界返工按现有工作流定义绘制；动效只演示方向。'}
       </p>
-      <div className="h-80 overflow-hidden rounded-lg border border-border bg-background">
+      <div
+        className={
+          motion.enabled
+            ? 'mam-flow-live h-80 overflow-hidden rounded-lg border border-border bg-background'
+            : 'h-80 overflow-hidden rounded-lg border border-border bg-background'
+        }
+      >
         <ReactFlow
           nodes={nodes}
-          edges={edges}
+          edges={displayEdges}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           fitView

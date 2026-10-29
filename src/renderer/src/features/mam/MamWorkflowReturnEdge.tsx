@@ -17,6 +17,26 @@ export function MamWorkflowReturnEdge(props: EdgeProps): React.JSX.Element {
         {...(markerEnd ? { markerEnd } : {})}
         style={{ stroke: 'var(--ring)', strokeWidth: 1.5 }}
       />
+      {props.data?.motionEnabled === true && (
+        <>
+          <path
+            d={path}
+            className="mam-flow-trace mam-flow-trace-return"
+            aria-hidden="true"
+            fill="none"
+          />
+          <circle r="3.5" className="mam-flow-head mam-flow-head-return" aria-hidden="true">
+            <animateMotion dur="3.6s" repeatCount="indefinite" path={path} />
+            <animate
+              attributeName="opacity"
+              values="0;1;1;0"
+              keyTimes="0;0.1;0.9;1"
+              dur="3.6s"
+              repeatCount="indefinite"
+            />
+          </circle>
+        </>
+      )}
       {props.label && (
         <EdgeLabelRenderer>
           <div
