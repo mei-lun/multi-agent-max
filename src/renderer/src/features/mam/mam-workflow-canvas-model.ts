@@ -1,13 +1,17 @@
-import type { Edge, Node } from '@xyflow/react'
+import { MarkerType, type Edge, type Node } from '@xyflow/react'
+import type { RoleProfile } from '../../../../shared/mam/domain/role'
+import { analyzeWorkflowVisual } from './mam-workflow-visual-analysis'
+import { layoutWorkflow } from './mam-workflow-layout'
 import type {
   WorkflowDefinition,
   WorkflowEdge,
   WorkflowNode
 } from '../../../../shared/mam/domain/workflow'
 
-export type MamWorkflowCanvasData = Record<string, unknown> & Readonly<{ node: WorkflowNode }>
+export type MamWorkflowCanvasData = Record<string, unknown> &
+  Readonly<{ node: WorkflowNode; roleName?: string }>
 export type MamWorkflowCanvasNode = Node<MamWorkflowCanvasData, 'mam-workflow'>
-export type MamWorkflowCanvasEdge = Edge<Readonly<{ edge: WorkflowEdge }>>
+export type MamWorkflowCanvasEdge = Edge<Readonly<{ edge?: WorkflowEdge; returnLane?: number }>>
 
 export const workflowNodeTypes: WorkflowNode['type'][] = [
   'role_task',
@@ -25,58 +29,65 @@ export const workflowNodeTypes: WorkflowNode['type'][] = [
   'finish'
 ]
 
-export function toCanvasNodes(definition: WorkflowDefinition): MamWorkflowCanvasNode[] {
-  const positions = workflowLayout(definition)
+export function toCanvasNodes(
+  definition: WorkflowDefinition,
+  roles: readonly RoleProfile[] = []
+): MamWorkflowCanvasNode[] {
+  const positions = layoutWorkflow(analyzeWorkflowVisual(definition), definition)
+  const roleNames = new Map(roles.map((role) => [role.id, role.displayName]))
   return definition.nodes.map((node, index) => ({
     id: node.id,
     type: 'mam-workflow',
     position: positions.get(node.id) ?? { x: (index % 3) * 240, y: Math.floor(index / 3) * 140 },
-    data: { node }
+    data: {
+      node,
+      ...('allowedRoleProfileIds' in node
+        ? {
+            roleName:
+              roleNames.get(node.allowedRoleProfileIds[0] ?? '') ?? node.allowedRoleProfileIds[0]
+          }
+        : {})
+    }
   }))
 }
 
-function workflowLayout(
-  definition: WorkflowDefinition
-): ReadonlyMap<string, Readonly<{ x: number; y: number }>> {
-  const nodeIds = new Set(definition.nodes.map((node) => node.id))
-  const incoming = new Map(definition.nodes.map((node) => [node.id, 0]))
-  const outgoing = new Map(definition.nodes.map((node) => [node.id, [] as string[]]))
-  const ranks = new Map(definition.nodes.map((node) => [node.id, 0]))
-  for (const edge of definition.edges) {
-    if (!nodeIds.has(edge.from) || !nodeIds.has(edge.to)) continue
-    outgoing.get(edge.from)!.push(edge.to)
-    incoming.set(edge.to, incoming.get(edge.to)! + 1)
-  }
-  const queue = [...incoming].filter(([, count]) => count === 0).map(([id]) => id)
-  for (let index = 0; index < queue.length; index += 1) {
-    const id = queue[index]!
-    for (const next of outgoing.get(id) ?? []) {
-      ranks.set(next, Math.max(ranks.get(next) ?? 0, (ranks.get(id) ?? 0) + 1))
-      const remaining = incoming.get(next)! - 1
-      incoming.set(next, remaining)
-      if (remaining === 0) queue.push(next)
-    }
-  }
-  const rowByRank = new Map<number, number>()
-  return new Map(
-    definition.nodes.map((node) => {
-      const rank = ranks.get(node.id) ?? 0
-      const row = rowByRank.get(rank) ?? 0
-      rowByRank.set(rank, row + 1)
-      return [node.id, { x: rank * 240, y: row * 140 }] as const
-    })
-  )
-}
-
 export function toCanvasEdges(definition: WorkflowDefinition): MamWorkflowCanvasEdge[] {
+  const returnOrder = new Map(
+    definition.edges
+      .map((edge, index) => ({ edge, index }))
+      .filter(({ edge }) => edge.maxTraversals !== undefined)
+      .sort((left, right) =>
+        `${left.edge.from}:${left.edge.to}:${left.edge.when ?? ''}`.localeCompare(
+          `${right.edge.from}:${right.edge.to}:${right.edge.when ?? ''}`
+        )
+      )
+      .map(({ index }, lane) => [index, lane])
+  )
   return definition.edges.map((edge, index) => ({
     id: edgeId(edge, index),
     source: edge.from,
     target: edge.to,
-    label: edge.when,
-    data: { edge },
-    type: 'smoothstep'
+    label: controlEdgeLabel(definition, edge),
+    data: { edge, ...(edge.maxTraversals ? { returnLane: returnOrder.get(index) ?? 0 } : {}) },
+    type: edge.maxTraversals ? 'mam-return' : 'smoothstep',
+    markerEnd: {
+      type: MarkerType.ArrowClosed,
+      color: edge.maxTraversals ? 'var(--ring)' : 'var(--muted-foreground)'
+    },
+    ...(edge.maxTraversals ? { sourceHandle: 'return-source', targetHandle: 'return-target' } : {})
   }))
+}
+
+function controlEdgeLabel(definition: WorkflowDefinition, edge: WorkflowEdge): string | undefined {
+  const source = definition.nodes.find((node) => node.id === edge.from)
+  const branch =
+    source?.type === 'condition'
+      ? Object.entries(source.branches).find(([, target]) => target === edge.to)?.[0]
+      : undefined
+  const condition = edge.when ?? branch
+  return edge.maxTraversals
+    ? `${condition ? `${condition} · ` : ''}最多 ${edge.maxTraversals} 次`
+    : condition
 }
 
 export function createWorkflowNode(
@@ -194,7 +205,19 @@ export function renameWorkflowNode(
     from: edge.from === previousId ? nextId : edge.from,
     to: edge.to === previousId ? nextId : edge.to
   }))
-  return { ...definition, nodes, edges }
+  const pinnedPositions = definition.presentation?.pinnedPositions
+  const presentation = pinnedPositions
+    ? {
+        schemaVersion: 1 as const,
+        pinnedPositions: Object.fromEntries(
+          Object.entries(pinnedPositions).map(([id, point]) => [
+            id === previousId ? nextId : id,
+            point
+          ])
+        )
+      }
+    : definition.presentation
+  return { ...definition, nodes, edges, ...(presentation ? { presentation } : {}) }
 }
 
 function renameNodeReferences(

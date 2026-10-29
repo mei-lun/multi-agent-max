@@ -27,6 +27,15 @@ describe('Workflow package', () => {
     })
     expect(result.success).toBe(false)
   })
+
+  it('round-trips optional presentation pins without changing the workflow graph', () => {
+    const definition = workflow()
+    definition.presentation = { schemaVersion: 1, pinnedPositions: { review: { x: 260, y: 150 } } }
+    const pack = createMamWorkflowPackage(definition, [role('role.builder'), role('role.reviewer')])
+    expect(MamWorkflowPackageSchema.parse(JSON.parse(JSON.stringify(pack))).workflow).toEqual(
+      definition
+    )
+  })
 })
 
 function workflow(): WorkflowDefinition {

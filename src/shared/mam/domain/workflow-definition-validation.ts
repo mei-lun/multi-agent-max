@@ -19,11 +19,23 @@ export function validateWorkflowDefinition(
       when?: string | undefined
       maxTraversals?: number | undefined
     }[]
+    presentation?:
+      | { pinnedPositions?: Record<string, { x: number; y: number }> | undefined }
+      | undefined
   },
   context: z.RefinementCtx
 ): void {
   validateRoleBindings(definition, context)
   const nodeIds = validateNodeIds(definition, context)
+  for (const pinnedId of Object.keys(definition.presentation?.pinnedPositions ?? {})) {
+    if (!nodeIds.has(pinnedId)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['presentation', 'pinnedPositions', pinnedId],
+        message: `pinned position references unknown node: ${pinnedId}`
+      })
+    }
+  }
   validateHumanReviewWorkflow(definition, context)
   validateReviewAggregateWorkflow(definition, context)
   validateEdges(definition, nodeIds, context)
@@ -64,7 +76,11 @@ function validateNodeIds(
     nodeIds.add(node.id)
   }
   if (!definition.nodes.some((node) => node.type === 'finish')) {
-    context.addIssue({ code: 'custom', path: ['nodes'], message: 'workflow requires a finish node' })
+    context.addIssue({
+      code: 'custom',
+      path: ['nodes'],
+      message: 'workflow requires a finish node'
+    })
   }
   return nodeIds
 }

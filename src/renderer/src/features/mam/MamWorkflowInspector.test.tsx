@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { WorkflowDefinitionSchema } from '../../../../shared/mam/domain/workflow'
 import { createWorkflowNode } from './mam-workflow-canvas-model'
 import { MamWorkflowNodeInspector } from './MamWorkflowNodeInspector'
+import { MamWorkflowInspector } from './MamWorkflowInspector'
 import { newWorkflowDefinition } from './MamNewWorkflowDialog'
 import { mamUiRoleFixture } from './mam-renderer-snapshot-fixture'
 
@@ -42,5 +43,32 @@ describe('MAM Workflow Inspector', () => {
     expect(merge).toContain('Merge strategy')
     expect(merge).toContain('Post-merge validations')
     expect(task.indexOf('Node Role')).toBeLessThan(task.indexOf('Advanced JSON'))
+  })
+
+  it('explains ambiguous Artifact candidates without claiming observed flow', () => {
+    const definition = newWorkflowDefinition('workflow.artifacts', 'Artifacts')
+    const relation = {
+      id: 'artifact:finish:artifact.input:0',
+      artifactId: 'artifact.input',
+      targetId: 'finish',
+      candidateIds: ['build-a', 'build-b'],
+      status: 'ambiguous' as const,
+      input: { artifactId: 'artifact.input', version: 1, contentHash: 'a'.repeat(64) }
+    }
+    const markup = renderToStaticMarkup(
+      <MamWorkflowInspector
+        definition={definition}
+        roles={[]}
+        selectedArtifact={relation}
+        artifactRelations={[relation]}
+        onDefinitionChange={() => undefined}
+        onNodeChange={() => undefined}
+        onNodeRename={() => undefined}
+        onEdgeChange={() => undefined}
+      />
+    )
+    expect(markup).toContain('来源未确定')
+    expect(markup).toContain('build-a、build-b')
+    expect(markup).not.toContain('已发生传输')
   })
 })

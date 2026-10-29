@@ -4,6 +4,38 @@ import { compileWorkflow, parseWorkflowDefinition } from './workflow-compiler'
 const hash = 'e'.repeat(64)
 
 describe('workflow compiler', () => {
+  it('keeps presentation coordinates out of the execution plan hash', () => {
+    const definition = workflowDefinition()
+    const original = compileWorkflow(definition)
+    const moved = compileWorkflow({
+      ...definition,
+      presentation: { schemaVersion: 1, pinnedPositions: { implement: { x: 420, y: -150 } } }
+    })
+    expect(moved.planHash).toBe(original.planHash)
+    expect(moved).toEqual(original)
+  })
+
+  it('rejects presentation coordinates that reference unknown nodes', () => {
+    expect(() =>
+      compileWorkflow({
+        ...workflowDefinition(),
+        presentation: { schemaVersion: 1, pinnedPositions: { missing: { x: 1, y: 2 } } }
+      })
+    ).toThrow(expect.objectContaining({ code: 'definition_schema_error' }))
+  })
+
+  it('rejects non-finite presentation coordinates', () => {
+    expect(() =>
+      compileWorkflow({
+        ...workflowDefinition(),
+        presentation: {
+          schemaVersion: 1,
+          pinnedPositions: { implement: { x: Number.POSITIVE_INFINITY, y: 2 } }
+        }
+      })
+    ).toThrow(expect.objectContaining({ code: 'definition_schema_error' }))
+  })
+
   it('parses YAML and JSON into the same deterministic plan', () => {
     const definition = workflowDefinition()
     const yaml = `

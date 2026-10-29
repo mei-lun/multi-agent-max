@@ -160,6 +160,23 @@ export const WorkflowEdgeSchema = z
   })
   .strict()
 
+export const WorkflowPresentationSchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    pinnedPositions: z
+      .record(
+        MamEntityIdSchema,
+        z
+          .object({
+            x: z.number().finite().min(-100_000).max(100_000),
+            y: z.number().finite().min(-100_000).max(100_000)
+          })
+          .strict()
+      )
+      .optional()
+  })
+  .strict()
+
 export const WorkflowDefinitionSchema = z
   .object({
     schemaVersion: MamSchemaVersionSchema,
@@ -168,6 +185,7 @@ export const WorkflowDefinitionSchema = z
     version: z.number().int().positive(),
     nodes: z.array(WorkflowNodeSchema).min(1),
     edges: z.array(WorkflowEdgeSchema),
+    presentation: WorkflowPresentationSchema.optional(),
     maxTransitions: z.number().int().positive().max(10_000),
     maxRunCostUsd: z.number().nonnegative(),
     maxRunDurationSeconds: z.number().int().positive()

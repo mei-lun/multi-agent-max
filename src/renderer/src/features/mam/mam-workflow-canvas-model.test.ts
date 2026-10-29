@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { WorkflowNodeSchema, type WorkflowDefinition } from '../../../../shared/mam/domain/workflow'
+import { newDeliveryWorkflowDefinition } from './MamNewWorkflowDialog'
 import {
   createWorkflowNode,
   renameWorkflowNode,
@@ -21,8 +22,8 @@ describe('MAM Workflow canvas model', () => {
     const nodes = toCanvasNodes(definition)
     expect(nodes.map((node) => node.data.node)).toEqual(definition.nodes)
     expect(nodes.find((node) => node.id === 'fan-out')?.position.x).toBe(0)
-    expect(nodes.find((node) => node.id === 'task-a')?.position.x).toBe(240)
-    expect(nodes.find((node) => node.id === 'join')?.position.x).toBe(480)
+    expect(nodes.find((node) => node.id === 'task-a')?.position.x).toBe(260)
+    expect(nodes.find((node) => node.id === 'join')?.position.x).toBe(520)
     expect(toCanvasEdges(definition).map((edge) => edge.data?.edge)).toEqual(definition.edges)
   })
 
@@ -39,6 +40,51 @@ describe('MAM Workflow canvas model', () => {
     expect(renamed.nodes.find((node) => node.id === 'condition')).toMatchObject({
       branches: { yes: 'task-renamed' }
     })
+  })
+
+  it('places bounded revision edges outside the base progression', () => {
+    const definition = workflow()
+    definition.edges.push({
+      from: 'join',
+      to: 'task-a',
+      when: 'changes_requested',
+      maxTraversals: 2
+    })
+    const nodes = toCanvasNodes(definition)
+    expect(nodes.find((node) => node.id === 'join')!.position.x).toBeGreaterThan(
+      nodes.find((node) => node.id === 'task-a')!.position.x
+    )
+    expect(toCanvasEdges(definition).at(-1)).toMatchObject({
+      type: 'mam-return',
+      label: 'changes_requested · 最多 2 次',
+      sourceHandle: 'return-source',
+      targetHandle: 'return-target'
+    })
+  })
+
+  it('persists only pinned coordinates and renames their key', () => {
+    const definition = workflow()
+    definition.presentation = {
+      schemaVersion: 1,
+      pinnedPositions: { 'task-a': { x: 123, y: 456 } }
+    }
+    expect(toCanvasNodes(definition).find((node) => node.id === 'task-a')?.position).toEqual({
+      x: 123,
+      y: 456
+    })
+    const renamed = renameWorkflowNode(definition, 'task-a', 'task-renamed')
+    expect(renamed.presentation?.pinnedPositions).toEqual({ 'task-renamed': { x: 123, y: 456 } })
+  })
+
+  it('keeps the built-in delivery review return above its forward path', () => {
+    const definition = newDeliveryWorkflowDefinition('workflow.delivery', 'Delivery', [])
+    const nodes = toCanvasNodes(definition)
+    const x = (id: string) => nodes.find((node) => node.id === id)?.position.x ?? -1
+    expect(x('review-delivery')).toBeGreaterThan(x('create-delivery'))
+    expect(x('finish')).toBeGreaterThan(x('review-delivery'))
+    expect(
+      toCanvasEdges(definition).find((edge) => edge.data?.edge?.when === 'changes_requested')
+    ).toMatchObject({ type: 'mam-return', label: 'changes_requested · 最多 2 次' })
   })
 })
 

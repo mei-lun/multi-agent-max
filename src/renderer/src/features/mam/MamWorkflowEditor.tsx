@@ -1,14 +1,15 @@
 import {
   Background,
   Controls,
+  MarkerType,
   ReactFlow,
-  addEdge,
-  useEdgesState,
+  ViewportPortal,
   useNodesState,
+  type ReactFlowInstance,
   type Connection
 } from '@xyflow/react'
-import { ArrowLeft, Plus, Save } from 'lucide-react'
-import { useState } from 'react'
+import { ArrowLeft, Plus, Save, WandSparkles } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import type { MamSaveWorkflowInput } from '../../../../shared/mam/application-command'
 import type { RoleProfile } from '../../../../shared/mam/domain/role'
 import type {
@@ -26,10 +27,23 @@ import {
   SelectValue
 } from '../../components/ui/select'
 import { MamWorkflowCanvasNodeView } from './MamWorkflowCanvasNode'
+import { MamWorkflowReturnEdge } from './MamWorkflowReturnEdge'
+import { MamWorkflowViewToolbar } from './MamWorkflowViewToolbar'
+import { workflowArtifactRelations } from './mam-workflow-artifact-relations'
+import { analyzeWorkflowVisual } from './mam-workflow-visual-analysis'
+import { workflowParallelRegions } from './mam-workflow-parallel-regions'
+import { reachableWorkflowNodes } from './mam-workflow-reachability'
 import { MamWorkflowInspector } from './MamWorkflowInspector'
 import {
+  connectWorkflowNodes,
+  deleteWorkflowEdges,
+  deleteWorkflowNodes,
+  replaceWorkflowEdge,
+  replaceWorkflowNode,
+  renameWorkflowNode
+} from './mam-workflow-edit-actions'
+import {
   createWorkflowNode,
-  renameWorkflowNode,
   toCanvasEdges,
   toCanvasNodes,
   workflowNodeTypes,
@@ -38,6 +52,7 @@ import {
 } from './mam-workflow-canvas-model'
 
 const nodeTypes = { 'mam-workflow': MamWorkflowCanvasNodeView }
+const edgeTypes = { 'mam-return': MamWorkflowReturnEdge }
 
 export function MamWorkflowEditor({
   workflow,
@@ -58,117 +73,126 @@ export function MamWorkflowEditor({
 }>): React.JSX.Element {
   const [definition, setDefinition] = useState(workflow)
   const [nodes, setNodes, onNodesChange] = useNodesState<MamWorkflowCanvasNode>(
-    toCanvasNodes(workflow)
-  )
-  const [edges, setEdges, onEdgesChange] = useEdgesState<MamWorkflowCanvasEdge>(
-    toCanvasEdges(workflow)
+    toCanvasNodes(workflow, roles)
   )
   const [selectedNodeId, setSelectedNodeId] = useState<string>()
   const [selectedEdgeId, setSelectedEdgeId] = useState<string>()
+  const [selectedArtifactId, setSelectedArtifactId] = useState<string>()
   const [newNodeType, setNewNodeType] = useState<WorkflowNode['type']>('role_task')
   const [newNodeId, setNewNodeId] = useState('new-task')
   const [editorError, setEditorError] = useState<string>()
+  const [viewMode, setViewMode] = useState<'control' | 'data'>('control')
+  const [traceDirection, setTraceDirection] = useState<'upstream' | 'downstream'>()
+  const [nodeQuery, setNodeQuery] = useState('')
+  const [flowInstance, setFlowInstance] =
+    useState<ReactFlowInstance<MamWorkflowCanvasNode, MamWorkflowCanvasEdge>>()
   const selectedNode = definition.nodes.find((node) => node.id === selectedNodeId)
+  const edges = useMemo(() => toCanvasEdges(definition), [definition])
   const selectedCanvasEdge = edges.find((edge) => edge.id === selectedEdgeId)
   const selectedEdge = selectedCanvasEdge?.data?.edge
+  const artifactRelations = useMemo(() => workflowArtifactRelations(definition), [definition])
+  const selectedArtifact = artifactRelations.find((relation) => relation.id === selectedArtifactId)
+  const visualDiagnostics = useMemo(
+    () => analyzeWorkflowVisual(definition).diagnostics,
+    [definition]
+  )
+  const parallelRegions = useMemo(
+    () => workflowParallelRegions(definition, nodes),
+    [definition, nodes]
+  )
+  const tracedNodes = useMemo(() => {
+    if (!selectedNodeId || !traceDirection) return undefined
+    const relations =
+      viewMode === 'control'
+        ? definition.edges
+        : artifactRelations
+            .filter((relation) => relation.sourceId)
+            .map((relation) => ({ from: relation.sourceId!, to: relation.targetId }))
+    return reachableWorkflowNodes(selectedNodeId, relations, traceDirection)
+  }, [selectedNodeId, traceDirection, viewMode, definition, artifactRelations])
+  const displayNodes = useMemo(
+    () =>
+      nodes.map((node) => ({
+        ...node,
+        style: {
+          ...node.style,
+          opacity:
+            (tracedNodes && !tracedNodes.has(node.id)) ||
+            (nodeQuery && !node.id.toLowerCase().includes(nodeQuery.toLowerCase()))
+              ? 0.28
+              : 1
+        }
+      })),
+    [nodes, tracedNodes, nodeQuery]
+  )
+  const visibleEdges = useMemo<MamWorkflowCanvasEdge[]>(
+    () =>
+      viewMode === 'control'
+        ? edges
+        : [
+            ...edges.map((edge) => ({
+              ...edge,
+              label: undefined,
+              style: { opacity: 0.18 },
+              selectable: false,
+              deletable: false
+            })),
+            ...artifactRelations
+              .filter((relation) => relation.sourceId)
+              .map((relation) => ({
+                id: relation.id,
+                source: relation.sourceId!,
+                target: relation.targetId,
+                type: 'smoothstep',
+                label: `${relation.artifactId} · 可能提供`,
+                style: { strokeDasharray: '5 4', stroke: 'var(--foreground)' },
+                markerEnd: { type: MarkerType.ArrowClosed, color: 'var(--foreground)' },
+                selectable: true,
+                deletable: false
+              }))
+          ],
+    [artifactRelations, edges, viewMode]
+  )
+  const displayEdges = useMemo(
+    () =>
+      visibleEdges.map((edge) => {
+        const dimmed =
+          tracedNodes && (!tracedNodes.has(edge.source) || !tracedNodes.has(edge.target))
+        return {
+          ...edge,
+          style: { ...edge.style, opacity: dimmed ? 0.2 : (edge.style?.opacity ?? 1) }
+        }
+      }),
+    [visibleEdges, tracedNodes]
+  )
   const save = async (): Promise<void> => {
+    if (visualDiagnostics.some((message) => message.startsWith('固定节点'))) {
+      setEditorError('固定节点重叠；请移动节点或使用自动整理。')
+      return
+    }
     try {
       await onSave({ definition })
     } catch (cause) {
       setEditorError(cause instanceof Error ? cause.message : String(cause))
     }
   }
+  const updateDefinition = (next: WorkflowDefinition): void => {
+    setDefinition(next)
+    setNodes(toCanvasNodes(next, roles))
+  }
+
+  const resetLayout = (): void => {
+    updateDefinition({ ...definition, presentation: { schemaVersion: 1 } })
+  }
 
   const connect = (connection: Connection): void => {
     if (!connection.source || !connection.target) return
-    if (
-      definition.edges.some(
-        (edge) => edge.from === connection.source && edge.to === connection.target
-      )
-    ) {
-      setEditorError('That edge already exists.')
-      return
+    try {
+      updateDefinition(connectWorkflowNodes(definition, connection.source, connection.target))
+      setEditorError(undefined)
+    } catch (cause) {
+      setEditorError(cause instanceof Error ? cause.message : String(cause))
     }
-    const edge: WorkflowEdge = { from: connection.source, to: connection.target }
-    const target = definition.nodes.find((node) => node.id === connection.target)
-    const revisionTargetNodeId =
-      target?.type === 'human_review_gate'
-        ? nearestUpstreamRoleTaskId(definition, connection.source)
-        : undefined
-    const returnEdge: WorkflowEdge | undefined =
-      target?.type === 'human_review_gate' && revisionTargetNodeId
-        ? {
-            from: target.id,
-            to: revisionTargetNodeId,
-            when: 'changes_requested',
-            maxTraversals: target.maxRevisionAttempts
-          }
-        : undefined
-    setDefinition((current) => ({
-      ...current,
-      nodes: current.nodes.map((node) =>
-        node.id === target?.id && node.type === 'human_review_gate' && revisionTargetNodeId
-          ? { ...node, revisionTargetNodeId }
-          : node
-      ),
-      edges: [
-        ...current.edges.filter(
-          (candidate) =>
-            !returnEdge ||
-            candidate.from !== returnEdge.from ||
-            candidate.when !== 'changes_requested'
-        ),
-        edge,
-        ...(returnEdge &&
-        !current.edges.some(
-          (candidate) => candidate.from === returnEdge.from && candidate.to === returnEdge.to
-        )
-          ? [returnEdge]
-          : [])
-      ]
-    }))
-    if (target?.type === 'human_review_gate' && revisionTargetNodeId) {
-      setNodes((current) =>
-        current.map((node) =>
-          node.id === target.id
-            ? { ...node, data: { node: { ...target, revisionTargetNodeId } } }
-            : node
-        )
-      )
-    }
-    setEdges((current) =>
-      addEdge(
-        {
-          ...connection,
-          id: `${connection.source}:${connection.target}:${String(current.length)}`,
-          type: 'smoothstep',
-          data: { edge }
-        },
-        returnEdge &&
-          !current.some(
-            (candidate) =>
-              candidate.data?.edge.from === returnEdge.from &&
-              candidate.data.edge.to === returnEdge.to
-          )
-          ? addEdge(
-              {
-                source: returnEdge.from,
-                target: returnEdge.to,
-                id: `${returnEdge.from}:${returnEdge.to}:revision`,
-                type: 'smoothstep',
-                label: returnEdge.when,
-                data: { edge: returnEdge }
-              },
-              current.filter(
-                (candidate) =>
-                  candidate.data?.edge.from !== returnEdge.from ||
-                  candidate.data.edge.when !== 'changes_requested'
-              )
-            )
-          : current
-      )
-    )
-    setEditorError(undefined)
   }
 
   const addNode = (): void => {
@@ -178,31 +202,14 @@ export function MamWorkflowEditor({
       return
     }
     const node = createWorkflowNode(newNodeType, id, roles[0]?.id)
-    setDefinition((current) => ({ ...current, nodes: [...current.nodes, node] }))
-    setNodes((current) => [
-      ...current,
-      {
-        id,
-        type: 'mam-workflow',
-        position: { x: 80 + (current.length % 3) * 240, y: 80 + current.length * 45 },
-        data: { node }
-      }
-    ])
+    updateDefinition({ ...definition, nodes: [...definition.nodes, node] })
     setSelectedNodeId(id)
     setSelectedEdgeId(undefined)
     setEditorError(undefined)
   }
 
   const updateNode = (node: WorkflowNode): void => {
-    setDefinition((current) => ({
-      ...current,
-      nodes: current.nodes.map((candidate) => (candidate.id === node.id ? node : candidate))
-    }))
-    setNodes((current) =>
-      current.map((candidate) =>
-        candidate.id === node.id ? { ...candidate, data: { node } } : candidate
-      )
-    )
+    updateDefinition(replaceWorkflowNode(definition, node))
   }
 
   const renameNode = (previousId: string, nextId: string): void => {
@@ -211,34 +218,18 @@ export function MamWorkflowEditor({
       return
     }
     const next = renameWorkflowNode(definition, previousId, nextId)
-    setDefinition(next)
-    setNodes((current) =>
-      current.map((node) =>
-        node.id === previousId
-          ? { ...node, id: nextId, data: { node: next.nodes.find((item) => item.id === nextId)! } }
-          : node
-      )
-    )
-    setEdges(toCanvasEdges(next))
+    updateDefinition(next)
     setSelectedNodeId(nextId)
     setEditorError(undefined)
   }
 
   const updateEdge = (edge: WorkflowEdge): void => {
     if (!selectedCanvasEdge) return
-    const previous = selectedCanvasEdge.data?.edge
-    const next = {
-      ...definition,
-      edges: definition.edges.map((candidate) => (candidate === previous ? edge : candidate))
-    }
-    setDefinition(next)
-    const nextEdges = toCanvasEdges(next)
-    setEdges(nextEdges)
-    setSelectedEdgeId(
-      nextEdges.find(
-        (candidate) => candidate.data?.edge.from === edge.from && candidate.data.edge.to === edge.to
-      )?.id
-    )
+    const index = edges.findIndex((candidate) => candidate.id === selectedEdgeId)
+    if (index < 0) return
+    const next = replaceWorkflowEdge(definition, index, edge)
+    updateDefinition(next)
+    setSelectedEdgeId(toCanvasEdges(next).find((candidate) => candidate.data?.edge === edge)?.id)
   }
 
   return (
@@ -280,6 +271,9 @@ export function MamWorkflowEditor({
         <Button variant="outline" size="sm" onClick={addNode}>
           <Plus /> Add node
         </Button>
+        <Button variant="outline" size="sm" onClick={resetLayout}>
+          <WandSparkles /> 自动整理
+        </Button>
         <Button size="sm" disabled={pending} onClick={() => void save()}>
           <Save /> {saveLabel}
         </Button>
@@ -289,52 +283,103 @@ export function MamWorkflowEditor({
           {editorError}
         </p>
       )}
+      {visualDiagnostics.length > 0 && (
+        <p
+          className="border-b border-border bg-muted/30 px-4 py-1.5 text-xs text-muted-foreground"
+          role="status"
+        >
+          {visualDiagnostics.join('；')}
+        </p>
+      )}
+      <MamWorkflowViewToolbar
+        mode={viewMode}
+        relations={artifactRelations}
+        nodeQuery={nodeQuery}
+        onNodeQueryChange={setNodeQuery}
+        onFitView={() => void flowInstance?.fitView({ padding: 0.15 })}
+        {...(selectedNodeId ? { selectedNodeId } : {})}
+        {...(traceDirection ? { traceDirection } : {})}
+        onModeChange={setViewMode}
+        onTraceChange={setTraceDirection}
+      />
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_21rem]">
         <div className="min-h-0 bg-background">
           <ReactFlow
-            nodes={nodes}
-            edges={edges}
+            nodes={displayNodes}
+            edges={displayEdges}
             nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
             proOptions={{ hideAttribution: true }}
             fitView
+            onInit={setFlowInstance}
             onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
+            nodesConnectable={viewMode === 'control'}
+            nodesDraggable={viewMode === 'control'}
+            deleteKeyCode={viewMode === 'control' ? 'Delete' : null}
             onConnect={connect}
+            onNodeDragStop={(_, node) => {
+              const presentation = definition.presentation ?? { schemaVersion: 1 as const }
+              updateDefinition({
+                ...definition,
+                presentation: {
+                  ...presentation,
+                  pinnedPositions: { ...presentation.pinnedPositions, [node.id]: node.position }
+                }
+              })
+            }}
             onNodeClick={(_, node) => {
               setSelectedNodeId(node.id)
+              setTraceDirection(undefined)
               setSelectedEdgeId(undefined)
+              setSelectedArtifactId(undefined)
             }}
             onEdgeClick={(_, edge) => {
+              if (edge.id.startsWith('artifact:')) {
+                setSelectedArtifactId(edge.id)
+                setSelectedEdgeId(undefined)
+                setSelectedNodeId(undefined)
+                return
+              }
+              if (!edge.data?.edge) return
               setSelectedEdgeId(edge.id)
               setSelectedNodeId(undefined)
+              setSelectedArtifactId(undefined)
             }}
             onNodesDelete={(deleted) => {
               const ids = new Set(deleted.map((node) => node.id))
-              setDefinition((current) => ({
-                ...current,
-                nodes: current.nodes.filter((node) => !ids.has(node.id)),
-                edges: current.edges.filter((edge) => !ids.has(edge.from) && !ids.has(edge.to))
-              }))
-              setEdges((current) =>
-                current.filter((edge) => !ids.has(edge.source) && !ids.has(edge.target))
-              )
+              updateDefinition(deleteWorkflowNodes(definition, ids))
               setSelectedNodeId(undefined)
+              setSelectedEdgeId(undefined)
             }}
             onEdgesDelete={(deleted) => {
-              const removed = new Set(deleted.map((edge) => edge.id))
-              setDefinition((current) => ({
-                ...current,
-                edges: current.edges.filter(
-                  (_, index) =>
-                    !removed.has(
-                      `${current.edges[index]!.from}:${current.edges[index]!.to}:${index}`
-                    )
-                )
-              }))
+              if (viewMode === 'data') return
+              const indexes = new Set(
+                deleted.map((edge) => edges.findIndex((candidate) => candidate.id === edge.id))
+              )
+              updateDefinition(deleteWorkflowEdges(definition, indexes))
               setSelectedEdgeId(undefined)
             }}
           >
             <Background color="var(--border)" gap={20} />
+            <ViewportPortal>
+              {parallelRegions.map((region) => (
+                <div
+                  key={region.id}
+                  aria-hidden="true"
+                  className="pointer-events-none absolute rounded-xl border border-dashed border-border bg-muted/10"
+                  style={{
+                    left: region.x,
+                    top: region.y,
+                    width: region.width,
+                    height: region.height
+                  }}
+                >
+                  <span className="absolute -top-5 left-2 text-[11px] text-muted-foreground">
+                    并行 · {region.splitId} → {region.joinId}
+                  </span>
+                </div>
+              ))}
+            </ViewportPortal>
             <Controls />
           </ReactFlow>
         </div>
@@ -343,7 +388,11 @@ export function MamWorkflowEditor({
           roles={roles}
           {...(selectedNode ? { selectedNode } : {})}
           {...(selectedEdge ? { selectedEdge } : {})}
-          onDefinitionChange={setDefinition}
+          {...(selectedArtifact ? { selectedArtifact } : {})}
+          {...(viewMode === 'data'
+            ? { artifactRelations, onArtifactSelect: setSelectedArtifactId }
+            : {})}
+          onDefinitionChange={updateDefinition}
           onNodeChange={updateNode}
           onNodeRename={renameNode}
           onEdgeChange={updateEdge}
@@ -351,25 +400,4 @@ export function MamWorkflowEditor({
       </div>
     </section>
   )
-}
-
-function nearestUpstreamRoleTaskId(
-  definition: WorkflowDefinition,
-  startingNodeId: string
-): string | undefined {
-  const nodesById = new Map(definition.nodes.map((node) => [node.id, node]))
-  const pending = [startingNodeId]
-  const visited = new Set<string>()
-  while (pending.length > 0) {
-    const nodeId = pending.shift()!
-    if (visited.has(nodeId)) continue
-    visited.add(nodeId)
-    if (nodesById.get(nodeId)?.type === 'role_task') return nodeId
-    pending.push(
-      ...definition.edges
-        .filter((candidate) => candidate.to === nodeId)
-        .map((candidate) => candidate.from)
-    )
-  }
-  return undefined
 }
