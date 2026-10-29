@@ -35,6 +35,7 @@ import { ResourceHealthResultSchema } from './resource-health'
 export const MamUiTaskSnapshotSchema = z
   .object({
     id: MamEntityIdSchema,
+    nodeId: MamEntityIdSchema.optional(),
     title: z.string().min(1),
     specification: z.string().min(1).optional(),
     inputArtifacts: z.array(ArtifactRefSchema).optional(),
@@ -63,6 +64,7 @@ export const MamUiTaskSnapshotSchema = z
     recommendedRoleProfileIds: z.array(MamEntityIdSchema),
     allowedRoleProfileIds: z.array(MamEntityIdSchema),
     attemptIds: z.array(MamEntityIdSchema),
+    currentDeliveryAttemptId: MamEntityIdSchema.optional(),
     selectedAttemptId: MamEntityIdSchema.optional(),
     reviewSubject: ReviewSubjectSchema.optional(),
     reviewIds: z.array(MamEntityIdSchema),
@@ -138,6 +140,7 @@ export const MamUiExecutionActivitySchema = z
 export const MamUiRunSnapshotSchema = z
   .object({
     run: WorkflowRunSchema,
+    definition: WorkflowDefinitionSchema.optional(),
     definitionName: z.string().min(1),
     roleProfiles: z.array(RoleProfileSchema),
     revision: Sha256Schema,

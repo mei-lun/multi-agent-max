@@ -2,8 +2,7 @@ import { BaseEdge, EdgeLabelRenderer, type EdgeProps } from '@xyflow/react'
 
 export function MamWorkflowReturnEdge(props: EdgeProps): React.JSX.Element {
   const { sourceX, sourceY, targetX, targetY, markerEnd } = props
-  const lane = Number(props.data?.returnLane ?? 0)
-  const channelY = Math.min(sourceY, targetY) - 76 - lane * 42
+  const channelY = Number(props.data?.returnChannelY ?? Math.min(sourceY, targetY) - 76)
   const path = `M ${sourceX} ${sourceY} L ${sourceX} ${channelY} L ${targetX} ${channelY} L ${targetX} ${targetY}`
   return (
     <>

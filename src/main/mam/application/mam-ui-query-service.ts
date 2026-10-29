@@ -28,6 +28,7 @@ import {
 } from './attempt-interruption-projection'
 import { projectBinding } from './mam-ui-project-binding'
 import { collectMamUiTaskDefinitions } from './mam-ui-task-definitions'
+import { projectMamUiTasks } from './mam-ui-task-projection'
 import { projectExecutionActivities } from './execution-activity-projection'
 import { latestSubmittedReviewSubject } from './review-route-projection'
 import { projectLocalRetryItems } from './local-retry-projection'
@@ -64,7 +65,8 @@ export class MamUiQueryService {
     private readonly now: () => string = () => new Date().toISOString(),
     private readonly diagnostics?: Pick<DiagnosticsRecorder, 'list'> &
       Partial<Pick<DiagnosticsRecorder, 'listInterruptionEvents'>>,
-    private readonly localDrafts?: Readonly<{ listUnfinished(): readonly LocalExecutionDraft[] }>, private readonly claimantInstanceId?: () => string
+    private readonly localDrafts?: Readonly<{ listUnfinished(): readonly LocalExecutionDraft[] }>,
+    private readonly claimantInstanceId?: () => string
   ) {}
 
   setRunSource(runs: MamUiRunSource): void {
@@ -78,7 +80,8 @@ export class MamUiQueryService {
       this.diagnostics?.listInterruptionEvents?.() ?? diagnosticEvents
     )
     const runSnapshots: MamUiRunSnapshot[] = []
-    const localRetryItems: MamUiSnapshot['localRetryItems'][number][] = []; const unfinishedDrafts = this.localDrafts?.listUnfinished() ?? []
+    const localRetryItems: MamUiSnapshot['localRetryItems'][number][] = []
+    const unfinishedDrafts = this.localDrafts?.listUnfinished() ?? []
     const issues: MamUiSnapshot['issues'][number][] = []
     for (const workflowRunId of this.runs?.listWorkflowRunIds() ?? []) {
       try {
@@ -93,7 +96,14 @@ export class MamUiQueryService {
         }
         const projection = this.runs!.rebuild(workflowRunId)
         if (this.localDrafts && this.claimantInstanceId) {
-          localRetryItems.push(...projectLocalRetryItems({ drafts: unfinishedDrafts, workflowRunId, projection, claimantInstanceId: this.claimantInstanceId() }))
+          localRetryItems.push(
+            ...projectLocalRetryItems({
+              drafts: unfinishedDrafts,
+              workflowRunId,
+              projection,
+              claimantInstanceId: this.claimantInstanceId()
+            })
+          )
         }
         runSnapshots.push(
           createRunSnapshot(bundle, projection, generatedAt, interruptions, diagnosticEvents)
@@ -157,6 +167,7 @@ function createRunSnapshot(
     })
   return {
     run: application.run,
+    definition: bundle.definition,
     definitionName: bundle.definition.name,
     roleProfiles: [...(bundle.roleProfiles ?? [])],
     revision: projection.revision,
@@ -181,38 +192,7 @@ function createRunSnapshot(
           ? { selectedOption: projection.resolvedApprovalGates[node.id]!.option }
           : {})
       })),
-    tasks: [...new Set([...taskDefinitions.keys(), ...Object.keys(projection.tasks)])]
-      .sort((left, right) => left.localeCompare(right))
-      .map((id) => {
-        const task = projection.tasks[id]
-        const definition = taskDefinitions.get(id)
-        return {
-          id,
-          title: definition?.title ?? id,
-          ...(definition?.specification ? { specification: definition.specification } : {}),
-          inputArtifacts: [...(definition?.inputArtifacts ?? [])],
-          outputContracts: [...(definition?.outputContracts ?? [])],
-          kind: definition?.kind ?? 'unknown',
-          status:
-            task?.status ??
-            (application.readyTaskIds.includes(id)
-              ? 'waiting_role_assignment'
-              : (definition?.initialStatus ?? 'waiting_dependencies')),
-          ...(task?.roleProfileId ? { roleProfileId: task.roleProfileId } : {}),
-          ...(task?.roleProfileVersion ? { roleProfileVersion: task.roleProfileVersion } : {}),
-          ...(task?.assignedByUserId ? { assignedByUserId: task.assignedByUserId } : {}),
-          ...(task?.activeClaim ? { activeClaim: task.activeClaim } : {}),
-          dependencies: [...(definition?.dependencies ?? [])],
-          recommendedRoleProfileIds: [...(definition?.recommendedRoleProfileIds ?? [])],
-          allowedRoleProfileIds: [...(definition?.allowedRoleProfileIds ?? [])],
-          attemptIds: [...(task?.knownAttemptIds ?? [])],
-          ...(task?.selectedAttemptId ? { selectedAttemptId: task.selectedAttemptId } : {}),
-          ...(definition?.reviewSubject ? { reviewSubject: definition.reviewSubject } : {}),
-          reviewIds: [...(task?.reviewIds ?? [])],
-          executionWarningCount: task?.executionWarnings.length ?? 0,
-          ...(task?.reusedFrom ? { reusedFrom: task.reusedFrom } : {})
-        }
-      }),
+    tasks: projectMamUiTasks(taskDefinitions, projection, application.readyTaskIds),
     attempts,
     activities: projectExecutionActivities(bundle.run.id, diagnosticEvents, attempts),
     humanAttentionItems: Object.values(projection.humanAttentionItems).sort(

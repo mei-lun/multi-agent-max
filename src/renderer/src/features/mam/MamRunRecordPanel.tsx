@@ -23,6 +23,7 @@ import { MamLocalCollaborationControl } from './MamLocalCollaborationControl'
 import { MamResetRunDialog } from './MamResetRunDialog'
 import { MamRunOutcomePanel } from './MamRunOutcomePanel'
 import { MamRunIntegrationPanel } from './MamRunIntegrationPanel'
+import { MamRunArtifactFlows } from './MamRunArtifactFlows'
 import { MamRunTaskDetails } from './MamRunTaskDetails'
 import { MamStateBadge } from './MamStateBadge'
 import { frozenRoleName } from './mam-task-role-candidates'
@@ -67,6 +68,7 @@ export function MamRunRecordPanel({
   onOpenIntegration?(): void
 }>): React.JSX.Element {
   const [open, setOpen] = useState(defaultOpen)
+  const frozenDefinition = run.definition ?? definition
   return (
     <article className="overflow-hidden rounded-xl border border-border bg-card">
       <details
@@ -105,6 +107,7 @@ export function MamRunRecordPanel({
             {...(definition ? { definition } : {})}
             {...(onOpenIntegration ? { onOpenIntegration } : {})}
           />
+          {frozenDefinition && <MamRunArtifactFlows run={run} definition={frozenDefinition} />}
           {!['completed', 'cancelled'].includes(run.run.status) && (
             <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
               <p className="text-xs text-muted-foreground">

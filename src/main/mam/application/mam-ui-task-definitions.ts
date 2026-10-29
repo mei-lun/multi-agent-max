@@ -5,6 +5,7 @@ import type { MamUiRunSnapshot } from '../../../shared/mam/ui-projection'
 import type { WorkflowRunProjection } from '../state-store/git-state-projection'
 
 export type MamUiTaskDefinition = Readonly<{
+  nodeId?: string
   title: string
   specification: string
   inputArtifacts: readonly ArtifactRef[]
@@ -23,14 +24,14 @@ export function collectMamUiTaskDefinitions(
 ): ReadonlyMap<string, MamUiTaskDefinition> {
   const definitions = new Map<string, MamUiTaskDefinition>()
   for (const task of bundle.taskCatalog) {
-    definitions.set(task.id, taskDefinition(task, 'static'))
+    definitions.set(task.id, taskDefinition(task, 'static', task.nodeId))
   }
   for (const task of Object.values(projection.dynamicTasks)) {
-    definitions.set(task.id, taskDefinition(task, 'dynamic'))
+    definitions.set(task.id, taskDefinition(task, 'dynamic', task.nodeId))
   }
   for (const task of Object.values(projection.reviewTasks)) {
     definitions.set(task.id, {
-      ...taskDefinition(task, 'review'),
+      ...taskDefinition(task, 'review', task.reviewNodeId),
       dependencies: [],
       reviewSubject: task.subject
     })
@@ -62,9 +63,11 @@ function taskDefinition(
     recommendedRoleProfileIds: readonly string[]
     allowedRoleProfileIds: readonly string[]
   }>,
-  kind: MamUiTaskDefinition['kind']
+  kind: MamUiTaskDefinition['kind'],
+  nodeId?: string
 ): MamUiTaskDefinition {
   return {
+    ...(nodeId ? { nodeId } : {}),
     title: task.title,
     specification: task.specification,
     inputArtifacts: task.inputArtifacts,

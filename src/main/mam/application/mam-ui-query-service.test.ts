@@ -57,6 +57,7 @@ describe('MAM UI query service', () => {
     expect(snapshot.generatedAt).toBe('2026-07-28T19:00:00Z')
     expect(snapshot.workflows.map((workflow) => workflow.id)).toEqual(['workflow.ui'])
     expect(snapshot.runs[0]).toMatchObject({
+      definition: bundle.definition,
       definitionName: 'UI projection',
       run: { id: 'run.ui', status: 'completed' }
     })
@@ -187,6 +188,7 @@ describe('MAM UI query service', () => {
 
     expect(service.getSnapshot().runs[0]?.tasks[0]).toMatchObject({
       id: definition.id,
+      nodeId: 'build',
       title: 'build',
       kind: 'static',
       roleProfileId: 'role.builder',
