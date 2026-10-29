@@ -2,11 +2,16 @@ import type { WorkflowDefinition } from '../../../../shared/mam/domain/workflow'
 import type { WorkflowPoint } from './mam-workflow-layout'
 
 type ReturnRoute = Readonly<{ from: string; to: string; when?: string; maxTraversals: number }>
+export type ReturnChannel = Readonly<{
+  y: number
+  sourceCorridorX: number
+  targetCorridorX: number
+}>
 
 export function returnEdgeChannels(
   definition: WorkflowDefinition,
   positions: ReadonlyMap<string, WorkflowPoint>
-): ReadonlyMap<number, number> {
+): ReadonlyMap<number, ReturnChannel> {
   const routes = definition.edges
     .map((edge, index) => ({ edge, index }))
     .filter(
@@ -18,7 +23,7 @@ export function returnEdgeChannels(
       const right = `${b.edge.from}:${b.edge.to}:${b.edge.when ?? ''}:${b.edge.maxTraversals}`
       return left.localeCompare(right) || a.index - b.index
     })
-  const result = new Map<number, number>()
+  const result = new Map<number, ReturnChannel>()
   const reserved: Array<{ left: number; right: number; y: number }> = []
   for (const { edge, index } of routes) {
     const source = positions.get(edge.from)
@@ -37,7 +42,7 @@ export function returnEdgeChannels(
       y -= 42
     }
     reserved.push({ left, right, y })
-    result.set(index, y)
+    result.set(index, { y, sourceCorridorX: source.x - 28, targetCorridorX: target.x + 218 })
   }
   return result
 }

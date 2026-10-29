@@ -31,8 +31,9 @@ describe('workflow return channels', () => {
       ['d', { x: 780, y: 100 }]
     ])
     const channels = returnEdgeChannels(definition, positions)
-    expect(channels.get(0)).toBeLessThan(-80)
-    expect(channels.get(1)).toBeLessThan(channels.get(0)!)
+    expect(channels.get(0)?.y).toBeLessThan(-80)
+    expect(channels.get(1)!.y).toBeLessThan(channels.get(0)!.y)
+    expect(channels.get(0)).toMatchObject({ sourceCorridorX: 492, targetCorridorX: 218 })
     expect(returnEdgeChannels(definition, positions)).toEqual(channels)
   })
 })

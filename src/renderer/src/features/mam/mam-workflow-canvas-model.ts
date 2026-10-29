@@ -3,7 +3,7 @@ import type { RoleProfile } from '../../../../shared/mam/domain/role'
 import type { NodeRun } from '../../../../shared/mam/domain/workflow'
 import { analyzeWorkflowVisual } from './mam-workflow-visual-analysis'
 import { layoutWorkflow } from './mam-workflow-layout'
-import { returnEdgeChannels } from './mam-workflow-return-channels'
+import { returnEdgeChannels, type ReturnChannel } from './mam-workflow-return-channels'
 import type {
   WorkflowDefinition,
   WorkflowEdge,
@@ -13,7 +13,9 @@ import type {
 export type MamWorkflowCanvasData = Record<string, unknown> &
   Readonly<{ node: WorkflowNode; roleName?: string; status?: NodeRun['status'] }>
 export type MamWorkflowCanvasNode = Node<MamWorkflowCanvasData, 'mam-workflow'>
-export type MamWorkflowCanvasEdge = Edge<Readonly<{ edge?: WorkflowEdge; returnChannelY?: number }>>
+export type MamWorkflowCanvasEdge = Edge<
+  Readonly<{ edge?: WorkflowEdge; returnChannel?: ReturnChannel }>
+>
 
 export const workflowNodeTypes: WorkflowNode['type'][] = [
   'role_task',
@@ -61,7 +63,10 @@ export function toCanvasEdges(definition: WorkflowDefinition): MamWorkflowCanvas
     source: edge.from,
     target: edge.to,
     label: controlEdgeLabel(definition, edge),
-    data: { edge, ...(edge.maxTraversals ? { returnChannelY: channels.get(index) ?? -70 } : {}) },
+    data: {
+      edge,
+      ...(edge.maxTraversals && channels.has(index) ? { returnChannel: channels.get(index)! } : {})
+    },
     type: edge.maxTraversals ? 'mam-return' : 'smoothstep',
     markerEnd: {
       type: MarkerType.ArrowClosed,
