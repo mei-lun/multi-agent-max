@@ -31,6 +31,7 @@ async function probe(window: BrowserWindow): Promise<void> {
     const chinese = rendererState.language === 'zh-CN'
     const commandTaskStatus = await runAssignmentProbe(window)
     const recoveryState = await runRecoveryProbe(window)
+    await captureWorkflowList(window, chinese)
     await openWorkflowEditor(window, chinese)
     const capturePath = process.env.MAM_DESKTOP_SMOKE_CAPTURE
     if (capturePath) {
@@ -69,6 +70,20 @@ async function probe(window: BrowserWindow): Promise<void> {
     process.stderr.write(`MAM_DESKTOP_SMOKE_FAILED ${String(error)}\n`)
     app.exit(1)
   }
+}
+
+async function captureWorkflowList(window: BrowserWindow, chinese: boolean): Promise<void> {
+  const capturePath = process.env.MAM_DESKTOP_SMOKE_CAPTURE_WORKFLOW_LIST
+  if (!capturePath) return
+  if (!isAbsolute(capturePath)) throw new Error('Workflow list capture path must be absolute')
+  await window.webContents.executeJavaScript(`(async () => {
+    const button = [...document.querySelectorAll('button')]
+      .find((candidate) => candidate.textContent?.trim() === ${JSON.stringify(chinese ? '工作流' : 'Workflows')});
+    if (!button) throw new Error('Missing Workflows navigation button');
+    button.click();
+    await new Promise((resolve) => setTimeout(resolve, 300));
+  })()`)
+  writeFileSync(capturePath, (await window.webContents.capturePage()).toPNG())
 }
 
 function probeResourceDiscovery(window: BrowserWindow): Promise<boolean> {

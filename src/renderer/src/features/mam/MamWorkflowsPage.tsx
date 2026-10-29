@@ -1,4 +1,4 @@
-import { ArrowRight, Download, Network, Pencil, Upload } from 'lucide-react'
+import { Download, Network, Pencil, Upload } from 'lucide-react'
 import { useState } from 'react'
 import type {
   MamCreateWorkflowRunInput,
@@ -14,6 +14,7 @@ import { MamWorkflowEditor } from './MamWorkflowEditor'
 import { MamNewWorkflowDialog } from './MamNewWorkflowDialog'
 import { MamStartWorkflowRunDialog } from './MamStartWorkflowRunDialog'
 import { MamDeleteWorkflowDialog } from './MamDeleteWorkflowDialog'
+import { MamWorkflowDefinitionPreview } from './MamWorkflowDefinitionPreview'
 
 export function MamWorkflowsPage({
   snapshot,
@@ -145,41 +146,7 @@ export function MamWorkflowsPage({
                   </div>
                 </header>
 
-                <div className="grid border-t border-border lg:grid-cols-[1fr_17rem]">
-                  <div className="space-y-2 p-4">
-                    <p className="text-xs font-medium text-muted-foreground">Nodes</p>
-                    <div className="flex flex-wrap gap-2">
-                      {workflow.nodes.map((node) => (
-                        <div
-                          key={node.id}
-                          className="rounded-lg border border-border bg-card px-3 py-2"
-                        >
-                          <p className="text-xs font-medium">{node.id}</p>
-                          <p className="mt-0.5 text-xs text-muted-foreground">
-                            {node.type.replaceAll('_', ' ')}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="space-y-2 border-t border-border p-4 lg:border-t-0 lg:border-l">
-                    <p className="text-xs font-medium text-muted-foreground">Edges</p>
-                    {workflow.edges.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">No transitions</p>
-                    ) : (
-                      workflow.edges.map((edge, index) => (
-                        <div
-                          key={`${edge.from}:${edge.to}:${index}`}
-                          className="flex items-center gap-2 font-mono text-xs"
-                        >
-                          <span className="min-w-0 truncate">{edge.from}</span>
-                          <ArrowRight className="size-3 shrink-0 text-muted-foreground" />
-                          <span className="min-w-0 truncate">{edge.to}</span>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
+                <MamWorkflowDefinitionPreview definition={workflow} roles={snapshot.roles} />
 
                 <footer className="flex flex-wrap gap-x-4 gap-y-1 border-t border-border bg-card px-4 py-2 text-xs text-muted-foreground">
                   <span>{workflow.maxTransitions} transitions maximum</span>

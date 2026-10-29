@@ -59,6 +59,8 @@ describe('MAM Workflows page', () => {
     )
 
     expect(html).toContain('Start Run')
+    expect(html).toContain('工作流流程图')
+    expect(html).toContain('控制路径')
     expect(html).not.toContain('disabled=""')
   })
 })

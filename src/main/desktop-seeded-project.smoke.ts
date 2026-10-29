@@ -44,6 +44,12 @@ describe('desktop seeded-project acceptance', () => {
         MAM_DESKTOP_SMOKE: '1',
         MAM_DESKTOP_SMOKE_EXPECT: 'Seeded desktop workflow',
         MAM_DESKTOP_SMOKE_OPEN_WORKFLOW_EDITOR: '1',
+        ...(process.env.MAM_DESKTOP_SMOKE_CAPTURE_WORKFLOW_LIST
+          ? {
+              MAM_DESKTOP_SMOKE_CAPTURE_WORKFLOW_LIST:
+                process.env.MAM_DESKTOP_SMOKE_CAPTURE_WORKFLOW_LIST
+            }
+          : {}),
         MAM_DESKTOP_SMOKE_SAVE_WORKFLOW: '1',
         MAM_DESKTOP_SMOKE_ASSIGN_TASK: JSON.stringify({
           workflowRunId: 'run.desktop-seeded',
