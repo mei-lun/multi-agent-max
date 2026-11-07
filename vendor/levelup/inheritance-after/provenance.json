@@ -1,0 +1,56 @@
+{
+  "schema": 1,
+  "commit": "e8c0141724de11f5cd81506cf37acbd2f1ffe105",
+  "selection": {
+    "schema": 1,
+    "components": [
+      "creative-fix-inheritance"
+    ],
+    "rules": [
+      {
+        "prefix": "src/lib/musicWorkbench.ts",
+        "component": "MusicWorkbench",
+        "target": "audit candidate",
+        "strategy": "verbatim"
+      },
+      {
+        "prefix": "src/lib/modelWorkbench.ts",
+        "component": "ModelWorkbench",
+        "target": "audit candidate",
+        "strategy": "verbatim"
+      },
+      {
+        "prefix": "src/lib/spine.ts",
+        "component": "SpineStudio",
+        "target": "audit candidate",
+        "strategy": "verbatim"
+      }
+    ]
+  },
+  "files": [
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "f93326c272050f403658cb17de11709b381acbca",
+      "path": "src/lib/modelWorkbench.ts",
+      "sha256": "7c2d4de2597200fde1882c7a360721f65536ba51f2bf71d63f0aa4fd9bbda88d"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "971aaa468d784af7e20951a8389419646ae03770",
+      "path": "src/lib/musicWorkbench.ts",
+      "sha256": "5c278f41f67b263a6def721b11418486237d308324314fead01725d2546cb245"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "dda21e1b58dd3af954f4c9af6914acb9770da468",
+      "path": "src/lib/spine.ts",
+      "sha256": "35d8f865cc957daaa82eccc923983da94b3ceb34bc144d8853dbbda3ee07f55a"
+    }
+  ],
+  "dependencyGaps": [],
+  "dependencyAnalysis": "Relative JS/TS imports only; no semantic dependency resolution",
+  "dependencyEdges": []
+}

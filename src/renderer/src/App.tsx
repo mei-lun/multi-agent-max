@@ -33,6 +33,7 @@ import { MamMyRolePage } from './features/mam/MamMyRolePage'
 import { MamOverviewPage } from './features/mam/MamOverviewPage'
 import { MamReviewsPage } from './features/mam/MamReviewsPage'
 import { MamResourcesPage } from './features/mam/MamResourcesPage'
+import { MamCreativePage } from './features/mam/MamCreativePage'
 import { MamRolesPage } from './features/mam/MamRolesPage'
 import { MamRunsPage } from './features/mam/MamRunsPage'
 import { MamLiveActivityPage } from './features/mam/MamLiveActivityPage'
@@ -57,6 +58,7 @@ type Page =
   | 'reviews'
   | 'merge-queue'
   | 'resources'
+  | 'creative'
   | 'settings'
 
 export function App(): React.JSX.Element {
@@ -211,6 +213,12 @@ export function App(): React.JSX.Element {
             icon={PackageOpen}
             label="Resources"
             onClick={() => setPage('resources')}
+          />
+          <NavigationButton
+            current={page === 'creative'}
+            icon={PackageOpen}
+            label={locale === 'zh-CN' ? '创作组件' : 'Creative components'}
+            onClick={() => setPage('creative')}
           />
           <NavigationButton
             current={page === 'settings'}
@@ -420,6 +428,7 @@ function ActivePage({
   onOpenWorkflows(): void
   onOpenReviews(): void
 }>): React.JSX.Element {
+  if (page === 'creative') return <MamCreativePage />
   if (page === 'design') {
     return <MamDesignPage snapshot={snapshot} design={design} onOpenSettings={onOpenSettings} />
   }

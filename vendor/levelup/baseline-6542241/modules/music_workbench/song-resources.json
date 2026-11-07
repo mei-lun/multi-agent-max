@@ -1,0 +1,22 @@
+{
+  "acestep": {
+    "schemaVersion": 1,
+    "resourceVersion": "2026.10.11-acestep",
+    "releaseTag": "music-workbench-resources",
+    "repository": "TippingGame/LevelUpAgent",
+    "target": "windows-x64-cu128",
+    "modelRevision": "19671f406d603126926c1b7e2adc169acbcade22",
+    "sourceRevision": "ca1e85fe9430179831e6bc6be790c332190a3866",
+    "components": ["runtime", "acestep-models"]
+  },
+  "yue2": {
+    "schemaVersion": 1,
+    "resourceVersion": "2026.10.11-yue2-int8",
+    "releaseTag": "music-workbench-resources",
+    "repository": "TippingGame/LevelUpAgent",
+    "target": "windows-x64-cu130",
+    "modelRevision": "2f76ca75e6ee094169de899cc7fc99d6887e2196",
+    "sourceRevision": "830232b856045ca2892833212d7771078a13edd5",
+    "components": ["runtime", "yue2-models"]
+  }
+}

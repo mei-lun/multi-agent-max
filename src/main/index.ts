@@ -1,12 +1,13 @@
-import { app, BrowserWindow, dialog, safeStorage, shell } from 'electron'
-import { mkdirSync } from 'node:fs'
+import { app, BrowserWindow, dialog, protocol, safeStorage, shell } from 'electron'
 import { isAbsolute, join } from 'node:path'
 import { ProfileCatalog } from './mam/profiles/profile-catalog'
 import { GitStateRepository } from './mam/state-store/git-state-repository'
 import { MamUiQueryService } from './mam/application/mam-ui-query-service'
 import { MamUiCommandService } from './mam/application/mam-ui-command-service'
 import { registerMamIpc } from './ipc/mam-ipc'
+import { registerCreativeIpc } from './ipc/mam-creative-ipc'
 import { installDesktopSmokeProbe } from './desktop-smoke-probe'
+import { configureSmokeUserData } from './desktop-smoke-user-data'
 import { MamLocalSettingsStore } from './mam/profiles/mam-local-settings-store'
 import { createGitCommandClient } from './mam/state-store/git-command-client'
 import { DiagnosticsRecorder } from './mam/diagnostics/diagnostics-recorder'
@@ -45,6 +46,9 @@ import {
   exportExecutionActivityDialog
 } from './mam/diagnostics/desktop-diagnostic-dialogs'
 let unregisterMamIpc: (() => void) | undefined
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'mam-component', privileges: { standard: true, secure: true, supportFetchAPI: true } }
+])
 configureSmokeUserData()
 const mamRoot = join(app.getPath('userData'), 'mam')
 const localSettings = new MamLocalSettingsStore(
@@ -97,7 +101,8 @@ function createMainWindow(): void {
     ],
     previousLogDirectories
   )
-  const initialRepository = configuredStateRepository(localSettings); const executionDrafts = new LocalExecutionDraftStore(join(mamRoot, 'execution-drafts'))
+  const initialRepository = configuredStateRepository(localSettings)
+  const executionDrafts = new LocalExecutionDraftStore(join(mamRoot, 'execution-drafts'))
   let activeProjectDirectory =
     initialRepository?.projectDirectory ??
     localSettings.get().defaultProjectDirectory ??
@@ -240,6 +245,7 @@ function createMainWindow(): void {
     createDesktopResourceOperations(resourceServices, service, notifySnapshotChanged),
     runtimeLogger
   )
+  const unregisterCreativeIpc = registerCreativeIpc(window, mamRoot)
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('https://')) void shell.openExternal(url)
     return { action: 'deny' }
@@ -251,6 +257,7 @@ function createMainWindow(): void {
     runtimeLogger.record('main', 'window_closed')
     unregisterMamIpc?.()
     unregisterMamIpc = undefined
+    unregisterCreativeIpc()
   })
 
   const developmentUrl = process.env.ELECTRON_RENDERER_URL
@@ -285,14 +292,6 @@ function configuredStateRepository(
 
 function stateRepositoryOptions(settings: MamLocalSettingsStore): { remote?: null } {
   return settings.get().collaborationMode === 'local' ? { remote: null } : {}
-}
-
-function configureSmokeUserData(): void {
-  const directory = process.env.MAM_DESKTOP_SMOKE_USER_DATA
-  if (process.env.MAM_DESKTOP_SMOKE !== '1' || !directory) return
-  if (!isAbsolute(directory)) throw new Error('MAM_DESKTOP_SMOKE_USER_DATA must be absolute')
-  mkdirSync(directory, { recursive: true })
-  app.setPath('userData', directory)
 }
 
 void app.whenReady().then(() => {

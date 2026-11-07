@@ -1,6 +1,6 @@
 {
   "name": "multi-agent-max",
-  "version": "0.1.38",
+  "version": "0.1.40",
   "private": true,
   "description": "Git-driven multi-agent workflow control plane",
   "type": "module",
@@ -30,7 +30,13 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "verify:environment": "node config/scripts/verify-environment.mjs",
     "verify": "corepack pnpm format:check && corepack pnpm lint && corepack pnpm typecheck && corepack pnpm test && corepack pnpm build",
-    "verify:final": "node config/scripts/verify-final-traceability.mjs"
+    "verify:final": "node config/scripts/verify-final-traceability.mjs",
+    "creative:build:image": "node config/scripts/build-creative-image.mjs",
+    "creative:verify:image": "node packages/creative-image/verify.mjs && node config/scripts/verify-creative-image.mjs",
+    "creative:verify:desktop": "node config/scripts/verify-creative-desktop.mjs",
+    "creative:verify:offscreen": "node config/scripts/verify-creative-offscreen.mjs",
+    "creative:sync": "node config/scripts/levelup-sync/sync.mjs",
+    "creative:test": "vitest run src/main/mam/components src/main/mam/creative-runtime && node --test config/scripts/levelup-sync/*.test.mjs"
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "0.81.1",

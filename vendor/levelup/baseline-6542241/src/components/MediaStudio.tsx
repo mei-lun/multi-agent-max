@@ -1,0 +1,2083 @@
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+  type WheelEvent as ReactWheelEvent,
+} from "react";
+import { createPortal } from "react-dom";
+import "./MediaStudio.css";
+import { CreativeStudioHeader } from "./CreativeStudioHeader";
+import {
+  AudioLines,
+  ArrowLeft,
+  ArrowRight,
+  Brush,
+  Check,
+  CircleAlert,
+  Clock3,
+  Copy,
+  Download,
+  FolderOpen,
+  Image,
+  ImagePlus,
+  LoaderCircle,
+  Maximize2,
+  Move,
+  Plus,
+  RefreshCw,
+  Search,
+  Settings2,
+  Sparkles,
+  Trash2,
+  Video,
+  X,
+  ZoomIn,
+  ZoomOut,
+} from "lucide-react";
+import {
+  deleteImageAttachment,
+  deleteMediaAsset,
+  exportMediaAsset,
+  generateMedia,
+  getMediaCatalog,
+  importAttachments,
+  importClipboardImages,
+  importMediaReferences,
+  listMediaAssets,
+  mediaAssetUrl,
+  previewAttachment,
+  refreshMediaAsset,
+  onMediaAssetUpdate,
+  openMediaDirectory,
+  selectImageReferences,
+  selectVideoReference,
+} from "../lib/bridge";
+import { tr } from "../lib/i18n";
+import { useImageCopy } from "./useImageCopy";
+import { copyText } from "../lib/clipboard";
+import { IMAGE_DIMENSION_OPTIONS, IMAGE_RATIO_OPTIONS, VIDEO_SIZE_OPTIONS, imageModelCapabilities, mediaModelBaseId, mediaModelSupportsExplicitImageMask, selectStudioMediaModel, sortStudioMediaModels, videoModelCapabilities, videoOutputOptions } from "../lib/mediaCapabilities";
+import { createMediaReferenceUrl, imageEditInputs, moveMediaReference, orderedMediaReferenceUrls, type MediaReferenceUrl } from "../lib/mediaReferences";
+import { createMediaPoller } from "../lib/mediaPolling";
+import { mediaHistoryFilter, type MediaHistoryRange } from "../lib/mediaHistory";
+import type {
+  ImageAttachment,
+  MediaAsset,
+  MediaGenerationRequest,
+  MediaKind,
+  MediaModelInfo,
+  VideoGenerationMode,
+} from "../lib/types";
+import { MediaReferenceList, MediaReferenceOrderHint, MediaReferenceUrlList } from "./MediaReferenceList";
+import {
+  ConstellationCanvasEditor,
+  type CanvasEditorSaveMeta,
+} from "./ConstellationCanvasEditor";
+
+interface PromptDraft {
+  id: string;
+  prompt: string;
+}
+
+interface MediaHistoryLoadState {
+  loaded: boolean;
+  loading: boolean;
+  hasMore: boolean;
+  ids: string[];
+  total: number;
+  queryKey: string;
+  error: string | null;
+}
+
+type StudioMediaAsset = MediaAsset & {
+  pendingOutput?: { index: number; total: number };
+};
+
+type StudioImageMode = "generate" | "edit" | "outpaint" | "inpaint";
+
+interface ImageEditEntry {
+  id: string;
+  source: ImageAttachment;
+  originalSource?: ImageAttachment;
+  mask?: ImageAttachment;
+  meta?: CanvasEditorSaveMeta;
+}
+
+interface PreviewPoint {
+  x: number;
+  y: number;
+}
+
+interface PreviewTransform extends PreviewPoint {
+  zoom: number;
+}
+
+const MIN_PREVIEW_ZOOM = 0.05;
+const MAX_PREVIEW_ZOOM = 4;
+const PREVIEW_ZOOM_STEP = 1.2;
+const EMPTY_HISTORY: MediaHistoryLoadState = { loaded: false, loading: false, hasMore: false, ids: [], total: 0, queryKey: "", error: null };
+
+interface MediaStudioProps {
+  active: boolean;
+  locale: string;
+  mediaCatalogRevision: number;
+  dropActive: boolean;
+  referenceDrop: { id: string; paths: string[] } | null;
+  onReferenceDropHandled: (id: string) => void;
+  onConfigureConnection: () => void;
+  onPendingCountChange: (count: number) => void;
+  onSpine: () => void;
+  onWriting: () => void;
+  onConstellation: () => void;
+  onModel3d: () => void;
+  onMusic: () => void;
+}
+
+const KIND_TABS: Array<{ kind: MediaKind; icon: typeof Image }> = [
+  { kind: "image", icon: Image },
+  { kind: "video", icon: Video },
+  { kind: "audio", icon: AudioLines },
+];
+const IMAGE_SIZE_OPTIONS = ["auto", ...IMAGE_DIMENSION_OPTIONS.map((option) => option.value), ...IMAGE_RATIO_OPTIONS];
+const MEDIA_MODEL_ROUTES_KEY = "levelup-agent.media-model-routes.v1";
+const STUDIO_IMAGE_MODES: Array<{ value: StudioImageMode; label: string; labelEn: string }> = [
+  { value: "generate", label: "生成", labelEn: "Generate" },
+  { value: "edit", label: "编辑", labelEn: "Edit" },
+  { value: "outpaint", label: "扩图", labelEn: "Outpaint" },
+  { value: "inpaint", label: "局部重绘", labelEn: "Inpaint" },
+];
+
+export function MediaStudio({ active, locale, mediaCatalogRevision, dropActive, referenceDrop, onReferenceDropHandled, onConfigureConnection, onPendingCountChange, onWriting, onConstellation, onSpine, onModel3d, onMusic }: MediaStudioProps) {
+  const rootRef = useRef<HTMLElement>(null);
+  const [kind, setKind] = useState<MediaKind>("image");
+  const [catalog, setCatalog] = useState<Awaited<ReturnType<typeof getMediaCatalog>> | null>(null);
+  const [assets, setAssets] = useState<MediaAsset[]>([]);
+  const [pendingAssets, setPendingAssets] = useState<StudioMediaAsset[]>([]);
+  const [selectedModels, setSelectedModels] = useState<Partial<Record<MediaKind, string>>>(loadMediaModelRoutes);
+  const [prompts, setPrompts] = useState<PromptDraft[]>([
+    { id: crypto.randomUUID(), prompt: "" },
+  ]);
+  const [imageReferences, setImageReferences] = useState<ImageAttachment[]>([]);
+  const [imageMode, setImageMode] = useState<StudioImageMode>("generate");
+  const [imageEditEntries, setImageEditEntries] = useState<ImageEditEntry[]>([]);
+  const [imageEditSelectionId, setImageEditSelectionId] = useState<string | null>(null);
+  const [imageEditorOpen, setImageEditorOpen] = useState(false);
+  const [videoReferences, setVideoReferences] = useState<ImageAttachment[]>([]);
+  const [videoReferenceUrls, setVideoReferenceUrls] = useState<MediaReferenceUrl[]>([]);
+  const [videoReferenceSource, setVideoReferenceSource] = useState<"url" | "local">("local");
+  const [videoMode, setVideoMode] = useState<VideoGenerationMode>("text");
+  const [videoResolution, setVideoResolution] = useState("720p");
+  const [videoAspectRatio, setVideoAspectRatio] = useState("16:9");
+  const [count, setCount] = useState(1);
+  const [size, setSize] = useState("auto");
+  const [quality, setQuality] = useState("auto");
+  const [outputFormat, setOutputFormat] = useState("png");
+  const [background, setBackground] = useState("auto");
+  const [seconds, setSeconds] = useState(8);
+  const [voice, setVoice] = useState("");
+  const [instructions, setInstructions] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [videoRefreshErrors, setVideoRefreshErrors] = useState<Record<string, string>>({});
+  const [refreshing, setRefreshing] = useState(false);
+  const [pastingReferences, setPastingReferences] = useState(false);
+  const [previewAsset, setPreviewAsset] = useState<MediaAsset | null>(null);
+  const [historyKeyword, setHistoryKeyword] = useState("");
+  const [historyRange, setHistoryRange] = useState<MediaHistoryRange>("all");
+  const [historyStart, setHistoryStart] = useState("");
+  const [historyEnd, setHistoryEnd] = useState("");
+  const [historyPageSize, setHistoryPageSize] = useState(20);
+  const [historyPage, setHistoryPage] = useState({ kind, index: 0 });
+  const [historyRevision, setHistoryRevision] = useState(0);
+  const [openingHistoryDirectory, setOpeningHistoryDirectory] = useState(false);
+  const historyPageIndex = historyPage.kind === kind ? historyPage.index : 0;
+  const historyFilter = mediaHistoryFilter(historyKeyword, historyRange, historyStart, historyEnd);
+  const historyQueryKey = JSON.stringify([kind, historyFilter, historyPageSize, historyPageIndex]);
+  const historyFiltered = Boolean(historyKeyword.trim()) || historyRange !== "all";
+  const [historyState, setHistoryState] = useState<Record<MediaKind, MediaHistoryLoadState>>({
+    image: EMPTY_HISTORY,
+    video: EMPTY_HISTORY,
+    audio: EMPTY_HISTORY,
+  });
+  const catalogRequestRef = useRef(0);
+  const catalogRevisionRef = useRef<number | null>(null);
+  const historyRequestRef = useRef<Record<MediaKind, number>>({ image: 0, video: 0, audio: 0 });
+
+  const models = useMemo(
+    () => sortStudioMediaModels((catalog?.models ?? []).filter((model) => model.kind === kind)),
+    [catalog, kind],
+  );
+  const editInputs = imageEditInputs(imageEditEntries, imageReferences);
+  const requiresImageMask = kind === "image" && imageMode !== "generate" && editInputs.some((input) => Boolean(input.maskAttachmentId));
+  const eligibleModels = useMemo(
+    () => requiresImageMask ? models.filter(mediaModelSupportsExplicitImageMask) : models,
+    [models, requiresImageMask],
+  );
+  const selectedKey = selectedModels[kind];
+  // Only picker changes are persisted; automatic fallbacks never overwrite
+  // a temporarily unavailable user choice.
+  const selected = selectStudioMediaModel(eligibleModels, selectedKey);
+  const selectedModelId = mediaModelBaseId(selected?.id ?? "");
+  const grokAudio = kind === "audio" && selectedModelId === "grok-voice-tts";
+  const imageCapabilities = imageModelCapabilities(selectedModelId);
+  const minimaxImage = kind === "image" && imageCapabilities.minimax;
+  const transparentBackgroundSupported = !selectedModelId.includes("gpt-image-2") && !minimaxImage;
+  const videoModelId = selected?.id ?? "";
+  const videoCapabilities = videoModelCapabilities(videoModelId, videoMode);
+  const isGrokVideo = kind === "video" && videoCapabilities.grok;
+  const isGrokVideo15 = isGrokVideo && videoCapabilities.grok15;
+  const isNativeVideo = kind === "video" && videoCapabilities.native;
+  const hasVideoControls = isGrokVideo || isNativeVideo;
+  const activeVideoMode: VideoGenerationMode = videoCapabilities.modes.includes(videoMode) ? videoMode : videoCapabilities.modes[0];
+  const videoResolutionOptions = videoCapabilities.resolutions;
+  const videoDurationOptions = videoModelCapabilities(videoModelId, activeVideoMode).durations;
+  const videoReferenceMaximum = videoModelCapabilities(videoModelId, activeVideoMode).referenceLimit;
+  const selectedVideoResolution = videoOutputOptions(videoModelId, activeVideoMode, { videoResolution }).resolution;
+  const useReferenceUrls = isNativeVideo && videoReferenceSource === "url";
+  const enteredVideoUrls = orderedMediaReferenceUrls(videoReferenceUrls);
+  const referenceCount = useReferenceUrls ? enteredVideoUrls.length : videoReferences.length;
+  const videoReferenceReady = !hasVideoControls || activeVideoMode === "text" || (
+    (activeVideoMode === "reference" ? referenceCount > 0 && referenceCount <= videoReferenceMaximum : referenceCount === videoReferenceMaximum)
+    && (useReferenceUrls ? enteredVideoUrls.every(Boolean) : videoReferences.every((item) => item.kind === (activeVideoMode === "video" ? "video" : "image")))
+  );
+  const imageDimensions = imageCapabilities.dimensions;
+  const imageRatios = imageCapabilities.ratios;
+  const imageEditReady = imageMode === "generate"
+    || imageEditEntries.length > 0;
+  const currentHistoryState = historyState[kind];
+  const historyLoading = (!currentHistoryState.loaded && !currentHistoryState.error) || currentHistoryState.queryKey !== historyQueryKey;
+  const visibleAssets = useMemo(() => {
+    const byId = new Map(assets.map((asset) => [asset.id, asset]));
+    return currentHistoryState.ids.flatMap((id) => byId.has(id) ? [byId.get(id)!] : []);
+  }, [assets, currentHistoryState.ids]);
+  const visiblePendingAssets = useMemo(() => pendingAssets.filter((asset) => asset.kind === kind), [pendingAssets, kind]);
+  const displayedAssets = useMemo<StudioMediaAsset[]>(() => [...visiblePendingAssets, ...visibleAssets], [visiblePendingAssets, visibleAssets]);
+  const activeImageEditEntry = imageEditEntries.find((entry) => entry.id === imageEditSelectionId) ?? imageEditEntries[0];
+  const activeImageEditNumber = imageEditEntries.findIndex((entry) => entry.id === activeImageEditEntry?.id) + 1;
+  const previewableAssets = useMemo(() => displayedAssets.filter(
+    (asset) => asset.kind === "image" && asset.status === "completed" && Boolean(mediaAssetUrl(asset)),
+  ), [displayedAssets]);
+  const pendingVideoIds = useMemo(() => assets
+    .filter((asset) => asset.kind === "video" && (asset.status === "queued" || asset.status === "in_progress"))
+    .map((asset) => asset.id), [assets]);
+  const videoRefreshError = pendingVideoIds.map((id) => videoRefreshErrors[id]).find(Boolean);
+  const visibleError = error ?? (videoRefreshError
+    ? tr("视频状态获取失败，将自动重试：", "Video status unavailable; retrying: ") + videoRefreshError
+    : null);
+
+  const rememberSelectedModel = (targetKind: MediaKind, key: string) => {
+    setSelectedModels((current) => {
+      const next = { ...current, [targetKind]: key };
+      saveMediaModelRoutes(next);
+      return next;
+    });
+  };
+
+  const loadCatalog = async (showSpinner = true) => {
+    const requestId = ++catalogRequestRef.current;
+    if (showSpinner) setLoading(true);
+    setError(null);
+    try {
+      const nextCatalog = await getMediaCatalog();
+      if (requestId !== catalogRequestRef.current) return;
+      setCatalog(nextCatalog);
+      catalogRevisionRef.current = mediaCatalogRevision;
+    } catch (reason) {
+      if (requestId === catalogRequestRef.current) setError(errorText(reason));
+    } finally {
+      if (requestId === catalogRequestRef.current) setLoading(false);
+    }
+  };
+
+  const loadHistory = async (targetKind: MediaKind) => {
+    if (!historyFilter) return;
+    const requestId = ++historyRequestRef.current[targetKind];
+    const offset = historyPageIndex * historyPageSize;
+    setHistoryState((current) => ({
+      ...current,
+      [targetKind]: {
+        ...current[targetKind],
+        loading: true,
+        error: null,
+      },
+    }));
+    try {
+      const page = await listMediaAssets(targetKind, historyPageSize, offset, historyFilter);
+      if (requestId !== historyRequestRef.current[targetKind]) return;
+      // Deleting the last item on a page returns to the last remaining page.
+      if (historyPageSize > 0 && historyPageIndex > 0 && offset >= page.total) {
+        setHistoryPage({ kind: targetKind, index: Math.max(0, Math.ceil(page.total / historyPageSize) - 1) });
+        return;
+      }
+      setAssets((current) => mergeAssets(current, page.assets));
+      setHistoryState((current) => ({
+        ...current,
+        [targetKind]: {
+          ...current[targetKind],
+          loaded: true,
+          hasMore: page.hasMore,
+          ids: page.assets.map((asset) => asset.id),
+          total: page.total,
+          queryKey: historyQueryKey,
+        },
+      }));
+    } catch (reason) {
+      if (requestId === historyRequestRef.current[targetKind]) {
+        setHistoryState((current) => ({ ...current, [targetKind]: { ...current[targetKind], queryKey: historyQueryKey, error: errorText(reason) } }));
+      }
+    } finally {
+      if (requestId === historyRequestRef.current[targetKind]) {
+        setHistoryState((current) => ({
+          ...current,
+          [targetKind]: {
+            ...current[targetKind],
+            loading: false,
+          },
+        }));
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (!active || catalogRevisionRef.current === mediaCatalogRevision) return;
+    void loadCatalog();
+  }, [active, mediaCatalogRevision]);
+
+  useEffect(() => {
+    if (!active || !historyFilter) return;
+    const timer = window.setTimeout(() => void loadHistory(kind), 250);
+    return () => {
+      window.clearTimeout(timer);
+      ++historyRequestRef.current[kind];
+    };
+  }, [active, historyQueryKey, historyRevision]);
+
+  useEffect(() => {
+    if (!transparentBackgroundSupported && background === "transparent") setBackground("auto");
+  }, [transparentBackgroundSupported]);
+
+  useEffect(() => {
+    if (kind !== "video") return;
+    if (!videoCapabilities.modes.includes(videoMode)) setVideoMode(videoCapabilities.modes[0]);
+    if (!videoResolutionOptions.includes(videoResolution)) setVideoResolution(videoResolutionOptions[0]);
+    if (!videoCapabilities.ratios.includes(videoAspectRatio)) setVideoAspectRatio("16:9");
+    if (!videoDurationOptions.includes(seconds)) setSeconds(videoDurationOptions[0]);
+  }, [kind, videoModelId, activeVideoMode, videoMode]);
+
+  useEffect(() => {
+    if (!minimaxImage) return;
+    if (!["auto", ...imageDimensions.map((option) => option.value), ...imageRatios].includes(size)) setSize("auto");
+    if (imageMode === "outpaint" || imageMode === "inpaint") setImageMode("generate");
+  }, [minimaxImage, selectedModelId]);
+
+  useEffect(() => {
+    if (kind !== "video") return;
+    const expectedKind = activeVideoMode === "video" ? "video" : "image";
+    const maximum = videoReferenceMaximum;
+    setVideoReferences((current) => {
+      const retained = current.filter((item) => item.kind === expectedKind).slice(0, maximum);
+      const retainedIds = new Set(retained.map((item) => item.id));
+      const discarded = current.filter((item) => !retainedIds.has(item.id));
+      void Promise.all(discarded.map((item) => deleteImageAttachment(item.id).catch(() => false)));
+      return retained;
+    });
+    setVideoReferenceUrls((current) => {
+      const retained = current.slice(0, maximum);
+      const minimum = activeVideoMode === "first_last" ? 2 : maximum > 0 ? 1 : 0;
+      while (retained.length < minimum) retained.push(createMediaReferenceUrl());
+      return retained;
+    });
+  }, [kind, activeVideoMode, selectedModelId]);
+
+  useEffect(() => {
+    onPendingCountChange(pendingAssets.length + pendingVideoIds.length);
+  }, [onPendingCountChange, pendingAssets.length, pendingVideoIds.length]);
+
+  useEffect(() => {
+    if (kind === "image") {
+      setSize((current) => IMAGE_SIZE_OPTIONS.includes(current) ? current : "auto");
+      setOutputFormat((current) => ["png", "webp", "jpeg"].includes(current) ? current : "png");
+    } else if (kind === "video") {
+      setSize((current) => VIDEO_SIZE_OPTIONS.includes(current) ? current : "1280x720");
+    } else {
+      setOutputFormat((current) => (grokAudio ? ["mp3", "wav"] : ["mp3", "wav", "aac", "flac", "opus"]).includes(current) ? current : "mp3");
+    }
+  }, [kind, grokAudio]);
+
+  useEffect(() => { setVoice(""); }, [grokAudio]);
+
+  useEffect(() => onMediaAssetUpdate((asset) => {
+    setAssets((current) => mergeAssets(current, [asset]));
+    // Progress is rendered from the cache; only persisted changes reload the page.
+    if (!asset.downloadProgress) setHistoryRevision((current) => current + 1);
+  }), []);
+
+  useEffect(() => {
+    if (pendingVideoIds.length === 0) return;
+    const poller = createMediaPoller(
+      refreshMediaAsset,
+      (asset) => setAssets((current) => mergeAssets(current, [asset])),
+      (id, reason) => setVideoRefreshErrors((current) => {
+        const next = { ...current };
+        if (reason === null) delete next[id];
+        else next[id] = errorText(reason);
+        return next;
+      }),
+    );
+    const refreshPending = () => {
+      poller.poll(pendingVideoIds);
+    };
+    const timer = window.setInterval(refreshPending, 5_000);
+    window.addEventListener("focus", refreshPending);
+    document.addEventListener("visibilitychange", refreshPending);
+    refreshPending();
+    return () => {
+      poller.stop();
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refreshPending);
+      document.removeEventListener("visibilitychange", refreshPending);
+    };
+  }, [pendingVideoIds.join("|")]);
+
+  const addPrompt = () => {
+    if (prompts.length >= 8) return;
+    setPrompts((current) => [...current, { id: crypto.randomUUID(), prompt: "" }]);
+  };
+
+  const updatePrompt = (id: string, prompt: string) => {
+    setPrompts((current) => current.map((item) => item.id === id ? { ...item, prompt } : item));
+  };
+
+  const removePrompt = (id: string) => {
+    setPrompts((current) => current.length === 1 ? current : current.filter((item) => item.id !== id));
+  };
+
+  const addImageReferences = async () => {
+    try {
+      const selectedImages = await selectImageReferences();
+      await acceptImageReferences(selectedImages);
+    } catch (reason) {
+      setError(errorText(reason));
+    }
+  };
+
+  const acceptImageReferences = async (incoming: ImageAttachment[]) => {
+    const ids = new Set(imageReferences.map((item) => item.id));
+    const maximum = imageMode === "generate" ? 8 : 7;
+    const available = Math.max(0, maximum - imageReferences.length);
+    const accepted = incoming
+      .filter((item) => item.kind === "image" && !ids.has(item.id))
+      .slice(0, available);
+    const acceptedIds = new Set(accepted.map((item) => item.id));
+    const discarded = incoming.filter((item) => !acceptedIds.has(item.id));
+    setImageReferences((current) => [...current, ...accepted]);
+    await Promise.all(discarded.map((item) => deleteImageAttachment(item.id).catch(() => false)));
+    if (incoming.some((item) => item.kind !== "image")) {
+      setError(tr("创作空间的拖拽区域只接受图片参考", "The Media Studio drop zone accepts image references only"));
+    } else if (accepted.length < incoming.length) {
+      setError(tr(`最多添加 ${maximum} 张参考图`, `You can add up to ${maximum} reference images`));
+    }
+  };
+
+  const replaceImageEditEntries = async (entries: ImageEditEntry[]) => {
+    const retainedIds = new Set(entries.flatMap((entry) => [entry.source.id, entry.originalSource?.id, entry.mask?.id].filter((id): id is string => Boolean(id))));
+    const discarded = imageEditEntries.flatMap((entry) => [entry.source, entry.originalSource, entry.mask].filter((item): item is ImageAttachment => item !== undefined))
+      .filter((item) => !retainedIds.has(item.id));
+    setImageEditEntries(entries);
+    setImageEditSelectionId((current) => entries.some((entry) => entry.id === current) ? current : entries[0]?.id ?? null);
+    await Promise.all(discarded.map((item) => deleteImageAttachment(item.id).catch(() => false)));
+  };
+
+  const acceptImageEditEntries = async (incoming: ImageAttachment[], openEditor = false) => {
+    const sources = incoming.filter((item) => item.kind === "image");
+    const discarded = incoming.filter((item) => !sources.includes(item));
+    await Promise.all(discarded.map((item) => deleteImageAttachment(item.id).catch(() => false)));
+    if (sources.length === 0) {
+      setError(tr("图片编辑需要至少一张有效图片", "Image editing needs at least one valid image"));
+      return;
+    }
+    const entries = sources.map((source) => ({ id: source.id, source }));
+    await replaceImageEditEntries(entries);
+    setKind("image");
+    setImageMode("edit");
+    setError(null);
+    if (openEditor) setImageEditorOpen(true);
+  };
+
+  const appendImageEditEntries = async (incoming: ImageAttachment[], openEditor = false) => {
+    const sources = incoming.filter((item) => item.kind === "image");
+    const discarded = incoming.filter((item) => !sources.includes(item));
+    await Promise.all(discarded.map((item) => deleteImageAttachment(item.id).catch(() => false)));
+    if (sources.length === 0) {
+      setError(tr("图片编辑需要至少一张有效图片", "Image editing needs at least one valid image"));
+      return;
+    }
+    const existingSourceIds = new Set(imageEditEntries.map((entry) => entry.source.id));
+    const nextEntries = [...imageEditEntries];
+    for (const source of sources) {
+      if (existingSourceIds.has(source.id)) continue;
+      nextEntries.push({ id: source.id, source });
+      existingSourceIds.add(source.id);
+    }
+    await replaceImageEditEntries(nextEntries);
+    setKind("image");
+    setImageMode("edit");
+    setError(null);
+    if (openEditor) setImageEditorOpen(true);
+  };
+
+  const chooseImageEditSource = async () => {
+    try {
+      const selectedImages = await selectImageReferences();
+      if (selectedImages.length === 0) return;
+      await acceptImageEditEntries(selectedImages, true);
+    } catch (reason) {
+      setError(errorText(reason));
+    }
+  };
+
+  const addImageEditSource = async () => {
+    try {
+      const selectedImages = await selectImageReferences();
+      if (selectedImages.length === 0) return;
+      await appendImageEditEntries(selectedImages, true);
+    } catch (reason) {
+      setError(errorText(reason));
+    }
+  };
+
+  const editImageAsset = async (asset: MediaAsset) => {
+    if (asset.kind !== "image" || asset.status !== "completed" || !asset.filePath) return;
+    setError(null);
+    try {
+      await acceptImageEditEntries(await importMediaReferences([asset.filePath]), true);
+    } catch (reason) {
+      setError(errorText(reason));
+    }
+  };
+
+  const applyCanvasEdit = async (
+    image: ImageAttachment,
+    mask: ImageAttachment | undefined,
+    meta: CanvasEditorSaveMeta,
+  ) => {
+    const nextEntries = imageEditEntries.map((entry) => entry.id === activeImageEditEntry?.id
+      ? { ...entry, originalSource: entry.originalSource ?? entry.source, source: image, mask, meta }
+      : entry);
+    await replaceImageEditEntries(nextEntries);
+    setImageMode(meta.expanded ? "outpaint" : mask ? "inpaint" : "edit");
+    setImageEditorOpen(false);
+    setError(null);
+  };
+
+  const changeImageMode = (nextMode: StudioImageMode) => {
+    setImageMode(nextMode);
+    setError(null);
+  };
+
+  const changeVideoMode = (nextMode: VideoGenerationMode) => {
+    if (isGrokVideo15 && nextMode !== "image") return;
+    setVideoMode(nextMode);
+    setError(null);
+  };
+
+  const addVideoReferences = async () => {
+    try {
+      const incoming = activeVideoMode === "video"
+        ? await selectVideoReference()
+        : await selectImageReferences(videoReferenceMaximum, true);
+      await acceptVideoReferences(incoming, activeVideoMode);
+    } catch (reason) {
+      setError(errorText(reason));
+    }
+  };
+
+  const acceptVideoReferences = async (incoming: ImageAttachment[], targetMode: VideoGenerationMode) => {
+    const expectedKind = targetMode === "video" ? "video" : "image";
+    const maximum = videoModelCapabilities(selectedModelId, targetMode).referenceLimit;
+    const compatibleCurrent = videoReferences.filter((item) => item.kind === expectedKind).slice(0, maximum);
+    const ids = new Set(compatibleCurrent.map((item) => item.id));
+    const available = Math.max(0, maximum - compatibleCurrent.length);
+    const accepted = incoming
+      .filter((item) => item.kind === expectedKind && !ids.has(item.id))
+      .slice(0, available);
+    const retainedIds = new Set([...compatibleCurrent, ...accepted].map((item) => item.id));
+    const discarded = [...videoReferences, ...incoming].filter((item) => !retainedIds.has(item.id));
+    setVideoMode(targetMode);
+    setVideoReferences([...compatibleCurrent, ...accepted]);
+    await Promise.all(discarded.map((item) => deleteImageAttachment(item.id).catch(() => false)));
+    if (incoming.some((item) => item.kind !== expectedKind)) {
+      setError(targetMode === "video"
+        ? tr("视频编辑只接受一个 MP4 视频", "Video editing accepts one MP4 video only")
+        : tr("当前视频模式只接受图片", "The current video mode accepts images only"));
+    } else if (accepted.length < incoming.length) {
+      setError(targetMode === "reference"
+        ? tr(`最多添加 ${maximum} 张视频参考图`, `You can add up to ${maximum} video reference images`)
+        : tr("当前模式只能添加一个参考素材", "The current mode accepts one reference only"));
+    }
+  };
+
+  const importReferencePaths = async (paths: string[]) => {
+    if (kind === "video") {
+      if (!hasVideoControls || useReferenceUrls) {
+        setError(tr("请填写 HTTPS 图片地址，或将素材来源切换为本地图片", "Enter HTTPS image URLs or switch the reference source to local images"));
+        return;
+      }
+      const imported = await importMediaReferences(paths.slice(0, Math.max(videoReferenceMaximum, videoModelCapabilities(selectedModelId, "reference").referenceLimit)));
+      const containsVideo = imported.some((item) => item.kind === "video");
+      const targetMode: VideoGenerationMode = containsVideo
+        ? "video"
+        : activeVideoMode === "first_last" ? "first_last" : isGrokVideo15 || activeVideoMode === "image"
+          ? "image"
+          : activeVideoMode === "reference" || imported.length > 1
+            ? "reference"
+            : "image";
+      if (!videoCapabilities.modes.includes(targetMode)) {
+        await Promise.all(imported.map((item) => deleteImageAttachment(item.id).catch(() => false)));
+        setError(tr("当前模型不支持这种参考模式，请先选择支持的生成方式", "This model does not support that reference mode; select a supported video mode first"));
+        return;
+      }
+      await acceptVideoReferences(imported, targetMode);
+      return;
+    }
+    if (kind === "image" && imageMode !== "generate") {
+      await appendImageEditEntries(await importAttachments(paths.slice(0, 12)), true);
+      return;
+    }
+    const available = Math.max(0, 8 - imageReferences.length);
+    if (available === 0) {
+      setError(tr("最多添加 8 张参考图", "You can add up to 8 reference images"));
+      return;
+    }
+    const imported = await importAttachments(paths.slice(0, 12));
+    await acceptImageReferences(imported);
+  };
+
+  const importPastedReferences = async (files: File[]) => {
+    if (kind === "video" && useReferenceUrls) {
+      setError(tr("当前模式请填写公网 HTTPS 图片地址", "Enter public HTTPS image URLs for this mode"));
+      return;
+    }
+    const targetVideoMode = kind === "video" && hasVideoControls
+      ? isGrokVideo15 || !matchesImageVideoMode(activeVideoMode) ? "image" : activeVideoMode
+      : null;
+    const targetImageEdit = kind === "image" && imageMode !== "generate";
+    const maximum = targetVideoMode ? videoModelCapabilities(selectedModelId, targetVideoMode).referenceLimit : 8;
+    const existing = targetVideoMode ? videoReferences.length : targetImageEdit ? 0 : imageReferences.length;
+    const available = Math.max(0, maximum - existing);
+    if (available === 0) {
+      setError(tr("当前参考素材数量已达上限", "The reference limit has been reached"));
+      return;
+    }
+    const selectedFiles = files.slice(0, Math.min(available, 8));
+    setPastingReferences(true);
+    setError(null);
+    try {
+      const imported = await importClipboardImages(selectedFiles);
+      if (targetVideoMode) await acceptVideoReferences(imported, targetVideoMode);
+      else if (targetImageEdit) await appendImageEditEntries(imported, true);
+      else await acceptImageReferences(imported);
+      if (selectedFiles.length < files.length) {
+        setError(tr("超出数量上限的图片未粘贴", "Images beyond the reference limit were not pasted"));
+      }
+    } catch (reason) {
+      setError(errorText(reason));
+    } finally {
+      setPastingReferences(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!active || !referenceDrop) return;
+    setError(null);
+    void importReferencePaths(referenceDrop.paths)
+      .catch((reason) => setError(errorText(reason)))
+      .finally(() => onReferenceDropHandled(referenceDrop.id));
+  }, [active, referenceDrop?.id]);
+
+  useEffect(() => {
+    if (!active) return;
+    const handlePaste = (event: ClipboardEvent) => {
+      const target = event.target;
+      const root = rootRef.current;
+      const isStudioTarget = target instanceof Node && root?.contains(target);
+      const isPageTarget = target === document.body || target === document.documentElement;
+      if (!isStudioTarget && !isPageTarget) return;
+      const files = clipboardImageFiles(event.clipboardData);
+      if (files.length === 0) return;
+      event.preventDefault();
+      if (kind !== "video" || !hasVideoControls) setKind("image");
+      if (pastingReferences) {
+        setError(tr("正在处理上一批粘贴图片", "The previous pasted images are still being processed"));
+        return;
+      }
+      void importPastedReferences(files);
+    };
+    window.addEventListener("paste", handlePaste);
+    return () => window.removeEventListener("paste", handlePaste);
+  }, [active, pastingReferences, kind, hasVideoControls, isGrokVideo15, activeVideoMode, imageMode, imageReferences, videoReferences, useReferenceUrls]);
+
+  const removeImageReference = async (attachment: ImageAttachment) => {
+    setImageReferences((current) => current.filter((item) => item.id !== attachment.id));
+    await deleteImageAttachment(attachment.id).catch(() => undefined);
+  };
+
+  const removeVideoReference = async (attachment: ImageAttachment) => {
+    setVideoReferences((current) => current.filter((item) => item.id !== attachment.id));
+    await deleteImageAttachment(attachment.id).catch(() => undefined);
+  };
+
+  const removeVideoReferenceUrl = (id: string) => {
+    setVideoReferenceUrls((current) => {
+      if (activeVideoMode === "first_last") return current.map((item) => item.id === id ? { ...item, url: "" } : item);
+      const remaining = current.filter((item) => item.id !== id);
+      return remaining.length > 0 ? remaining : [createMediaReferenceUrl()];
+    });
+  };
+
+  const removeImageEditEntry = async (entry: ImageEditEntry) => {
+    const nextEntries = imageEditEntries.filter((item) => item.id !== entry.id);
+    await replaceImageEditEntries(nextEntries);
+    if (nextEntries.length === 0) {
+      setImageMode("generate");
+      setImageEditorOpen(false);
+    }
+  };
+
+  const selectImageEditEntry = (entry: ImageEditEntry) => {
+    setImageEditSelectionId(entry.id);
+    setImageEditorOpen(true);
+  };
+
+  const generate = async () => {
+    const activePrompts = prompts.map((item) => item.prompt.trim()).filter(Boolean);
+    if (activePrompts.length === 0) return;
+    if (kind === "image" && imageMode !== "generate" && imageEditEntries.length === 0) {
+      setError(tr("请先选择至少一张编辑源图", "Choose at least one edit source image first"));
+      return;
+    }
+    if (kind === "image" && imageMode !== "generate" && imageReferences.length > 7) {
+      setError(tr("每张源图最多搭配 7 张参考图，请移除多余参考图", "Each source supports up to 7 reference images. Remove extra references."));
+      return;
+    }
+    if (kind === "image" && imageMode === "inpaint" && !editInputs.some(({ entry }) => entry.mask)) {
+      setError(tr("请先为需要局部重绘的源图涂抹蒙版，其他源图按各自设置处理", "Paint a mask on a source to inpaint; other sources use their own settings"));
+      return;
+    }
+    if (kind === "image" && imageMode === "outpaint" && !editInputs.some(({ entry }) => entry.mask && entry.meta?.expanded)) {
+      setError(tr("请先为需要扩图的源图设置扩边范围，其他源图按各自设置处理", "Expand a source canvas to outpaint; other sources use their own settings"));
+      return;
+    }
+    if (!selected) {
+      setError(requiresImageMask
+        ? tr("当前没有支持 PNG 蒙版编辑的图像模型，请配置支持 OpenAI Images Edit 的模型", "No configured image model supports PNG mask editing. Configure a model with OpenAI Images Edit support")
+        : tr("当前没有可用的生成模型", "No generation model is available"));
+      return;
+    }
+    if (!videoReferenceReady) {
+      setError(useReferenceUrls && enteredVideoUrls.some((url) => !url)
+        ? tr("请填写或移除空白图片地址，保持图号与发送顺序一致", "Fill or remove empty image URLs to keep image numbers aligned with the submitted order")
+        : videoReferenceRequirement(activeVideoMode));
+      return;
+    }
+    setError(null);
+    const videoHasOutputControls = hasVideoControls && activeVideoMode !== "video";
+    const selectedVideoRatio = isNativeVideo && (activeVideoMode === "image" || activeVideoMode === "first_last") ? "adaptive" : videoAspectRatio;
+    const videoSizeLabel = videoHasOutputControls ? `${selectedVideoResolution} · ${selectedVideoRatio}` : undefined;
+    const base: Omit<MediaGenerationRequest, "prompt"> = {
+      kind,
+      profileId: selected.profileId,
+      model: selected.id,
+      protocol: selected.protocol,
+      count,
+      size: kind === "image"
+        ? size !== "auto" ? size : undefined
+        : kind === "video" && !hasVideoControls ? size : undefined,
+      quality: kind === "image" && !minimaxImage && quality !== "auto" ? quality : undefined,
+      outputFormat: kind === "video" || minimaxImage ? undefined : outputFormat,
+      background: kind === "image" && !minimaxImage && background !== "auto" ? background : undefined,
+      voice: kind === "audio" && voice.trim() ? voice.trim() : undefined,
+      instructions: kind === "audio" && !grokAudio && instructions.trim() ? instructions.trim() : undefined,
+      seconds: kind === "video" && activeVideoMode !== "video" ? seconds : undefined,
+      videoMode: kind === "video" && hasVideoControls ? activeVideoMode : "text",
+      videoResolution: videoHasOutputControls ? selectedVideoResolution : undefined,
+      videoAspectRatio: videoHasOutputControls ? selectedVideoRatio : undefined,
+      referenceAttachmentIds: [],
+      referenceUrls: useReferenceUrls && activeVideoMode !== "text" ? enteredVideoUrls : [],
+    };
+    const tasks = kind === "image"
+      ? (imageMode === "generate"
+        ? activePrompts.map((prompt) => ({ prompt, editInput: null }))
+        : activePrompts.flatMap((prompt) => editInputs.map((editInput) => ({ prompt: studioImagePrompt(prompt, editInput.entry.meta?.expanded ? "outpaint" : editInput.entry.mask ? "inpaint" : "edit", editInput.entry.meta), editInput }))))
+      : activePrompts.map((prompt) => ({ prompt, editInput: null }));
+    const taskRequests = tasks.map((task) => {
+      const pendingBatchId = `pending-${crypto.randomUUID()}`;
+      const createdAt = Date.now();
+      const placeholders: StudioMediaAsset[] = Array.from({ length: count }, (_, index) => ({
+        id: `${pendingBatchId}-${index + 1}`,
+        batchId: pendingBatchId,
+        providerId: selected.profileId,
+        providerName: selected.profileName,
+        kind,
+        status: "in_progress",
+        prompt: task.prompt,
+        model: selected.id,
+        size: videoSizeLabel ?? base.size,
+        quality: base.quality,
+        outputFormat: base.outputFormat,
+        voice: base.voice,
+        seconds: base.seconds,
+        createdAt,
+        updatedAt: createdAt,
+        pendingOutput: { index: index + 1, total: count },
+      }));
+      return { pendingBatchId, task, placeholders };
+    });
+    setPendingAssets((current) => [...taskRequests.flatMap((task) => task.placeholders), ...current]);
+
+    const results = await Promise.allSettled(taskRequests.map(async ({ pendingBatchId, task }) => {
+      try {
+        const result = await generateMedia({
+          ...base,
+          prompt: task.prompt,
+          referenceAttachmentIds: kind === "image"
+            ? imageMode === "generate"
+              ? imageReferences.map((item) => item.id)
+              : task.editInput?.referenceAttachmentIds ?? []
+            : kind === "video" && hasVideoControls && !useReferenceUrls && activeVideoMode !== "text"
+              ? videoReferences.map((item) => item.id)
+              : [],
+          editSourceImageNumber: task.editInput?.editSourceImageNumber,
+          maskAttachmentId: task.editInput?.maskAttachmentId,
+        });
+        setAssets((current) => mergeAssets(current, result.assets));
+        setHistoryRevision((current) => current + 1);
+        return result;
+      } finally {
+        setPendingAssets((current) => current.filter((asset) => asset.batchId !== pendingBatchId));
+      }
+    }));
+    const failures = results.flatMap((result) => result.status === "rejected" ? [errorText(result.reason)] : result.value.errors);
+    if (failures.length > 0) setError(failures.join(" · "));
+  };
+
+  const refreshAll = async () => {
+    setRefreshing(true);
+    await Promise.all([loadCatalog(false), loadHistory(kind)]);
+    setRefreshing(false);
+  };
+
+  const resetHistoryPage = () => setHistoryPage({ kind, index: 0 });
+  const clearHistoryFilters = () => {
+    setHistoryKeyword("");
+    setHistoryRange("all");
+    setHistoryStart("");
+    setHistoryEnd("");
+    resetHistoryPage();
+  };
+  const openHistoryDirectory = async () => {
+    setOpeningHistoryDirectory(true);
+    try {
+      await openMediaDirectory();
+    } catch (reason) {
+      setError(errorText(reason));
+    } finally {
+      setOpeningHistoryDirectory(false);
+    }
+  };
+
+  const removeAsset = async (asset: MediaAsset) => {
+    try {
+      await deleteMediaAsset(asset.id);
+      setAssets((current) => current.filter((item) => item.id !== asset.id));
+      setHistoryRevision((current) => current + 1);
+    } catch (reason) {
+      setError(errorText(reason));
+    }
+  };
+
+  const reuseImage = async (asset: MediaAsset) => {
+    if (asset.kind !== "image" || asset.status !== "completed" || !asset.filePath) return;
+    setError(null);
+    try {
+      const imported = await importMediaReferences([asset.filePath]);
+      await acceptImageReferences(imported);
+
+      setKind("image");
+      setImageMode("generate");
+      setPrompts((current) => [{ id: current[0]?.id ?? crypto.randomUUID(), prompt: asset.prompt }]);
+      rememberSelectedModel("image", `${asset.providerId}::${asset.model}`);
+      setCount(clampMediaCount(asset.count));
+      setSize(normalizeImageSize(asset.size));
+      setQuality(normalizeImageQuality(asset.quality));
+      setOutputFormat(normalizeImageFormat(asset.outputFormat, asset.fileName));
+      setBackground(normalizeImageBackground(asset.background));
+
+      window.setTimeout(() => {
+        rootRef.current?.querySelector<HTMLTextAreaElement>(".media-prompt-card textarea")?.focus();
+      }, 0);
+    } catch (reason) {
+      setError(errorText(reason));
+    }
+  };
+
+  // Stable event dispatch lets history skip prompt edits without retaining stale
+  // reference lists or image editing settings in its event handlers.
+  const assetActions = useRef({ remove: removeAsset, reuse: reuseImage, edit: editImageAsset });
+  useLayoutEffect(() => { assetActions.current = { remove: removeAsset, reuse: reuseImage, edit: editImageAsset }; });
+  const onAssetAction = useCallback((action: MediaHistoryAction, asset: StudioMediaAsset) => {
+    if (action === "preview") { setPreviewAsset(asset); return; }
+    return assetActions.current[action](asset);
+  }, []);
+
+
+  return (
+    <main
+      ref={rootRef}
+      className={`media-studio creative-studio${dropActive ? " file-drag-active" : ""}`}
+      hidden={!active}
+      onDragEnter={(event) => event.preventDefault()}
+      onDragOver={(event) => event.preventDefault()}
+      onDrop={(event) => event.preventDefault()}
+    >
+      {dropActive && (
+        <div className="media-drop-overlay" role="status" aria-live="polite">
+          <span>{kind === "video" && activeVideoMode === "video" ? <Video size={28} /> : <ImagePlus size={28} />}</span>
+          <strong>{mediaDropTitle(kind, activeVideoMode, imageMode)}</strong>
+          <small>{tr("素材会添加到当前创作任务，不会进入会话附件", "References are added to Media Studio, not to the conversation")}</small>
+        </div>
+      )}
+      <CreativeStudioHeader mode="media" onModel3d={onModel3d} onMusic={onMusic} onSpine={onSpine} className="media-topbar" subtitle={tr("图片、视频与声音", "Images, video and sound")} onWriting={onWriting} onConstellation={onConstellation} actions={<div className="media-topbar-actions">
+          <button className="media-icon-button" disabled={refreshing} onClick={() => void refreshAll()} title={tr("刷新模型和历史", "Refresh models and history")}>
+            <RefreshCw className={refreshing ? "spin" : ""} size={16} />
+          </button>
+          <button className="media-icon-button" onClick={onConfigureConnection} title={tr("模型连接设置", "Model connection settings")}><Settings2 size={16} /></button>
+        </div>} />
+
+      <div className="media-studio-body">
+        <section className="media-compose-panel">
+          <div className="media-kind-tabs" role="tablist">
+            {KIND_TABS.map(({ kind: value, icon: Icon }) => (
+              <button className={kind === value ? "active" : ""} role="tab" aria-selected={kind === value} key={value} onClick={() => setKind(value)}>
+                <Icon size={15} /><span>{kindLabel(value)}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="media-model-row">
+            <label>
+              <span>{tr("生成模型", "Generation model")}</span>
+              <select
+                value={selected ? modelKey(selected) : ""}
+                disabled={models.length === 0}
+                onChange={(event) => rememberSelectedModel(kind, event.target.value)}
+              >
+                {models.length === 0 && <option value="">{tr("未发现可用模型", "No model discovered")}</option>}
+                {requiresImageMask && models.length > 0 && eligibleModels.length === 0 && <option value="">{tr("没有支持 PNG 蒙版的模型", "No model supports PNG masks")}</option>}
+                {models.map((model) => (
+                  <option value={modelKey(model)} disabled={requiresImageMask && !mediaModelSupportsExplicitImageMask(model)} key={modelKey(model)}>
+                    {model.id} · {model.profileName}{requiresImageMask && !mediaModelSupportsExplicitImageMask(model) ? tr(" · 不支持蒙版", " · No mask support") : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {requiresImageMask && selected && <span className="recommended-model"><Check size={12} />{tr("当前模型支持 PNG 蒙版编辑", "The current model supports PNG mask editing")}</span>}
+          </div>
+
+          {kind === "image" && <div className="media-image-mode-control">
+            <span>{tr("创作方式", "Image mode")}</span>
+            <div role="radiogroup" aria-label={tr("图片创作方式", "Image creation mode")}>{STUDIO_IMAGE_MODES.filter((mode) => !minimaxImage || mode.value === "generate" || mode.value === "edit").map((mode) => <button
+              type="button"
+              role="radio"
+              aria-checked={imageMode === mode.value}
+              className={imageMode === mode.value ? "active" : ""}
+              onClick={() => changeImageMode(mode.value)}
+              key={mode.value}
+            >{minimaxImage && mode.value === "edit" ? tr("人物参考", "Character reference") : tr(mode.label, mode.labelEn)}</button>)}</div>
+            <small>{minimaxImage ? tr("MiniMax 支持文生图和人物主体参考，不支持局部蒙版编辑", "MiniMax supports text-to-image and character references, without masked editing") : imageModeDescription(imageMode)}</small>
+          </div>}
+
+          {kind === "image" && imageMode !== "generate" && <section className="media-image-edit-panel">
+            <header>
+              <div><span><Brush size={15} /></span><div><strong>{tr("编辑源图", "Edit source")}</strong><small>{tr("可从本地选择，或点击右侧历史图片的画笔按钮", "Choose a local image or use the brush button on a history image")}</small></div></div>
+              <em className={imageEditEntries.length > 0 ? "ready" : ""}>{imageEditEntries.length > 0 ? tr(`${imageEditEntries.length} 张源图已就绪`, `${imageEditEntries.length} sources ready`) : tr("需要源图", "Source required")}</em>
+            </header>
+            {imageEditEntries.length > 0 ? <>
+              <div className="media-image-edit-source">
+                <div className="media-image-edit-source-list">
+                  {imageEditEntries.map((entry, index) => (
+                    <MediaImageEditSource
+                      attachment={entry.source}
+                      index={index}
+                      active={entry.id === activeImageEditEntry?.id}
+                      onOpen={() => selectImageEditEntry(entry)}
+                      onRemove={() => void removeImageEditEntry(entry)}
+                      key={entry.id}
+                    />
+                  ))}
+                </div>
+                <div className="media-image-edit-actions">
+                  <button type="button" onClick={() => void addImageEditSource()}><ImagePlus size={13} />{tr("添加更多", "Add more")}</button>
+                  <button type="button" className="primary" onClick={() => setImageEditorOpen(true)}><Brush size={13} />{tr("编辑当前选中", "Edit selected")}</button>
+                </div>
+              </div>
+              <div className="media-image-edit-status">
+                <span className="ready">{tr(`当前选中：源图 ${activeImageEditNumber}`, `Selected: Source Image ${activeImageEditNumber}`)} / {imageEditEntries.length}</span>
+                {activeImageEditEntry?.meta?.hasLabels && <span className="ready">{tr("标签已合成", "Labels applied")}</span>}
+                <span className={activeImageEditEntry?.mask ? "ready" : ""}>{activeImageEditEntry?.mask ? tr("PNG 蒙版已就绪", "PNG mask ready") : tr("尚无蒙版", "No mask")}</span>
+                {activeImageEditEntry?.meta?.expanded && <span className="ready">{tr("扩边已设置", "Expansion set")}</span>}
+              </div>
+              <p className="media-reference-order-hint media-image-edit-hint">{tr("每张源图独立提交，使用自己的蒙版、扩边和标签，并带上全部参考图。用“源图 1”“参考图 1”区分编辑目标和参考素材。", "Each source is submitted separately with its own mask, expansion and labels, plus all reference images. Use “Source Image 1” and “Reference Image 1” to distinguish them.")}</p>
+            </> : <button type="button" className="media-image-edit-empty" onClick={() => void chooseImageEditSource()}><ImagePlus size={21} /><span><strong>{tr("选择图片开始编辑", "Choose images to edit")}</strong><small>{tr("支持多张源图、标签、涂抹蒙版和向外扩图", "Supports multiple source images, labels, masks, and outpainting")}</small></span></button>}
+            {requiresImageMask && eligibleModels.length === 0 && <p className="media-image-mask-warning"><CircleAlert size={13} />{tr("已生成 PNG 蒙版，但当前连接里没有兼容模型；请配置支持 OpenAI Images Edit 的模型", "A PNG mask is ready, but no compatible model is configured. Add a model with OpenAI Images Edit support")}</p>}
+          </section>}
+
+          {hasVideoControls && (
+            <div className="media-video-mode-control">
+              <span>{tr("生成方式", "Video mode")}</span>
+              <div role="radiogroup" aria-label={tr("视频生成方式", "Video generation mode")} style={{ gridTemplateColumns: `repeat(${videoCapabilities.modes.length}, minmax(0, 1fr))` }}>
+                {videoCapabilities.modes.map((mode) => {
+                  const unsupported = isGrokVideo15 && mode !== "image";
+                  return (
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={activeVideoMode === mode}
+                      className={activeVideoMode === mode ? "active" : ""}
+                      disabled={unsupported}
+                      title={unsupported ? tr("Grok 1.5 仅支持首帧图生成", "Grok 1.5 supports first-frame generation only") : videoModeDescription(mode)}
+                      onClick={() => changeVideoMode(mode)}
+                      key={mode}
+                    >
+                      {videoModeLabel(mode)}
+                    </button>
+                  );
+                })}
+              </div>
+              <small>{videoModeDescription(activeVideoMode)}</small>
+            </div>
+          )}
+
+          <div className="media-prompt-list">
+            {prompts.map((item, index) => (
+              <article className="media-prompt-card" key={item.id}>
+                <div><span>{kind === "image" && imageMode !== "generate" ? tr("修改要求", "Edit instruction") : tr("提示词", "Prompt")} {prompts.length > 1 ? index + 1 : ""}</span>{prompts.length > 1 && <button onClick={() => removePrompt(item.id)} title={tr("删除提示词", "Remove prompt")}><X size={13} /></button>}</div>
+                <textarea
+                  value={item.prompt}
+                  maxLength={minimaxImage ? 1500 : isNativeVideo ? 7000 : 32_000}
+                  placeholder={promptPlaceholder(kind, imageMode)}
+                  onChange={(event) => updatePrompt(item.id, event.target.value)}
+                />
+              </article>
+            ))}
+          </div>
+          <button className="add-media-prompt" disabled={prompts.length >= 8} onClick={addPrompt}><Plus size={14} />{tr("添加并行提示词", "Add parallel prompt")}</button>
+
+          <div className="media-options-grid">
+            {kind === "image" && (
+              <label><span>{tr("尺寸 / 比例", "Size / ratio")}</span><select value={size} onChange={(event) => setSize(event.target.value)}>
+                <option value="auto">{tr("auto（模型自动，推荐）", "auto (model decides, recommended)")}</option>
+                <optgroup label={tr("像素尺寸", "Pixel dimensions")}>
+                  {imageDimensions.map((option) => (
+                    <option value={option.value} key={option.value}>
+                      {option.value.replace("x", " × ")} · {option.ratio}{option.experimental ? tr(" · 实验性", " · Experimental") : ""}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label={tr("仅指定构图比例", "Aspect ratio only")}>
+                  {imageRatios.map((value) => <option value={value} key={value}>{value}</option>)}
+                </optgroup>
+              </select></label>
+            )}
+            {kind === "video" && !hasVideoControls && <label><span>{tr("尺寸 / 比例", "Size / ratio")}</span><select value={size} onChange={(event) => setSize(event.target.value)}>{VIDEO_SIZE_OPTIONS.map((value) => <option value={value} key={value}>{value}</option>)}</select></label>}
+            {kind === "video" && hasVideoControls && activeVideoMode !== "video" && <>
+              <label><span>{tr("画面比例", "Aspect ratio")}</span><select disabled={isNativeVideo && (activeVideoMode === "image" || activeVideoMode === "first_last")} value={isNativeVideo && (activeVideoMode === "image" || activeVideoMode === "first_last") ? "adaptive" : videoAspectRatio} onChange={(event) => setVideoAspectRatio(event.target.value)}>{isNativeVideo && (activeVideoMode === "image" || activeVideoMode === "first_last") && <option value="adaptive">{tr("跟随首帧", "Follow first frame")}</option>}{videoCapabilities.ratios.map((value) => <option value={value} key={value}>{value}</option>)}</select></label>
+              <label><span>{tr("清晰度", "Resolution")}</span><select value={selectedVideoResolution} onChange={(event) => setVideoResolution(event.target.value)}>{videoResolutionOptions.map((value) => <option value={value} key={value}>{value}</option>)}</select></label>
+            </>}
+            {kind === "video" && isGrokVideo && activeVideoMode === "video" && <div className="media-inherited-video-size"><span>{tr("尺寸与时长", "Size and duration")}</span><strong>{tr("继承源视频 · 最高 720p", "Inherited from source · up to 720p")}</strong></div>}
+            {kind === "image" && !minimaxImage && <label><span>{tr("质量", "Quality")}</span><select value={quality} onChange={(event) => setQuality(event.target.value)}>{["auto", "high", "medium", "2K", "4K"].map((value) => <option key={value}>{value}</option>)}</select></label>}
+            {kind === "image" && !minimaxImage && <label><span>{tr("背景", "Background")}</span><select value={background} onChange={(event) => setBackground(event.target.value)}>
+              <option value="auto">auto</option>
+              <option value="transparent" disabled={!transparentBackgroundSupported}>{transparentBackgroundSupported ? "transparent" : tr("transparent（当前模型不支持）", "transparent (unsupported by this model)")}</option>
+              <option value="opaque">opaque</option>
+            </select></label>}
+            {kind !== "video" && !minimaxImage && <label><span>{tr("格式", "Format")}</span><select value={outputFormat} onChange={(event) => setOutputFormat(event.target.value)}>{(kind === "image" ? ["png", "webp", "jpeg"] : grokAudio ? ["mp3", "wav"] : ["mp3", "wav", "aac", "flac", "opus"]).map((value) => <option key={value}>{value}</option>)}</select></label>}
+            {kind === "video" && activeVideoMode !== "video" && <label><span>{tr("时长", "Duration")}</span><select value={seconds} onChange={(event) => setSeconds(Number(event.target.value))}>{videoDurationOptions.map((value) => <option value={value} key={value}>{value}s</option>)}</select></label>}
+            <label><span>{tr("每条数量", "Outputs each")}</span><select value={count} onChange={(event) => setCount(Number(event.target.value))}>{Array.from({ length: kind === "image" ? 8 : 4 }, (_, index) => index + 1).map((value) => <option value={value} key={value}>{value}</option>)}</select></label>
+            {kind === "audio" && <label><span>{tr("声音", "Voice")}</span><input value={voice} placeholder={grokAudio ? "eve" : tr("留空自动选择", "Automatic when empty")} onChange={(event) => setVoice(event.target.value)} /></label>}
+          </div>
+
+          {kind === "audio" && !grokAudio && <label className="media-wide-field"><span>{tr("演绎要求", "Delivery instructions")}</span><input value={instructions} placeholder={tr("例如：温暖、自然、稍慢", "For example: warm, natural, slightly slower")} onChange={(event) => setInstructions(event.target.value)} /></label>}
+
+          {kind === "image" && (
+            <div className="media-reference-row">
+              <div className="media-reference-heading">
+                <span>{tr("参考图", "References")}<small>{imageMode !== "generate" ? tr("全部参考图会随每张源图一起发送", "All references accompany each source image") : pastingReferences ? tr("正在粘贴图片…", "Pasting images…") : tr("可拖拽、选择，或按 Ctrl+V 粘贴外部图片", "Drop, choose, or press Ctrl+V to paste images")}</small></span>
+                <button disabled={pastingReferences || imageReferences.length >= (imageMode === "generate" ? 8 : 7)} onClick={() => void addImageReferences()}>{pastingReferences ? <LoaderCircle className="spin" size={14} /> : <ImagePlus size={14} />}{tr("选择图片", "Choose images")}</button>
+              </div>
+              {imageMode === "generate" ? <MediaReferenceOrderHint /> : <p className="media-reference-order-hint">{tr("可写“源图 2 参考参考图 1 的风格”；移动或移除后，参考图编号自动更新。", "For example: apply Reference Image 1’s style to Source Image 2. Reference numbers update when moved or removed.")}</p>}
+              <MediaReferenceList referenceImages={imageMode !== "generate"} attachments={imageReferences} onMove={(id, direction) => setImageReferences((current) => moveMediaReference(current, current.findIndex((item) => item.id === id), direction))} onRemove={(attachment) => void removeImageReference(attachment)} />
+            </div>
+          )}
+
+          {isNativeVideo && activeVideoMode !== "text" && <div className="media-reference-row">
+            <label className="media-wide-field media-reference-source"><span>{tr("素材来源", "Reference source")}</span><select value={videoReferenceSource} onChange={(event) => setVideoReferenceSource(event.target.value as "url" | "local")}><option value="url">{tr("公网 HTTPS 图片地址（通用）", "Public HTTPS image URLs")}</option><option value="local">{tr("本地图片（自动上传）", "Local images (automatic upload)")}</option></select></label>
+            {useReferenceUrls && <>
+              <div className="media-reference-heading">
+                <span>{videoReferenceTitle(activeVideoMode)}<small>{tr("使用上游无需登录即可访问的 HTTPS 图片地址", "Use HTTPS image URLs accessible without signing in")}</small></span>
+                {activeVideoMode === "reference" && <button type="button" disabled={videoReferenceUrls.length >= videoReferenceMaximum} onClick={() => setVideoReferenceUrls((current) => [...current, createMediaReferenceUrl()])}><Plus size={14} />{tr("添加地址", "Add URL")}</button>}
+              </div>
+              <MediaReferenceOrderHint mode={activeVideoMode} />
+              <MediaReferenceUrlList references={videoReferenceUrls} mode={activeVideoMode}
+                onMove={(id, direction) => setVideoReferenceUrls((current) => moveMediaReference(current, current.findIndex((item) => item.id === id), direction))}
+                onChange={(id, url) => setVideoReferenceUrls((current) => current.map((item) => item.id === id ? { ...item, url } : item))}
+                onRemove={removeVideoReferenceUrl} />
+              {enteredVideoUrls.some((url) => !url) && <p className="media-reference-order-hint">{tr("请填写或移除空白地址后再生成；首尾帧需要两张图片。", "Fill or remove empty URLs before generating; first/last frames require two images.")}</p>}
+              <small>{tr(`最多 ${videoReferenceMaximum} 张；首尾帧与多图参考分别使用`, `Up to ${videoReferenceMaximum} images; frame and multi-reference modes are separate`)}</small>
+            </>}
+            {!useReferenceUrls && <small>{tr("本地图片会随生成请求发送到所选连接；通过 LevelUpAPI 时自动上传，无需配置图床", "Local images are sent to the selected connection; LevelUpAPI uploads them automatically")}</small>}
+          </div>}
+
+          {kind === "video" && hasVideoControls && !useReferenceUrls && activeVideoMode !== "text" && (
+            <div className="media-reference-row media-video-reference-row">
+              <div className="media-reference-heading">
+                <span>{videoReferenceTitle(activeVideoMode)}<small>{videoReferenceHint(activeVideoMode, pastingReferences)}</small></span>
+                <button disabled={pastingReferences || videoReferences.length >= videoReferenceMaximum} onClick={() => void addVideoReferences()}>
+                  {pastingReferences ? <LoaderCircle className="spin" size={14} /> : activeVideoMode === "video" ? <Video size={14} /> : <ImagePlus size={14} />}
+                  {activeVideoMode === "video" ? tr("选择视频", "Choose video") : tr("选择图片", "Choose images")}
+                </button>
+              </div>
+              <MediaReferenceOrderHint mode={activeVideoMode} />
+              <MediaReferenceList attachments={videoReferences} mode={activeVideoMode} onMove={(id, direction) => setVideoReferences((current) => moveMediaReference(current, current.findIndex((item) => item.id === id), direction))} onRemove={(attachment) => void removeVideoReference(attachment)} />
+            </div>
+          )}
+
+          {catalog && catalog.errors.length > 0 && <details className="media-catalog-warning"><summary><CircleAlert size={13} />{tr("部分连接无法读取模型", "Some connections could not list models")}</summary><p>{catalog.errors.join(" · ")}</p></details>}
+          {visibleError && <div className="media-error"><CircleAlert size={14} /><span>{visibleError}</span><button onClick={() => { setError(null); setVideoRefreshErrors({}); }}><X size={13} /></button></div>}
+
+          {models.length === 0 && !loading ? (
+            <button className="media-configure-button" onClick={onConfigureConnection}><Settings2 size={15} />{tr("配置支持生成能力的模型连接", "Configure a media-capable model connection")}</button>
+          ) : (
+            <button className="media-generate-button" disabled={pastingReferences || loading || !selected || !videoReferenceReady || !imageEditReady || !prompts.some((item) => item.prompt.trim())} onClick={() => void generate()}>
+              {pastingReferences ? <LoaderCircle className="spin" size={16} /> : <Sparkles size={16} />}
+              {pastingReferences ? tr("正在添加参考素材", "Adding references") : mediaGenerateLabel(kind, imageMode)}
+            </button>
+          )}
+        </section>
+
+        <section className="media-gallery-panel">
+          <div className="media-gallery-heading media-history-heading">
+            <div>
+              <strong>{tr("创作历史", "Creation history")}</strong><span aria-live="polite">{historyLoading ? "…" : currentHistoryState.total}</span>
+              {visiblePendingAssets.length > 0 && <em><LoaderCircle className="spin" size={12} />{tr(`${visiblePendingAssets.length} 个生成中`, `${visiblePendingAssets.length} generating`)}</em>}
+            </div>
+            <form className="media-history-tools" onSubmit={(event) => event.preventDefault()}>
+              <label className="media-history-search">
+                <Search size={15} aria-hidden="true" />
+                <input type="search" aria-label={tr("搜索创作历史", "Search creation history")} placeholder={tr("搜索提示词、模型、文件名", "Search prompts, models, filenames")} value={historyKeyword} onChange={(event) => { setHistoryKeyword(event.target.value); resetHistoryPage(); }} />
+              </label>
+              <select aria-label={tr("创作时间范围", "Creation date range")} value={historyRange} onChange={(event) => { setHistoryRange(event.target.value as MediaHistoryRange); resetHistoryPage(); }}>
+                <option value="all">{tr("全部时间", "All time")}</option>
+                <option value="today">{tr("今天", "Today")}</option>
+                <option value="7">{tr("近 7 天", "Last 7 days")}</option>
+                <option value="30">{tr("近 30 天", "Last 30 days")}</option>
+                <option value="custom">{tr("自定义日期", "Custom dates")}</option>
+              </select>
+              <label className="media-history-page-size">{tr("每页", "Per page")}
+                <select aria-label={tr("每页历史数量", "History items per page")} value={historyPageSize} onChange={(event) => { setHistoryPageSize(Number(event.target.value)); resetHistoryPage(); }}>
+                  <option value={20}>20</option><option value={50}>50</option><option value={100}>100</option><option value={0}>{tr("全部", "All")}</option>
+                </select>
+              </label>
+              <button type="button" disabled={openingHistoryDirectory} onClick={() => void openHistoryDirectory()} title={tr("打开本地保存创作结果的目录", "Open the folder containing local creations")}>
+                {openingHistoryDirectory ? <LoaderCircle className="spin" size={15} /> : <FolderOpen size={15} />}{tr("打开目录", "Open folder")}
+              </button>
+              {historyFiltered && <button type="button" onClick={clearHistoryFilters}>{tr("清除筛选", "Clear filters")}</button>}
+            </form>
+          </div>
+          {historyRange === "custom" && <div className="media-history-dates">
+            <label>{tr("开始日期", "Start date")}<input type="date" aria-label={tr("开始日期", "Start date")} max={historyEnd || undefined} value={historyStart} onChange={(event) => { setHistoryStart(event.target.value); resetHistoryPage(); }} /></label>
+            <label>{tr("结束日期", "End date")}<input type="date" aria-label={tr("结束日期", "End date")} min={historyStart || undefined} value={historyEnd} onChange={(event) => { setHistoryEnd(event.target.value); resetHistoryPage(); }} /></label>
+            <small>{tr("包含开始和结束当天，可只选一端", "Includes both dates; either end may be left open")}</small>
+          </div>}
+          {!historyFilter ? <div className="media-empty" role="alert">{tr("开始日期不能晚于结束日期", "The start date must not be after the end date")}</div>
+            : historyLoading ? <div className="media-empty" role="status"><LoaderCircle className="spin" size={24} /><span>{tr("正在读取历史", "Loading history")}</span></div>
+            : currentHistoryState.error ? <div className="media-empty" role="alert"><CircleAlert size={24} /><span>{currentHistoryState.error}</span><button type="button" onClick={() => void loadHistory(kind)}>{tr("重试", "Retry")}</button></div>
+            : displayedAssets.length === 0 ? <div className="media-empty"><KindIcon kind={kind} /><strong>{historyFiltered ? tr("没有符合条件的历史记录", "No matching history") : tr("还没有作品", "No creations yet")}</strong><span>{historyFiltered ? tr("试试其他关键词或扩大时间范围", "Try another keyword or a wider date range") : tr("输入提示词后，结果会自动出现在这里", "Generated outputs will appear here automatically")}</span></div>
+              : <>
+                <MediaHistoryGrid assets={displayedAssets} locale={locale} onAction={onAssetAction}/>
+                {historyPageSize > 0 && currentHistoryState.total > 0 && <div className="media-history-pagination media-history-pages">
+                  <button type="button" disabled={historyPageIndex === 0} onClick={() => setHistoryPage({ kind, index: historyPageIndex - 1 })}><ArrowLeft size={14} />{tr("上一页", "Previous")}</button>
+                  <span aria-live="polite">{tr(`第 ${historyPageIndex + 1} / ${Math.max(1, Math.ceil(currentHistoryState.total / historyPageSize))} 页 · 共 ${currentHistoryState.total} 条`, `Page ${historyPageIndex + 1} / ${Math.max(1, Math.ceil(currentHistoryState.total / historyPageSize))} · ${currentHistoryState.total} items`)}</span>
+                  <button type="button" disabled={!currentHistoryState.hasMore} onClick={() => setHistoryPage({ kind, index: historyPageIndex + 1 })}>{tr("下一页", "Next")}<ArrowRight size={14} /></button>
+                </div>}
+              </>}
+        </section>
+      </div>
+      {active && previewAsset && <MediaImagePreview
+        asset={previewAsset}
+        locale={locale}
+        previewAssets={previewableAssets}
+        onNavigate={(nextAsset) => setPreviewAsset(nextAsset)}
+        onEdit={(asset) => {
+          setPreviewAsset(null);
+          return editImageAsset(asset);
+        }}
+        onClose={() => setPreviewAsset(null)}
+      />}
+      {active && imageEditorOpen && activeImageEditEntry && <ConstellationCanvasEditor
+        key={activeImageEditEntry.id}
+        source={activeImageEditEntry.originalSource ?? activeImageEditEntry.source}
+        initialState={activeImageEditEntry.meta?.editorState}
+        title={tr(`图片编辑画板 · 源图 ${activeImageEditNumber}`, `Image editing canvas · Source Image ${activeImageEditNumber}`)}
+        saveLabel={tr("应用到图片编辑", "Apply to image edit")}
+        onClose={() => setImageEditorOpen(false)}
+        onSave={applyCanvasEdit}
+      />}
+    </main>
+  );
+}
+
+type MediaHistoryAction = "remove" | "preview" | "reuse" | "edit";
+type MediaHistoryDispatch = (action: MediaHistoryAction, asset: StudioMediaAsset) => Promise<void> | void;
+const MediaHistoryCard = memo(function MediaHistoryCard({ asset, locale, onAction }: {
+  asset: StudioMediaAsset; locale: string; onAction: MediaHistoryDispatch;
+}) {
+  const imageReady = asset.kind === "image" && asset.status === "completed";
+  return <MediaAssetCard asset={asset} locale={locale}
+    onDelete={asset.pendingOutput ? undefined : () => void onAction("remove", asset)}
+    onPreview={imageReady ? () => void onAction("preview", asset) : undefined}
+    onReuse={imageReady && asset.filePath ? () => onAction("reuse", asset) : undefined}
+    onEdit={imageReady && asset.filePath ? () => onAction("edit", asset) : undefined}/>;
+});
+const MediaHistoryGrid = memo(function MediaHistoryGrid({ assets, locale, onAction }: {
+  assets: StudioMediaAsset[]; locale: string; onAction: MediaHistoryDispatch;
+}) {
+  return <div className="media-gallery-grid">{assets.map(asset => <MediaHistoryCard key={asset.id} asset={asset} locale={locale} onAction={onAction}/>)}</div>;
+});
+
+function MediaImageEditSource({ attachment, index, active, onOpen, onRemove }: { attachment: ImageAttachment; index: number; active?: boolean; onOpen: () => void; onRemove: () => void }) {
+  const [url, setUrl] = useState<string>();
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let disposed = false;
+    setUrl(undefined);
+    setLoading(true);
+    void previewAttachment(attachment).then((preview) => {
+      if (!disposed && preview.kind === "image" && preview.dataBase64) {
+        setUrl(`data:${preview.mimeType};base64,${preview.dataBase64}`);
+      }
+    }).catch(() => undefined).finally(() => {
+      if (!disposed) setLoading(false);
+    });
+    return () => { disposed = true; };
+  }, [attachment.id]);
+  return <div className={`media-image-edit-source-card${active ? " active" : ""}`}>
+    <span className="media-reference-label"><strong>{tr(`源图 ${index + 1}`, `Source Image ${index + 1}`)}</strong></span>
+    <button type="button" className="media-image-edit-thumbnail" onClick={onOpen} aria-label={tr(`编辑图 ${index + 1}：${attachment.name}`, `Edit Image ${index + 1}: ${attachment.name}`)} title={tr(`打开图 ${index + 1} 标注画板`, `Open annotation canvas for Image ${index + 1}`)}>
+      {url ? <img src={url} alt={attachment.name} /> : loading ? <LoaderCircle className="spin" size={18} /> : <Image size={19} />}
+      <span><Brush size={11} />{tr("编辑", "Edit")}</span>
+    </button>
+    <div><strong title={attachment.name}>{attachment.name}</strong><small>{attachment.mimeType.replace("image/", "").toUpperCase()} · {formatAttachmentBytes(attachment.sizeBytes)}</small></div>
+    <button type="button" onClick={onRemove} aria-label={tr(`移除图 ${index + 1}`, `Remove Image ${index + 1}`)} title={tr(`移除图 ${index + 1}`, `Remove Image ${index + 1}`)}><X size={13} /></button>
+  </div>;
+}
+
+export function MediaAssetCard({ asset, locale, onDelete, onPreview, onReuse, onEdit }: { asset: StudioMediaAsset; locale: string; onDelete?: () => void; onPreview?: () => void; onReuse?: () => Promise<void> | void; onEdit?: () => Promise<void> | void }) {
+  const url = mediaAssetUrl(asset);
+  const imageCopy = useImageCopy(asset.kind === "image" ? url : undefined);
+  const [exporting, setExporting] = useState(false);
+  const [reusing, setReusing] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [promptExpanded, setPromptExpanded] = useState(false);
+  const [promptCopyStatus, setPromptCopyStatus] = useState<"idle" | "copied" | "error">("idle");
+  const [exportFeedback, setExportFeedback] = useState<{ error: boolean; text: string } | null>(null);
+  const [videoRatio, setVideoRatio] = useState<number | null>(null);
+  const [loadedImage, setLoadedImage] = useState<{ url: string; width: number; height: number } | null>(null);
+  const imageDimensions = loadedImage?.url === url ? loadedImage : null;
+  const canExport = asset.status === "completed" && Boolean(asset.filePath && asset.fileName);
+  const canPreview = asset.status === "completed" && asset.kind === "image" && Boolean(url && onPreview);
+  const canReuse = asset.status === "completed" && asset.kind === "image" && Boolean(onReuse);
+  const canEdit = asset.status === "completed" && asset.kind === "image" && Boolean(onEdit);
+  const canExpandPrompt = asset.prompt.trim().length > 42;
+  const dateFormatter = useMemo(() => new Intl.DateTimeFormat(locale, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }), [locale]);
+  const previewRatio = asset.kind === "video" ? videoRatio ?? mediaAssetAspectRatio(asset) ?? 16 / 9 : 4 / 3;
+
+  useEffect(() => setVideoRatio(null), [asset.id]);
+
+  const recordImageDimensions = (image: HTMLImageElement) => {
+    if (url && image.naturalWidth > 0 && image.naturalHeight > 0) {
+      setLoadedImage({ url, width: image.naturalWidth, height: image.naturalHeight });
+    }
+  };
+
+  const exportAsset = async () => {
+    if (!canExport || exporting) return;
+    setExporting(true);
+    setExportFeedback(null);
+    try {
+      const destination = await exportMediaAsset(asset);
+      if (destination) {
+        setExportFeedback({ error: false, text: tr(`已保存到 ${destination}`, `Saved to ${destination}`) });
+      }
+    } catch (reason) {
+      setExportFeedback({ error: true, text: errorText(reason) });
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const copyPrompt = async () => {
+    try {
+      await copyText(asset.prompt);
+      setPromptCopyStatus("copied");
+    } catch {
+      setPromptCopyStatus("error");
+    }
+    window.setTimeout(() => setPromptCopyStatus("idle"), 1_500);
+  };
+
+  const reuseAsset = async () => {
+    if (!canReuse || !onReuse || reusing) return;
+    setReusing(true);
+    try {
+      await onReuse();
+    } finally {
+      setReusing(false);
+    }
+  };
+
+  const editAsset = async () => {
+    if (!canEdit || !onEdit || editing) return;
+    setEditing(true);
+    try {
+      await onEdit();
+    } finally {
+      setEditing(false);
+    }
+  };
+
+  return (
+    <article className={`media-asset-card kind-${asset.kind} status-${asset.status} ${canExport || canReuse || canEdit || onDelete ? "has-actions" : ""}`}>
+      <div className="media-preview" style={{ aspectRatio: previewRatio }} onContextMenu={imageCopy.openMenu} tabIndex={asset.kind === "image" && url ? 0 : undefined}>
+        {asset.status === "completed" && url && asset.kind === "image" && (canPreview ? (
+          <button className="media-preview-trigger" type="button" onClick={onPreview} aria-label={tr("打开大图预览", "Open large image preview")}>
+            <img src={url} loading="lazy" decoding="async" alt={asset.revisedPrompt || asset.prompt} onLoad={(event) => recordImageDimensions(event.currentTarget)} />
+            <span><Maximize2 size={14} />{tr("查看大图", "View large")}</span>
+          </button>
+        ) : <img src={url} loading="lazy" decoding="async" alt={asset.revisedPrompt || asset.prompt} onLoad={(event) => recordImageDimensions(event.currentTarget)} />)}
+        {/* WebView's native download cannot save asset-protocol URLs. Use exportAsset below. */}
+        {asset.status === "completed" && url && asset.kind === "video" && <video src={url} controls controlsList="nodownload" preload="metadata" onLoadedMetadata={(event) => {
+          const { videoWidth, videoHeight } = event.currentTarget;
+          if (videoWidth > 0 && videoHeight > 0) setVideoRatio(videoWidth / videoHeight);
+        }} />}
+        {asset.status === "completed" && url && asset.kind === "audio" && <div className="audio-preview"><AudioLines size={28} /><audio src={url} controls controlsList="nodownload" preload="metadata" /></div>}
+        {(asset.status === "queued" || asset.status === "in_progress") && <div className="pending-preview"><LoaderCircle className="spin" size={24} /><strong>{asset.downloadProgress ? tr("已生成，正在下载", "Generated, downloading") : asset.gatewayStatus === "billing" ? tr("已生成，正在结算", "Generated, settling usage") : statusLabel(asset.status)}</strong><span>{pendingAssetDetail(asset)}</span></div>}
+        {asset.status === "failed" && <div className="failed-preview"><CircleAlert size={24} /><strong>{tr("生成失败", "Generation failed")}</strong></div>}
+      </div>
+      {imageCopy.contextMenu}
+      <div className="media-asset-content">
+        {imageCopy.status !== "idle" && <small className="media-image-copy-feedback" role="status">{imageCopy.label}</small>}
+        <div className={`media-asset-prompt${promptExpanded ? " expanded" : ""}`}>
+          <p title={asset.prompt}>{asset.prompt}</p>
+          {(canExpandPrompt || asset.kind === "image") && <div className="media-asset-prompt-actions">
+            {canExpandPrompt && (
+              <button type="button" onClick={() => setPromptExpanded((value) => !value)}>
+                {promptExpanded ? tr("收起提示词", "Collapse prompt") : tr("展开完整提示词", "Show full prompt")}
+              </button>
+            )}
+            {asset.kind === "image" && <button className={`media-copy-prompt status-${promptCopyStatus}`} type="button" onClick={() => void copyPrompt()} title={tr("复制完整提示词", "Copy full prompt")}>
+              {promptCopyStatus === "copied" ? <Check size={11} /> : <Copy size={11} />}
+              {promptCopyStatus === "copied" ? tr("已复制", "Copied") : promptCopyStatus === "error" ? tr("复制失败", "Copy failed") : tr("复制", "Copy")}
+            </button>}
+          </div>}
+        </div>
+        <div className="media-asset-meta"><span>{asset.model}</span><span>{asset.providerName}</span></div>
+        {asset.kind === "video" && (asset.size || asset.seconds) && <div className="media-asset-specs">{asset.size && <span>{asset.size}</span>}{asset.seconds && <span>{asset.seconds}s</span>}</div>}
+        <small className="media-asset-time"><Clock3 size={11} />{dateFormatter.format(asset.createdAt)}{asset.kind === "image" && imageDimensions && <span>{imageDimensions.width} × {imageDimensions.height}</span>}</small>
+        {asset.error && <em title={asset.error}>{mediaErrorSummary(asset.error)}</em>}
+        {exportFeedback && <em className={exportFeedback.error ? "media-export-error" : "media-export-success"} title={exportFeedback.text}>{exportFeedback.error ? <CircleAlert size={11} /> : <Check size={11} />}{exportFeedback.text}</em>}
+      </div>
+      {(canExport || canReuse || canEdit || onDelete) && <div className="media-asset-actions">
+        {canEdit && <button className="media-edit-asset" disabled={editing} onClick={() => void editAsset()} title={tr("编辑此图", "Edit this image")} aria-label={tr("编辑此图", "Edit this image")}>{editing ? <LoaderCircle className="spin" size={13} /> : <Brush size={13} />}</button>}
+        {canReuse && <button className="media-reuse-asset" disabled={reusing} onClick={() => void reuseAsset()} title={tr("复用图片与参数", "Reuse image and parameters")} aria-label={tr("复用图片与参数", "Reuse image and parameters")}>{reusing ? <LoaderCircle className="spin" size={13} /> : <RefreshCw size={13} />}</button>}
+        {canExport && <button className={`media-export-asset${asset.kind !== "image" ? " media-export-labeled" : ""}`} disabled={exporting} onClick={() => void exportAsset()} title={tr("另存为", "Save as")} aria-label={asset.kind === "image" ? tr("另存为", "Save as") : tr("下载（另存为）", "Download (save as)")}>{exporting ? <LoaderCircle className="spin" size={13} /> : <Download size={13} />}{asset.kind !== "image" && <span>{exporting ? tr("保存中…", "Saving…") : tr("下载", "Download")}</span>}</button>}
+        {onDelete && <button className="media-delete-asset" onClick={onDelete} title={tr("删除作品", "Delete creation")} aria-label={tr("删除作品", "Delete creation")}><Trash2 size={13} /></button>}
+      </div>}
+    </article>
+  );
+}
+
+export function MediaImagePreview({
+  asset,
+  locale,
+  previewAssets,
+  onNavigate,
+  onEdit,
+  onClose,
+}: {
+  asset: MediaAsset;
+  locale: string;
+  previewAssets: MediaAsset[];
+  onNavigate: (asset: MediaAsset) => void;
+  onEdit?: (asset: MediaAsset) => Promise<void> | void;
+  onClose: () => void;
+}) {
+  const url = mediaAssetUrl(asset);
+  const imageCopy = useImageCopy(asset.kind === "image" ? url : undefined);
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const imageRef = useRef<HTMLImageElement>(null);
+  const dragRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    originX: number;
+    originY: number;
+    bounds: { width: number; height: number };
+  } | null>(null);
+  const dragFrameRef = useRef<number | null>(null);
+  const pendingDragPointRef = useRef<PreviewPoint | null>(null);
+  const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
+  const [view, setView] = useState<PreviewTransform>({ zoom: 1, x: 0, y: 0 });
+  const viewRef = useRef(view);
+  const fitModeRef = useRef(true);
+  const exportingRef = useRef(false);
+  const currentAssetIdRef = useRef(asset.id);
+  currentAssetIdRef.current = asset.id;
+  const [dragging, setDragging] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState(false);
+  const imageReady = imageSize.width > 0 && imageSize.height > 0;
+  const currentIndex = previewAssets.findIndex((item) => item.id === asset.id);
+  const previousAsset = currentIndex > 0 ? previewAssets[currentIndex - 1] : undefined;
+  const nextAsset = currentIndex >= 0 && currentIndex < previewAssets.length - 1
+    ? previewAssets[currentIndex + 1]
+    : undefined;
+
+  useLayoutEffect(() => {
+    fitModeRef.current = true;
+    if (dragFrameRef.current !== null) window.cancelAnimationFrame(dragFrameRef.current);
+    dragFrameRef.current = null;
+    pendingDragPointRef.current = null;
+    dragRef.current = null;
+    setDragging(false);
+    setImageSize({ width: 0, height: 0 });
+    const resetView = { zoom: 1, x: 0, y: 0 };
+    viewRef.current = resetView;
+    setView(resetView);
+    setExportError(false);
+  }, [asset.id, url]);
+
+  useEffect(() => {
+    viewRef.current = view;
+    applyPreviewTransform(imageRef.current, view);
+  }, [view]);
+
+  useEffect(() => () => {
+    if (dragFrameRef.current !== null) window.cancelAnimationFrame(dragFrameRef.current);
+  }, []);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setView((current) => {
+        const next = fitModeRef.current
+          ? fittedPreview(imageSize, canvasRef.current)
+          : { ...current, ...constrainPreviewOffset(current, current.zoom, imageSize, canvasRef.current) };
+        viewRef.current = next;
+        return next;
+      });
+    };
+    const observer = new ResizeObserver(handleResize);
+    if (canvasRef.current) observer.observe(canvasRef.current);
+    return () => observer.disconnect();
+  }, [imageSize.height, imageSize.width]);
+
+  const applyZoom = (requestedZoom: number, anchor: PreviewPoint = { x: 0, y: 0 }) => {
+    const current = viewRef.current;
+    fitModeRef.current = false;
+    const minimum = Math.min(MIN_PREVIEW_ZOOM, fittedPreview(imageSize, canvasRef.current).zoom);
+    const zoom = Math.min(MAX_PREVIEW_ZOOM, Math.max(minimum, requestedZoom));
+    const ratio = zoom / current.zoom;
+    const candidate = {
+      x: anchor.x - (anchor.x - current.x) * ratio,
+      y: anchor.y - (anchor.y - current.y) * ratio,
+    };
+    const next = { zoom, ...constrainPreviewOffset(candidate, zoom, imageSize, canvasRef.current) };
+    viewRef.current = next;
+    setView(next);
+  };
+
+  const showActualSize = () => {
+    fitModeRef.current = false;
+    const next = { zoom: 1, x: 0, y: 0 };
+    viewRef.current = next;
+    setView(next);
+  };
+
+  const fitImage = () => {
+    if (!imageReady) return;
+    fitModeRef.current = true;
+    const next = fittedPreview(imageSize, canvasRef.current);
+    viewRef.current = next;
+    setView(next);
+  };
+
+  const panBy = (x: number, y: number) => {
+    const current = viewRef.current;
+    const offset = constrainPreviewOffset(
+      { x: current.x + x, y: current.y + y },
+      current.zoom,
+      imageSize,
+      canvasRef.current,
+    );
+    const next = { ...current, ...offset };
+    viewRef.current = next;
+    setView(next);
+  };
+
+  const updateDragPosition = (drag: NonNullable<typeof dragRef.current>, point: PreviewPoint) => {
+    const current = viewRef.current;
+    const offset = constrainPreviewOffsetToBounds(
+      {
+        x: drag.originX + point.x - drag.startX,
+        y: drag.originY + point.y - drag.startY,
+      },
+      current.zoom,
+      imageSize,
+      drag.bounds,
+    );
+    const next = { ...current, ...offset };
+    viewRef.current = next;
+    applyPreviewTransform(imageRef.current, next);
+  };
+
+  const beginDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || !imageReady) return;
+    if ((event.target as Element).closest(".media-image-lightbox-toolbar, .media-image-lightbox-nav")) return;
+    event.preventDefault();
+    event.currentTarget.focus();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const current = viewRef.current;
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: current.x,
+      originY: current.y,
+      bounds: { width: bounds.width, height: bounds.height },
+    };
+    setDragging(true);
+  };
+
+  const moveDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    event.preventDefault();
+    pendingDragPointRef.current = { x: event.clientX, y: event.clientY };
+    if (dragFrameRef.current !== null) return;
+    dragFrameRef.current = window.requestAnimationFrame(() => {
+      dragFrameRef.current = null;
+      const latestDrag = dragRef.current;
+      const point = pendingDragPointRef.current;
+      pendingDragPointRef.current = null;
+      if (latestDrag && point) updateDragPosition(latestDrag, point);
+    });
+  };
+
+  const endDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    if (drag?.pointerId !== event.pointerId) return;
+    if (dragFrameRef.current !== null) {
+      window.cancelAnimationFrame(dragFrameRef.current);
+      dragFrameRef.current = null;
+    }
+    updateDragPosition(drag, { x: event.clientX, y: event.clientY });
+    pendingDragPointRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    dragRef.current = null;
+    setView({ ...viewRef.current });
+    setDragging(false);
+  };
+
+  const handleWheel = (event: ReactWheelEvent<HTMLDivElement>) => {
+    if (!imageReady || (event.target as Element).closest(".media-image-lightbox-toolbar, .media-image-lightbox-nav")) return;
+    event.preventDefault();
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const anchor = {
+      x: event.clientX - bounds.left - bounds.width / 2,
+      y: event.clientY - bounds.top - bounds.height / 2,
+    };
+    applyZoom(viewRef.current.zoom * (event.deltaY < 0 ? PREVIEW_ZOOM_STEP : 1 / PREVIEW_ZOOM_STEP), anchor);
+  };
+
+  const handleCanvasKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "+" || event.key === "=") {
+      event.preventDefault();
+      applyZoom(viewRef.current.zoom * PREVIEW_ZOOM_STEP);
+    } else if (event.key === "-") {
+      event.preventDefault();
+      applyZoom(viewRef.current.zoom / PREVIEW_ZOOM_STEP);
+    } else if (event.key === "0") {
+      event.preventDefault();
+      showActualSize();
+    } else if (event.key.toLocaleLowerCase() === "f") {
+      event.preventDefault();
+      fitImage();
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      panBy(0, 56);
+    } else if (event.key === "ArrowDown") {
+      event.preventDefault();
+      panBy(0, -56);
+    }
+  };
+
+  const navigateTo = (next: MediaAsset | undefined) => {
+    if (!next) return;
+    onNavigate(next);
+  };
+  const downloadImage = useCallback(async () => {
+    if (exportingRef.current || asset.status !== "completed" || !asset.fileName) return;
+    exportingRef.current = true;
+    setExporting(true);
+    setExportError(false);
+    try {
+      await exportMediaAsset(asset);
+    } catch {
+      if (currentAssetIdRef.current === asset.id) setExportError(true);
+    } finally {
+      exportingRef.current = false;
+      setExporting(false);
+    }
+  }, [asset]);
+
+  useEffect(() => {
+    if (!url) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.isComposing || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+      if (event.target instanceof HTMLElement && event.target.closest("input, textarea, select, [contenteditable]:not([contenteditable='false'])")) return;
+      if (event.target instanceof HTMLElement && event.target.closest(".media-image-context-menu")) return;
+      if (event.key === "Enter" && event.target instanceof HTMLElement && event.target.closest(".media-image-lightbox-copy")) return;
+      if (!["Escape", "ArrowLeft", "ArrowRight", "Enter"].includes(event.key)) return;
+      // Capture before the focused button or canvas handles the key.
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.key === "Escape") onClose();
+      else if (event.key === "ArrowLeft" && previousAsset) onNavigate(previousAsset);
+      else if (event.key === "ArrowRight" && nextAsset) onNavigate(nextAsset);
+      else if (event.key === "Enter" && !event.repeat) void downloadImage();
+    };
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
+  }, [url, previousAsset, nextAsset, onNavigate, onClose, downloadImage]);
+
+  if (!url) return null;
+  const createdAt = new Intl.DateTimeFormat(locale, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(asset.createdAt);
+
+
+  return createPortal(
+    <div className={`media-image-lightbox`} role="dialog" aria-modal="true" aria-labelledby="media-image-preview-title" onMouseDown={(event) => {
+      if (event.target === event.currentTarget) onClose();
+    }}>
+      {imageCopy.contextMenu}
+      <section className="media-image-lightbox-dialog">
+        <header>
+          <div>
+            <strong id="media-image-preview-title">{tr("图片预览", "Image preview")}</strong>
+            <p title={asset.prompt}>{asset.prompt}</p>
+          </div>
+          <div className="media-image-lightbox-actions">
+            <span className="media-image-copy-feedback" role="status">{imageCopy.status !== "idle" ? imageCopy.label : ""}</span>
+            <button className="media-image-lightbox-copy" type="button" disabled={!imageReady || imageCopy.status === "copying"}
+              onClick={() => void imageCopy.copy()} aria-label={tr("复制图片", "Copy image")} title={imageCopy.label}>
+              {imageCopy.status === "copying" ? <LoaderCircle className="spin" size={17} /> : imageCopy.status === "copied" ? <Check size={17} /> : imageCopy.status === "error" ? <CircleAlert size={17} /> : <Copy size={17} />}
+            </button>
+            {onEdit && asset.filePath && <button
+              className="media-image-lightbox-edit"
+              type="button"
+              onClick={() => void onEdit(asset)}
+              aria-label={tr("编辑此图", "Edit this image")}
+              title={tr("编辑此图", "Edit this image")}
+            ><Brush size={17} /></button>}
+            <button
+              className={`media-image-lightbox-download${exportError ? " error" : ""}`}
+              type="button"
+              disabled={exporting || !asset.fileName}
+              onClick={() => void downloadImage()}
+              aria-label={tr("下载图片", "Download image")}
+              aria-keyshortcuts="Enter"
+              title={`${exportError ? tr("下载失败，点击重试", "Download failed, click to retry") : tr("下载图片", "Download image")} (Enter)`}
+            >
+              {exporting ? <LoaderCircle className="spin" size={17} /> : <Download size={17} />}
+            </button>
+            <button className="media-image-lightbox-close" type="button" autoFocus onClick={onClose} aria-label={tr("关闭预览", "Close preview")} title={`${tr("关闭预览", "Close preview")} (Esc)`}><X size={19} /></button>
+          </div>
+        </header>
+        <div
+          ref={canvasRef}
+          className={`media-image-lightbox-canvas${dragging ? " dragging" : ""}`}
+          role="region"
+          aria-label={tr("图片查看区域，可拖动图片并使用滚轮缩放", "Image viewer; drag the image and use the wheel to zoom")}
+          tabIndex={0}
+          onContextMenu={(event) => {
+            if (!(event.target as Element).closest("button, .media-image-lightbox-toolbar")) imageCopy.openMenu(event);
+          }}
+          onPointerDown={beginDrag}
+          onPointerMove={moveDrag}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+          onLostPointerCapture={endDrag}
+          onWheel={handleWheel}
+          onKeyDown={handleCanvasKeyDown}
+          onDoubleClick={(event) => {
+            if ((event.target as Element).closest(".media-image-lightbox-toolbar, .media-image-lightbox-nav")) return;
+            if (Math.abs(view.zoom - 1) < 0.01) fitImage();
+            else showActualSize();
+          }}
+        >
+          <button
+            className="media-image-lightbox-nav previous"
+            type="button"
+            disabled={!previousAsset}
+            onClick={() => navigateTo(previousAsset)}
+            aria-label={tr("上一张图片", "Previous image")}
+            aria-keyshortcuts="ArrowLeft"
+            title={`${tr("上一张图片", "Previous image")} (←)`}
+          >
+            <ArrowLeft size={21} />
+          </button>
+          <img
+            ref={imageRef}
+            key={asset.id}
+            src={url}
+            alt={asset.revisedPrompt || asset.prompt}
+            draggable={false}
+            onLoad={(event) => {
+              const size = { width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight };
+              setImageSize(size);
+              fitModeRef.current = true;
+              const resetView = fittedPreview(size, canvasRef.current);
+              viewRef.current = resetView;
+              setView(resetView);
+            }}
+            style={imageReady ? {
+              width: imageSize.width,
+              height: imageSize.height,
+              transform: previewTransform(view),
+            } : undefined}
+          />
+          <button
+            className="media-image-lightbox-nav next"
+            type="button"
+            disabled={!nextAsset}
+            onClick={() => navigateTo(nextAsset)}
+            aria-label={tr("下一张图片", "Next image")}
+            aria-keyshortcuts="ArrowRight"
+            title={`${tr("下一张图片", "Next image")} (→)`}
+          >
+            <ArrowRight size={21} />
+          </button>
+          <div className="media-image-lightbox-toolbar" role="toolbar" aria-label={tr("图片缩放控制", "Image zoom controls")}>
+            <button type="button" disabled={!imageReady} onClick={fitImage} title={`${tr("适应窗口", "Fit to window")} (F)`}><Maximize2 size={14} /><span>{tr("适应窗口", "Fit")}</span></button>
+            <button type="button" disabled={!imageReady} onClick={() => showActualSize()} title={`${tr("原始大小", "Actual size")} (0)`}>1:1</button>
+            <i aria-hidden="true" />
+            <button type="button" disabled={!imageReady || view.zoom <= Math.min(MIN_PREVIEW_ZOOM, fittedPreview(imageSize, canvasRef.current).zoom)} onClick={() => applyZoom(view.zoom / PREVIEW_ZOOM_STEP)} aria-label={tr("缩小", "Zoom out")} title={tr("缩小", "Zoom out")}><ZoomOut size={15} /></button>
+            <output aria-live="polite">{Math.round(view.zoom * 100)}%</output>
+            <button type="button" disabled={!imageReady || view.zoom >= MAX_PREVIEW_ZOOM} onClick={() => applyZoom(view.zoom * PREVIEW_ZOOM_STEP)} aria-label={tr("放大", "Zoom in")} title={tr("放大", "Zoom in")}><ZoomIn size={15} /></button>
+          </div>
+          <div className="media-image-pan-hint" aria-hidden="true"><Move size={14} /><span>{tr("← → 切换图片 · 回车下载 · 拖动查看 · 滚轮缩放", "← → switch images · Enter to download · drag to pan · wheel to zoom")}</span></div>
+        </div>
+        <footer>
+          <div>
+            {asset.size && <span>{asset.size}</span>}
+            {asset.quality && <span>{asset.quality}</span>}
+            {asset.outputFormat && <span>{asset.outputFormat.toUpperCase()}</span>}
+          </div>
+          <small>{asset.model} · {asset.providerName} · {createdAt}</small>
+        </footer>
+      </section>
+    </div>,
+    document.body,
+  );
+}
+
+// Reserve space for the navigation buttons, bottom toolbar and pan hint.
+function fittedPreview(size: { width: number; height: number }, canvas: HTMLDivElement | null): PreviewTransform {
+  const bounds = canvas?.getBoundingClientRect();
+  if (!bounds || size.width <= 0 || size.height <= 0) return { zoom: 1, x: 0, y: 0 };
+  return { zoom: Math.min(1, Math.max(1, bounds.width - 120) / size.width, Math.max(1, bounds.height - 140) / size.height), x: 0, y: 0 };
+}
+
+function constrainPreviewOffset(
+  point: PreviewPoint,
+  zoom: number,
+  imageSize: { width: number; height: number },
+  canvas: HTMLDivElement | null,
+): PreviewPoint {
+  if (!canvas || imageSize.width <= 0 || imageSize.height <= 0) return { x: 0, y: 0 };
+  const bounds = canvas.getBoundingClientRect();
+  return constrainPreviewOffsetToBounds(point, zoom, imageSize, bounds);
+}
+
+function constrainPreviewOffsetToBounds(
+  point: PreviewPoint,
+  zoom: number,
+  imageSize: { width: number; height: number },
+  bounds: { width: number; height: number },
+): PreviewPoint {
+  if (imageSize.width <= 0 || imageSize.height <= 0 || bounds.width <= 0 || bounds.height <= 0) return { x: 0, y: 0 };
+  const maxX = Math.max(0, (imageSize.width * zoom - bounds.width) / 2);
+  const maxY = Math.max(0, (imageSize.height * zoom - bounds.height) / 2);
+  return {
+    x: Math.min(maxX, Math.max(-maxX, point.x)),
+    y: Math.min(maxY, Math.max(-maxY, point.y)),
+  };
+}
+
+function previewTransform(view: PreviewTransform) {
+  return `translate3d(calc(-50% + ${view.x}px), calc(-50% + ${view.y}px), 0) scale(${view.zoom})`;
+}
+
+function applyPreviewTransform(image: HTMLImageElement | null, view: PreviewTransform) {
+  if (image) image.style.transform = previewTransform(view);
+}
+
+function modelKey(model: MediaModelInfo) {
+  return `${model.profileId}::${model.id}`;
+}
+
+function loadMediaModelRoutes(): Partial<Record<MediaKind, string>> {
+  try {
+    const value = JSON.parse(localStorage.getItem(MEDIA_MODEL_ROUTES_KEY) ?? "{}");
+    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+    return Object.fromEntries(
+      (["image", "video", "audio"] as MediaKind[])
+        .filter((kind) => typeof value[kind] === "string" && value[kind].length <= 512)
+        .map((kind) => [kind, value[kind]]),
+    );
+  } catch {
+    return {};
+  }
+}
+
+function saveMediaModelRoutes(routes: Partial<Record<MediaKind, string>>) {
+  try {
+    localStorage.setItem(MEDIA_MODEL_ROUTES_KEY, JSON.stringify(routes));
+  } catch {
+    // Keep model switching available for the current session if WebView
+    // storage is unavailable.
+  }
+}
+
+function matchesImageVideoMode(mode: VideoGenerationMode): mode is "image" | "first_last" | "reference" {
+  return mode === "image" || mode === "first_last" || mode === "reference";
+}
+
+function videoModeLabel(mode: VideoGenerationMode) {
+  if (mode === "first_last") return tr("首尾帧", "First / last frames");
+  if (mode === "image") return tr("首帧图", "First frame");
+  if (mode === "reference") return tr("参考图", "References");
+  if (mode === "video") return tr("视频编辑", "Edit video");
+  return tr("纯文本", "Text");
+}
+
+function videoModeDescription(mode: VideoGenerationMode) {
+  if (mode === "first_last") return tr("用两张图片分别指定起始和结束画面", "Set the first and last frames with two images");
+  if (mode === "image") return tr("以一张图片作为视频起始画面", "Animate one image as the starting frame");
+  if (mode === "reference") return tr("用多张图片引导人物、物体或服装一致性，数量依模型而定", "Guide people, objects, or clothing with multiple images within the model limit");
+  if (mode === "video") return tr("根据提示词编辑一个不超过 8.7 秒的 MP4 视频", "Edit one MP4 video up to 8.7 seconds");
+  return tr("仅根据提示词生成视频", "Generate a video from the prompt only");
+}
+
+function videoReferenceTitle(mode: VideoGenerationMode) {
+  if (mode === "first_last") return tr("首尾帧图片", "First and last frame images");
+  if (mode === "video") return tr("源视频", "Source video");
+  if (mode === "reference") return tr("视频参考图", "Video references");
+  return tr("首帧图", "First-frame image");
+}
+
+function videoReferenceHint(mode: VideoGenerationMode, busy: boolean) {
+  if (busy) return tr("正在添加参考素材…", "Adding references…");
+  if (mode === "first_last") return tr("依次选择首帧和尾帧图片", "Choose the first frame, then the last frame");
+  if (mode === "video") return tr("选择或拖入一个 MP4，最大 64 MiB", "Choose or drop one MP4, up to 64 MiB");
+  if (mode === "reference") return tr("选择、拖入或粘贴参考图片", "Choose, drop, or paste reference images");
+  return tr("选择、拖入或粘贴一张图片", "Choose, drop, or paste one image");
+}
+
+function videoReferenceRequirement(mode: VideoGenerationMode) {
+  if (mode === "first_last") return tr("请分别添加首帧和尾帧图片", "Add both the first and last frame images");
+  if (mode === "video") return tr("请先添加一个 MP4 源视频", "Add one MP4 source video first");
+  if (mode === "reference") return tr("请先添加模型数量限制内的视频参考图", "Add video references within the selected model limit");
+  return tr("请先添加一张首帧图", "Add one first-frame image first");
+}
+
+function imageModeDescription(mode: StudioImageMode) {
+  if (mode === "edit") return tr("修改整张图片，可先在画板添加标签", "Modify the whole image and optionally add labels in the canvas");
+  if (mode === "outpaint") return tr("在画板扩展边界后，让模型无缝补全新区域", "Expand the canvas and let the model seamlessly fill the new area");
+  if (mode === "inpaint") return tr("在画板涂红需要修改的区域，再进行精准重绘", "Paint the area to change in red, then regenerate it precisely");
+  return tr("从提示词生成新图片，参考图为可选", "Generate a new image from a prompt, with optional references");
+}
+
+function studioImagePrompt(prompt: string, mode: StudioImageMode, meta?: CanvasEditorSaveMeta) {
+  const instructions: string[] = [];
+  if (mode === "outpaint") {
+    instructions.push(tr("扩展画面边界并无缝补全新增区域；保持原图主体、光线、透视、色彩和材质完全一致。", "Extend the image beyond its current boundaries and seamlessly complete the new area while preserving subject, lighting, perspective, color, and material."));
+  }
+  if (meta?.labels.length) {
+    instructions.push(tr(
+      `图中的彩色标签是编辑定位提示（${meta.labels.join("、")}），请理解其指向后在最终图片中移除这些标签文字和标记。`,
+      `Colored labels in the source are editing guides (${meta.labels.join(", ")}); use their locations as guidance, then remove the label text and markers from the final image.`,
+    ));
+  }
+  return instructions.length > 0 ? `${prompt}\n\n${instructions.join("\n")}` : prompt;
+}
+
+function mediaGenerateLabel(kind: MediaKind, imageMode: StudioImageMode) {
+  if (kind !== "image" || imageMode === "generate") return tr("开始生成", "Generate");
+  if (imageMode === "outpaint") return tr("开始扩图", "Start outpainting");
+  if (imageMode === "inpaint") return tr("开始局部重绘", "Start inpainting");
+  return tr("提交图片编辑", "Submit image edit");
+}
+
+function mediaDropTitle(kind: MediaKind, videoMode: VideoGenerationMode, imageMode: StudioImageMode) {
+  if (kind === "image") return imageMode === "generate"
+    ? tr("拖入即可作为参考图", "Drop to add image references")
+    : tr("拖入图片并打开标注画板", "Drop an image and open the annotation canvas");
+  if (kind !== "video") return tr("当前模式不使用图片参考", "This mode does not use image references");
+  if (videoMode === "video") return tr("拖入 MP4 作为源视频", "Drop an MP4 source video");
+  if (videoMode === "reference") return tr("拖入图片作为视频参考", "Drop image references for the video");
+  return tr("拖入图片作为首帧", "Drop an image as the first frame");
+}
+
+function mediaAssetAspectRatio(asset: MediaAsset) {
+  const size = asset.size?.toLocaleLowerCase() ?? "";
+  if (size.includes("9:16")) return 9 / 16;
+  if (size.includes("16:9")) return 16 / 9;
+  const dimensions = size.match(/(\d+)\s*x\s*(\d+)/);
+  if (!dimensions) return null;
+  const width = Number(dimensions[1]);
+  const height = Number(dimensions[2]);
+  return width > 0 && height > 0 ? width / height : null;
+}
+
+function clampMediaCount(value: number | undefined) {
+  return Number.isFinite(value) ? Math.min(8, Math.max(1, Math.round(value as number))) : 1;
+}
+
+function normalizeImageSize(value: string | undefined) {
+  return value && IMAGE_SIZE_OPTIONS.includes(value) ? value : "auto";
+}
+
+function normalizeImageQuality(value: string | undefined) {
+  if (!value) return "auto";
+  const normalized = value.toLocaleLowerCase();
+  return ["auto", "high", "medium", "2k", "4k"].includes(normalized)
+    ? normalized === "2k" ? "2K" : normalized === "4k" ? "4K" : normalized
+    : "auto";
+}
+
+function normalizeImageFormat(value: string | undefined, fileName: string | undefined) {
+  const candidate = value?.toLocaleLowerCase() || fileName?.split(".").pop()?.toLocaleLowerCase();
+  if (candidate === "jpg") return "jpeg";
+  return candidate && ["png", "webp", "jpeg"].includes(candidate) ? candidate : "png";
+}
+
+function normalizeImageBackground(value: string | undefined) {
+  return value && ["auto", "transparent", "opaque"].includes(value) ? value : "auto";
+}
+
+function formatAttachmentBytes(bytes: number) {
+  if (bytes < 1_024) return `${bytes} B`;
+  if (bytes < 1_048_576) return `${(bytes / 1_024).toFixed(1)} KB`;
+  return `${(bytes / 1_048_576).toFixed(1)} MB`;
+}
+
+function mergeAssets(current: MediaAsset[], incoming: MediaAsset[]) {
+  const byId = new Map(current.map((asset) => [asset.id, asset]));
+  for (const asset of incoming) byId.set(asset.id, asset);
+  return [...byId.values()].sort((left, right) => right.createdAt - left.createdAt);
+}
+
+function kindLabel(kind: MediaKind) {
+  if (kind === "image") return tr("图片", "Images");
+  if (kind === "video") return tr("视频", "Video");
+  return tr("语音", "Speech");
+}
+
+function statusLabel(status: MediaAsset["status"]) {
+  if (status === "queued") return tr("正在排队", "Queued");
+  if (status === "in_progress") return tr("正在生成", "Generating");
+  if (status === "completed") return tr("已完成", "Completed");
+  return tr("失败", "Failed");
+}
+
+function pendingAssetDetail(asset: StudioMediaAsset) {
+  if (asset.downloadProgress) {
+    const { receivedBytes, totalBytes } = asset.downloadProgress;
+    return `${formatAttachmentBytes(receivedBytes)}${totalBytes ? ` / ${formatAttachmentBytes(totalBytes)}` : ""}`;
+  }
+  if (asset.gatewayStatus === "billing") return asset.error || tr("视频生成已完成，正在保存使用记录", "Video generated; saving usage record");
+  if (asset.pendingOutput) {
+    const { index, total } = asset.pendingOutput;
+    return total > 1 ? tr(`第 ${index} / ${total} 个结果`, `Output ${index} of ${total}`) : tr("请求已发送", "Request sent");
+  }
+  if (typeof asset.progress === "number" && Number.isFinite(asset.progress)) return `${asset.progress}%`;
+  return asset.status === "queued"
+    ? tr("任务已受理，等待上游处理；上游未提供进度", "Task accepted, waiting for the provider; progress unavailable")
+    : tr("正在等待上游结果，上游未提供进度", "Waiting for the provider result; progress unavailable");
+}
+
+function promptPlaceholder(kind: MediaKind, imageMode: StudioImageMode) {
+  if (kind === "image" && imageMode !== "generate") return tr("描述要修改什么，以及必须保留的主体、构图、光线与材质…", "Describe what to change and what subject, composition, lighting, and materials must remain…");
+  if (kind === "image") return tr("描述主体、构图、光线、材质、风格和需要避免的元素…", "Describe subject, composition, lighting, materials, style, and exclusions…");
+  if (kind === "video") return tr("描述镜头、主体动作、环境变化、摄影机运动和节奏…", "Describe shot, subject motion, environment changes, camera movement, and timing…");
+  return tr("输入要朗读的文本…", "Enter the exact text to speak…");
+}
+
+function KindIcon({ kind }: { kind: MediaKind }) {
+  if (kind === "image") return <Image size={28} />;
+  if (kind === "video") return <Video size={28} />;
+  return <AudioLines size={28} />;
+}
+
+function clipboardImageFiles(clipboard: DataTransfer | null) {
+  if (!clipboard) return [];
+  const itemFiles = Array.from(clipboard.items)
+    .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+    .flatMap((item) => {
+      const file = item.getAsFile();
+      return file ? [file] : [];
+    });
+  if (itemFiles.length > 0) return itemFiles;
+  return Array.from(clipboard.files).filter((file) => file.type.startsWith("image/"));
+}
+
+function errorText(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function mediaErrorSummary(error: string) {
+  const compact = error.replace(/\s+/g, " ").trim();
+  const status = compact.match(/\b[45]\d{2}(?: [A-Za-z][A-Za-z -]*)?/i)?.[0];
+  const quotedMessage = compact.match(/"message"\s*:\s*"([^"]+)"/i)?.[1];
+  const statusIndex = status ? compact.indexOf(status) + status.length : -1;
+  const plainMessage = statusIndex >= 0
+    ? compact.slice(statusIndex).replace(/^[\s):·-]+/, "").split(";")[0].trim()
+    : compact;
+  const detail = quotedMessage || plainMessage;
+  const summary = status && detail ? `${status} · ${detail}` : detail;
+  return summary.length > 220 ? `${summary.slice(0, 219)}…` : summary;
+}

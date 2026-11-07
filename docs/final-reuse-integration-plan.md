@@ -7,6 +7,8 @@
 
 **需求权威**：本文档是唯一现行产品需求基线；[`MAM_REQUIREMENTS_DELTA_2026-07-27.md`](./readme/MAM_REQUIREMENTS_DELTA_2026-07-27.md) 负责把旧需求逐项映射到本文档，但不建立第二套产品定义。
 
+2026-11-07 增量：用户批准按需创作组件接入，边界由本文引用的 [创作组件产品契约](./creative-components-authority.md) 补充。LevelUp 只读，MAM 侧移植与持续同步；实现状态以版本档案及验收为准，既有任务权威语义保持有效。
+
 ## 1. 文档目的
 
 本文档把 `design-v1.md`、`design-v2-workflow.md`、`design-v3-distributed-workflow.md`、`design-v4-pi-runtime.md` 与 2026-07-27 的需求确认收敛为一套最终方案，并回答四个问题：
