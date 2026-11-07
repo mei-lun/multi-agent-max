@@ -10,6 +10,7 @@ const output = join(root, '.mam-local', 'creative-desktop-qa')
 await mkdir(output, { recursive: true })
 const run = await mkdtemp(join(output, 'run-'))
 const pkg = resolve(root, '.mam-local/component-packages/creative-image')
+const componentVersion = JSON.parse(await readFile(join(pkg, 'manifest.json'), 'utf8')).version
 const entry = pathToFileURL(join(root, 'out/main/index.js')).href
 const report = join(run, 'result.json')
 const script = `
@@ -30,7 +31,7 @@ async function test(){
  step='initial catalog';const before=await main.webContents.executeJavaScript('window.mamCreative.list()');
  if(before.length!==8 || before.some(c=>c.versions.length))throw Error('Initial catalog incorrect');
  step='install';await main.webContents.executeJavaScript('window.mamCreative.install()');
- step='enable';const installed=await main.webContents.executeJavaScript('window.mamCreative.enable("creative.image","0.1.0")');
+ step='enable';const installed=await main.webContents.executeJavaScript('window.mamCreative.enable("creative.image","${componentVersion}")');
  if(!installed.find(c=>c.id==='creative.image')?.versions[0]?.enabled)throw Error('Enable failed');
  step='open';await main.webContents.executeJavaScript('window.mamCreative.open("creative.image")');
  const component=BrowserWindow.getAllWindows().find(w=>w!==main);
@@ -40,7 +41,7 @@ async function test(){
  if(context.manifest.id!=='creative.image'||!isolated)throw Error('Context isolation failed');
  const denied=await component.webContents.executeJavaScript('window.componentHost.request({action:"submit",operation:"image.removeSolidBackground",idempotencyKey:"test",inputAssets:[],params:{},attempt:{id:"forged"}}).then(()=>false,()=>true)');
  if(!denied)throw Error('Forged authority accepted');
- const pinned=await main.webContents.executeJavaScript('window.mamCreative.remove("creative.image","0.1.0").then(()=>false,()=>true)');
+ const pinned=await main.webContents.executeJavaScript('window.mamCreative.remove("creative.image","${componentVersion}").then(()=>false,()=>true)');
  if(!pinned)throw Error('Open version was removed');
  await main.webContents.executeJavaScript('(()=>{const button=[...document.querySelectorAll("nav button")].find(b=>/创作组件|Creative components/.test(b.textContent));if(!button)throw Error("navigation missing");button.click()})()');
  for(let i=0;i<100;i++){if(await main.webContents.executeJavaScript('document.querySelectorAll("main article").length===8 && ![...document.querySelectorAll("main button")].some(b=>b.disabled)'))break;await wait(100)}
@@ -48,7 +49,7 @@ async function test(){
  if(cards!==8)throw Error('Catalog UI did not finish loading');
  for(const theme of ['light','dark']){nativeTheme.themeSource=theme;await wait(150);const image=await main.webContents.capturePage();fs.writeFileSync(${JSON.stringify(output)}+'/'+theme+'.png',image.toPNG());}
  component.destroy();await wait(100);
- const removed=await main.webContents.executeJavaScript('window.mamCreative.remove("creative.image","0.1.0")');
+ const removed=await main.webContents.executeJavaScript('window.mamCreative.remove("creative.image","${componentVersion}")');
  if(removed.find(c=>c.id==='creative.image').versions.length)throw Error('Removal failed');
  const sourceHash=context.manifest.source.sha256;
  finish({passed:true,catalogEntries:before.length,installedEnabledOpened:true,mainFrameBridge:true,forgedAuthorityRejected:denied,openVersionProtected:pinned,uninstalled:true,sourceHash});

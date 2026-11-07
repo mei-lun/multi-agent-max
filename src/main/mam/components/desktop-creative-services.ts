@@ -9,13 +9,20 @@ export type DesktopCreativeServices = Awaited<ReturnType<typeof createServices>>
 let current: Promise<DesktopCreativeServices> | undefined
 let currentRoot: string | undefined
 
-export function desktopCreativeServices(root: string): Promise<DesktopCreativeServices> {
+export type CreativeMediaFactory = (assets: BinaryAssetStore) => {
+  handlers: HandlerRegistry
+  listModels: () => unknown | Promise<unknown>
+}
+export function desktopCreativeServices(
+  root: string,
+  factory: CreativeMediaFactory
+): Promise<DesktopCreativeServices> {
   const normalized = resolve(root)
   if (currentRoot && currentRoot !== normalized)
     return Promise.reject(new Error('Creative services already bound to another root'))
   if (!current) {
     currentRoot = normalized
-    current = createServices(normalized).catch((error: unknown) => {
+    current = createServices(normalized, factory).catch((error: unknown) => {
       current = undefined
       currentRoot = undefined
       throw error
@@ -24,7 +31,7 @@ export function desktopCreativeServices(root: string): Promise<DesktopCreativeSe
   return current
 }
 
-async function createServices(root: string) {
+async function createServices(root: string, factory: CreativeMediaFactory) {
   const lock = await acquireServiceRootLock(root)
   let cleanup: (() => Promise<void>) | undefined
   try {
@@ -37,7 +44,7 @@ async function createServices(root: string) {
     const assets = await BinaryAssetStore.open(join(root, 'creative-assets'))
     // Backend capabilities are registered explicitly as they are ported. A package
     // manifest never authorizes executing arbitrary native code in the main process.
-    const handlers: HandlerRegistry = () => undefined
+    const { handlers, listModels } = factory(assets)
     const jobs = await CreativeJobManager.open({
       directory: join(root, 'creative-jobs'),
       handlers,
@@ -47,11 +54,13 @@ async function createServices(root: string) {
     })
     cleanup = () => jobs.dispose()
     const host = createComponentHostService({
+      protectedDirectories: [root],
       registry,
       assets,
       jobs,
       handlers,
       projectId: 'creative.local',
+      listModels,
       authorizationDirectory: join(root, 'creative-authorization'),
       preloadPath: join(__dirname, '../preload/component-api.cjs')
     })

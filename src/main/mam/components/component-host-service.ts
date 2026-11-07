@@ -1,7 +1,4 @@
-import { createReadStream } from 'node:fs'
-import { lstat } from 'node:fs/promises'
-import { basename } from 'node:path'
-import { dialog, ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
+import { ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
 import {
   COMPONENT_HOST_CHANNEL,
   componentHostRequestSchema
@@ -11,6 +8,9 @@ import type { BinaryAssetStore, CreativeJobManager, HandlerRegistry } from '../c
 import type { ComponentRegistry } from './registry'
 import { openComponentWindow } from './component-window'
 import { AssetGrants } from './host-asset-grants'
+import { randomUUID } from 'node:crypto'
+import type { AssetRef } from '../../../shared/mam/creative-runtime'
+import { decodeImage, importNativeAsset, exportNativeAsset } from './host-native-assets'
 
 export type ComponentHostContext = { projectId: string; manifest: ComponentManifest }
 export function authorizeComponentSender(
@@ -33,6 +33,8 @@ export function createComponentHostService(options: {
   projectId: string
   preloadPath: string
   authorizationDirectory: string
+  protectedDirectories?: readonly string[]
+  listModels?: () => unknown | Promise<unknown>
 }) {
   const grants = new AssetGrants(options.authorizationDirectory)
   const pins = new Map<string, { release(): void }>()
@@ -69,6 +71,7 @@ export function createComponentHostService(options: {
       if (job.request.projectId === options.projectId) await pin(job.id)
   })()
   const windows = new Map<number, { window: BrowserWindow; context: ComponentHostContext }>()
+  const previews = new Map<string, { sender: number; ref: AssetRef }>()
   ipcMain.handle(COMPONENT_HOST_CHANNEL, async (event, input: unknown) => {
     await ready
     const binding = windows.get(event.sender.id)
@@ -87,6 +90,40 @@ export function createComponentHostService(options: {
       return job
     }
     if (request.action === 'context') return structuredClone(binding.context)
+    if (request.action === 'listModels') return options.listModels?.() ?? []
+    if (request.action === 'storeImage') {
+      const bytes = Buffer.from(request.bytes)
+      const mime = decodeImage(bytes)
+      const ref = await options.assets.import(
+        (async function* () {
+          yield bytes
+        })(),
+        { filename: request.filename, mime }
+      )
+      await grants.grant(projectId, manifest.id, ref)
+      return ref
+    }
+    if (request.action === 'previewAsset' || request.action === 'exportAsset') {
+      const ref = request.ref
+      const output = options.jobs
+        .list()
+        .some(
+          (j) =>
+            j.request.projectId === projectId &&
+            j.request.componentId === manifest.id &&
+            j.request.componentVersion === manifest.version &&
+            j.events.some((e) => grants.contains(e.data, ref))
+        )
+      if (!(await grants.has(projectId, manifest.id, ref)) && !output)
+        throw new Error('Asset outside component context')
+      await options.assets.read(ref)
+      if (request.action === 'exportAsset') {
+        return exportNativeAsset(binding.window, options.assets, ref, options.protectedDirectories)
+      }
+      const token = randomUUID()
+      previews.set(token, { sender: event.sender.id, ref })
+      return `mam-component://package/__assets/${token}`
+    }
     if (request.action === 'listJobs')
       return options.jobs
         .list()
@@ -104,16 +141,26 @@ export function createComponentHostService(options: {
       owns(request.jobId)
       return options.jobs.cancel(request.jobId)
     }
+    if (request.action === 'deleteJob') {
+      const job = owns(request.jobId)
+      if (!settled.has(job.state)) throw new Error('Only terminal jobs can be deleted')
+      const retain = async (value: unknown): Promise<void> => {
+        const { assetRefSchema } = await import('../../../shared/mam/creative-runtime')
+        const parsed = assetRefSchema.safeParse(value)
+        if (parsed.success) {
+          await grants.grant(projectId, manifest.id, parsed.data)
+          return
+        }
+        if (value && typeof value === 'object')
+          for (const child of Object.values(value)) await retain(child)
+      }
+      for (const event of job.events) await retain(event.data)
+      await options.jobs.delete(job.id)
+      return true
+    }
     if (request.action === 'importAsset') {
-      const selected = await dialog.showOpenDialog(binding.window, { properties: ['openFile'] })
-      const file = selected.filePaths[0]
-      if (selected.canceled || !file) return null
-      const stat = await lstat(file)
-      if (!stat.isFile() || stat.isSymbolicLink()) throw new Error('Unsafe import source')
-      const ref = await options.assets.import(createReadStream(file), {
-        filename: basename(file),
-        mime: 'application/octet-stream'
-      })
+      const ref = await importNativeAsset(binding.window, options.assets)
+      if (!ref) return null
       await grants.grant(projectId, manifest.id, ref)
       return ref
     }
@@ -157,18 +204,39 @@ export function createComponentHostService(options: {
   })
   return {
     ready: () => ready,
-    open: (id: ComponentManifest['id']) =>
-      openComponentWindow(options.registry, id, {
+    open: (id: ComponentManifest['id']) => {
+      let senderId: number | undefined
+      return openComponentWindow(options.registry, id, {
         preloadPath: options.preloadPath,
+        asset: async (request) => {
+          const url = new URL(request.url)
+          if (!url.pathname.startsWith('/__assets/')) return undefined
+          const entry = previews.get(url.pathname.slice('/__assets/'.length))
+          if (
+            !entry ||
+            entry.sender !== senderId ||
+            !windows.has(entry.sender) ||
+            request.method !== 'GET'
+          )
+            return new Response(null, { status: 404 })
+          return new Response(new Uint8Array(await options.assets.read(entry.ref)), {
+            headers: { 'Content-Type': entry.ref.mime, 'X-Content-Type-Options': 'nosniff' }
+          })
+        },
         bind: (window, manifest) => {
+          senderId = window.webContents.id
           windows.set(window.webContents.id, {
             window,
             context: { manifest, projectId: options.projectId }
           })
           const key = window.webContents.id
-          window.once('closed', () => windows.delete(key))
+          window.once('closed', () => {
+            windows.delete(key)
+            for (const [token, entry] of previews) if (entry.sender === key) previews.delete(token)
+          })
         }
-      }),
+      })
+    },
     dispose: () => {
       ipcMain.removeHandler(COMPONENT_HOST_CHANNEL)
       for (const { window } of windows.values()) if (!window.isDestroyed()) window.destroy()

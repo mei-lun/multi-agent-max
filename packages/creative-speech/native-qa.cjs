@@ -1,0 +1,21 @@
+const {app,BrowserWindow}=require('electron')
+const fs=require('node:fs/promises'),path=require('node:path'),assert=require('node:assert/strict'),{createHash}=require('node:crypto')
+const root=path.resolve(__dirname,'../..'),output=path.join(root,'.mam-local/creative-speech-qa')
+app.setPath('userData',path.join(output,'profile'))
+app.whenReady().then(async()=>{
+ await fs.mkdir(output,{recursive:true});const packaged=path.join(root,'.mam-local/component-packages/creative-speech'),manifest=JSON.parse(await fs.readFile(path.join(packaged,'manifest.json')))
+ for(const [file,hash] of Object.entries(manifest.files))assert.equal(createHash('sha256').update(await fs.readFile(path.join(packaged,file))).digest('hex'),hash)
+ const window=new BrowserWindow({show:false,width:720,height:800,webPreferences:{sandbox:true,contextIsolation:true,nodeIntegration:false}}),run=code=>window.webContents.executeJavaScript(code,true)
+ await window.loadFile(path.join(packaged,'index.html'))
+ await run(`(async()=>{const bytes=new Uint8Array(16044),v=new DataView(bytes.buffer);const text=(o,s)=>[...s].forEach((c,i)=>bytes[o+i]=c.charCodeAt(0));text(0,'RIFF');v.setUint32(4,16036,true);text(8,'WAVEfmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);v.setUint32(24,8000,true);v.setUint32(28,16000,true);v.setUint16(32,2,true);v.setUint16(34,16,true);text(36,'data');v.setUint32(40,16000,true);window.audioURL=URL.createObjectURL(new Blob([bytes],{type:'audio/wav'}));window.componentHost={jobs:[],exports:0,async request(r){if(r.action==='listModels')return [{id:'mock',label:'测试语音',kind:'speech',operations:['speech.generate'],voices:['alloy'],outputFormats:['wav']}];if(r.action==='submit'){this.jobs.push({id:'j'+this.jobs.length,request:r,state:'succeeded'});return 'j'}if(r.action==='listJobs')return this.jobs;if(r.action==='events')return [{sequence:1,type:'asset',data:{id:'a',filename:'speech.wav',mime:'audio/wav'}}];if(r.action==='previewAsset')return window.audioURL;if(r.action==='exportAsset'){this.exports++;return true}if(r.action==='deleteJob'){this.jobs=this.jobs.filter(j=>j.id!==r.jobId);return true}}};await import(new URL('./speech.js?mock',location.href).href)})()`)
+ await run(`document.getElementById('prompt').value='你好，语音测试';document.getElementById('submit').click()`)
+ for(let i=0;i<100;i++){if(await run(`!!document.querySelector('audio')&&document.querySelector('audio').readyState>=2`))break;await new Promise(r=>setTimeout(r,20))}
+ assert.equal(await run(`window.componentHost.jobs[0].request.params.outputFormat`),'wav')
+ assert.equal(await run(`document.querySelector('audio').duration`),1)
+ await run(`document.querySelector('audio').play()`);assert.equal(await run(`document.querySelector('audio').paused`),false)
+ await run(`document.querySelector('article button').click()`);assert.equal(await run(`document.getElementById('prompt').value`),'你好，语音测试')
+ await run(`document.querySelectorAll('article button')[1].click()`)
+ for(let i=0;i<100;i++){if(await run(`window.componentHost.jobs.length===2`))break;await new Promise(r=>setTimeout(r,20))}assert.equal(await run(`window.componentHost.jobs.length`),2)
+ await window.webContents.debugger.attach('1.3');for(const scheme of ['light','dark']){await window.webContents.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:scheme}]});assert.ok(await run(`document.documentElement.scrollWidth<=innerWidth`));await fs.writeFile(path.join(output,scheme+'.png'),(await window.webContents.capturePage()).toPNG())}
+ await fs.writeFile(path.join(output,'result.json'),JSON.stringify({passed:true,mock:true,checks:['manifest hashes','submit','voice/format','reuse','retry','WAV decode and playback','720px light/dark']}));window.destroy();app.quit()
+}).catch(error=>{console.error(error);app.exit(1)})

@@ -3,6 +3,8 @@ import { z } from 'zod'
 import { componentIdSchema, versionSchema } from '../../shared/mam/components'
 import { MAM_CREATIVE_CHANNEL } from '../../shared/mam/creative-api'
 import { desktopCreativeServices } from '../mam/components/desktop-creative-services'
+import { createMediaServices, type MediaCatalog } from '../mam/media'
+import { decodeImage } from '../mam/components/host-native-assets'
 import { assertTrustedRenderer } from './trusted-renderer-ipc'
 
 const requestSchema = z.discriminatedUnion('action', [
@@ -14,11 +16,17 @@ const requestSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('open'), id: componentIdSchema }).strict()
 ])
 
-export function registerCreativeIpc(window: BrowserWindow, mamRoot: string): () => void {
+export function registerCreativeIpc(
+  window: BrowserWindow,
+  mamRoot: string,
+  media: { catalog: MediaCatalog; resolveSecret: (reference: string) => string | undefined }
+): () => void {
   ipcMain.handle(MAM_CREATIVE_CHANNEL, async (event, input: unknown) => {
     assertTrustedRenderer(event, window)
     const request = requestSchema.parse(input)
-    const { registry, host } = await desktopCreativeServices(mamRoot)
+    const { registry, host } = await desktopCreativeServices(mamRoot, (assets) =>
+      createMediaServices({ ...media, assets, validateImage: decodeImage })
+    )
     if (request.action === 'install') {
       const selected = await dialog.showOpenDialog(window, {
         title: '导入创作组件 / Import creative component',

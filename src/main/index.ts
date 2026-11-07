@@ -6,6 +6,7 @@ import { MamUiQueryService } from './mam/application/mam-ui-query-service'
 import { MamUiCommandService } from './mam/application/mam-ui-command-service'
 import { registerMamIpc } from './ipc/mam-ipc'
 import { registerCreativeIpc } from './ipc/mam-creative-ipc'
+import { desktopMediaDependencies } from './mam/components/desktop-media-dependencies'
 import { installDesktopSmokeProbe } from './desktop-smoke-probe'
 import { configureSmokeUserData } from './desktop-smoke-user-data'
 import { MamLocalSettingsStore } from './mam/profiles/mam-local-settings-store'
@@ -17,7 +18,7 @@ import { AttemptResourceMaterializer } from './mam/profiles/attempt-resource-mat
 import { LocalArtifactStore } from './mam/artifacts/local-artifact-store'
 import { AttemptArtifactValidator } from './mam/application/attempt-artifact-validator'
 import { PiRpcAdapter } from './mam/executors/pi-rpc-adapter'
-import { MAM_UI_SNAPSHOT_CHANGED_CHANNEL } from '../shared/mam/application-api'
+import { createSnapshotChangeNotifier } from './window-snapshot-notifier'
 import { MamAttemptInspectionService } from './mam/application/mam-attempt-inspection-service'
 import { MamMergeQueueExecutionService } from './mam/application/mam-merge-queue-execution-service'
 import { EncryptedLocalSecretStore } from './mam/application/encrypted-local-secret-store'
@@ -245,7 +246,11 @@ function createMainWindow(): void {
     createDesktopResourceOperations(resourceServices, service, notifySnapshotChanged),
     runtimeLogger
   )
-  const unregisterCreativeIpc = registerCreativeIpc(window, mamRoot)
+  const unregisterCreativeIpc = registerCreativeIpc(
+    window,
+    mamRoot,
+    desktopMediaDependencies(profiles, localSettings, secretValues)
+  )
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('https://')) void shell.openExternal(url)
     return { action: 'deny' }
@@ -263,17 +268,6 @@ function createMainWindow(): void {
   const developmentUrl = process.env.ELECTRON_RENDERER_URL
   if (developmentUrl) void window.loadURL(developmentUrl)
   else void window.loadFile(join(__dirname, '../renderer/index.html'))
-}
-
-function createSnapshotChangeNotifier(window: BrowserWindow): () => void {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  return () => {
-    if (timer || window.isDestroyed()) return
-    timer = setTimeout(() => {
-      timer = undefined
-      if (!window.isDestroyed()) window.webContents.send(MAM_UI_SNAPSHOT_CHANGED_CHANNEL)
-    }, 120)
-  }
 }
 
 function configuredStateRepository(

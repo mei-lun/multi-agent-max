@@ -23,7 +23,11 @@ const mimeTypes: Readonly<Record<string, string>> = {
 export async function openComponentWindow(
   registry: ComponentRegistry,
   id: ComponentId,
-  host?: { preloadPath: string; bind(window: BrowserWindow, manifest: ComponentManifest): void }
+  host?: {
+    preloadPath: string
+    bind(window: BrowserWindow, manifest: ComponentManifest): void
+    asset?(request: Request): Promise<Response | undefined>
+  }
 ): Promise<void> {
   const lease = await registry.acquire(id)
   const isolated = session.fromPartition(`mam-component-${randomUUID()}`)
@@ -41,6 +45,8 @@ export async function openComponentWindow(
     })
     await isolated.protocol.handle('mam-component', async (request) => {
       try {
+        const asset = await host?.asset?.(request)
+        if (asset) return asset
         const url = new URL(request.url)
         const relative = decodeURIComponent(url.pathname).replace(/^\//, '')
         const expected = lease.manifest.files[relative]
