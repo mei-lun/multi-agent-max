@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-11-07T08:21:42.680Z",
+  "hostVersion": "0.1.42",
+  "status": "partial",
+  "localEvidencePassed": true,
+  "evidence": [
+    {
+      "requirement": "MAM-CREATIVE-001",
+      "criterion": "local-component-lifecycle",
+      "path": ".mam-local/creative-desktop-qa/latest.json",
+      "status": "passed",
+      "scope": "local fixture"
+    },
+    {
+      "requirement": "MAM-CREATIVE-003",
+      "criterion": "image-speech-host",
+      "path": ".mam-local/media-desktop-qa/latest.json",
+      "status": "passed",
+      "scope": "local HTTP fixture; no live provider call"
+    },
+    {
+      "requirement": "MAM-CREATIVE-003",
+      "criterion": "video-playback-recovery",
+      "path": ".mam-local/video-desktop-qa/latest.json",
+      "status": "passed",
+      "scope": "locally encoded real MP4 served by local HTTP fixture; no external generation"
+    },
+    {
+      "requirement": "MAM-CREATIVE-005",
+      "criterion": "original-writing-persistence",
+      "path": ".mam-local/writing-desktop-qa/latest.json",
+      "status": "passed",
+      "scope": "local HTTP fixture; no live model call"
+    },
+    {
+      "requirement": "MAM-CREATIVE-005",
+      "criterion": "original-spine-vision",
+      "path": ".mam-local/spine-desktop-qa/latest.json",
+      "status": "passed",
+      "scope": "local HTTP/process fixtures; no paid model or GPU inference"
+    },
+    {
+      "requirement": "MAM-CREATIVE-001",
+      "criterion": "native-workbench-status",
+      "path": ".mam-local/native-workbenches-qa/latest.json",
+      "status": "passed",
+      "scope": "real host component rendering and no-resource statuses; no GPU inference"
+    }
+  ],
+  "pending": [
+    "Paid provider online compatibility and output quality",
+    "Real music/model3d GPU inference and ComfyUI layer inference",
+    "macOS native acceptance",
+    "Publisher-signed online component catalog",
+    "Spine editor import/edit/save/reopen roundtrip"
+  ]
+}

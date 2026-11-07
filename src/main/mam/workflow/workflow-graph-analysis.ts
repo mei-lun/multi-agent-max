@@ -48,7 +48,12 @@ export function requiredArtifactRefs(node: WorkflowNode): ArtifactRef[] {
 }
 
 export function producedArtifactTypes(node: WorkflowNode): string[] {
-  if (node.type === 'role_task' || node.type === 'artifact_transform' || node.type === 'command') {
+  if (
+    node.type === 'role_task' ||
+    node.type === 'component_task' ||
+    node.type === 'artifact_transform' ||
+    node.type === 'command'
+  ) {
     return node.outputs.map((contract) => contract.artifactType)
   }
   if (node.type === 'review_gate') return [node.reportContract.artifactType]

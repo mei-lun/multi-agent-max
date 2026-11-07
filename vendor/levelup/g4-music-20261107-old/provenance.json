@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "commit": "208862f560d4a4180fb5d211ae5b30884bf67a78",
+  "selection": {
+    "rules": [
+      {
+        "prefix": "src/lib/musicWorkbench.ts",
+        "component": "creative.music",
+        "target": "patched"
+      }
+    ]
+  },
+  "files": [
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "2d571fb743d2e379022759e2d8358e08982b0116",
+      "path": "src/lib/musicWorkbench.ts",
+      "sha256": "116fbc9b5caec63216cdcd840c25a175603bf4f76776e5bd328d80d2efaaad9a"
+    }
+  ],
+  "dependencyGaps": [],
+  "dependencyAnalysis": "Relative JS/TS imports only; no semantic dependency resolution",
+  "dependencyEdges": []
+}

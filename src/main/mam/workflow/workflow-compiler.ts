@@ -72,6 +72,7 @@ export function compileWorkflow(
     return {
       id: nodeId,
       type: node.type,
+      ...(node.type === 'component_task' ? { component: node.component } : {}),
       ordinal,
       dependencies: [...(graphs.base.incoming.get(nodeId) ?? [])].sort(),
       successors: [...(graphs.base.outgoing.get(nodeId) ?? [])].sort(),

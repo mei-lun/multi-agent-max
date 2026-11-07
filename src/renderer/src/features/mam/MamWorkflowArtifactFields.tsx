@@ -18,6 +18,7 @@ import {
 } from './MamWorkflowFieldControls'
 
 const artifactFormats: ArtifactContract['format'][] = [
+  'asset-bundle',
   'json-schema',
   'markdown',
   'file-set',

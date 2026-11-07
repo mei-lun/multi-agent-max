@@ -15,6 +15,7 @@ import {
   type RuntimeDiagnostic
 } from '../../../shared/mam/creative-runtime'
 import { atomicJson, readSafe, safeDirectory } from './storage'
+import { CreativeReconciliationRequired } from '../../../shared/mam/creative-runtime-errors'
 
 export type OperationHandler = {
   validate(request: CreativeRequest): void
@@ -40,6 +41,7 @@ export class CreativeJobManager {
   private listeners = new Map<string, Set<(event: JobEvent) => void>>()
   private controllers = new Map<string, AbortController>()
   private queue: Promise<unknown> = Promise.resolve()
+  private executions = new Set<Promise<void>>()
   private disposed = false
   private diagnostics: RuntimeDiagnostic[] = []
   health(): RuntimeDiagnostic[] {
@@ -154,15 +156,21 @@ export class CreativeJobManager {
       }
       await this.transition(job, 'accepted')
       this.jobs.set(job.id, job)
-      setTimeout(() => {
-        void this.execute(job, handler).catch((error) => {
-          this.diagnostics.push({
-            jobId: job.id,
-            message: String(error),
-            at: new Date().toISOString()
-          })
-        })
-      }, 0)
+      const execution = new Promise<void>((resolve) =>
+        setTimeout(() => {
+          void this.execute(job, handler)
+            .catch((error) => {
+              this.diagnostics.push({
+                jobId: job.id,
+                message: String(error),
+                at: new Date().toISOString()
+              })
+            })
+            .finally(resolve)
+        }, 0)
+      )
+      this.executions.add(execution)
+      void execution.finally(() => this.executions.delete(execution))
       return job.id
     })
   }
@@ -198,7 +206,9 @@ export class CreativeJobManager {
         if (!this.disposed && !terminal.has(job.state))
           await this.transition(
             job,
-            job.state === 'cancel-requested' ? 'reconciliation-required' : 'failed',
+            job.state === 'cancel-requested' || error instanceof CreativeReconciliationRequired
+              ? 'reconciliation-required'
+              : 'failed',
             { error: String(error) }
           )
       })
@@ -275,5 +285,6 @@ export class CreativeJobManager {
       for (const controller of this.controllers.values()) controller.abort()
       this.listeners.clear()
     })
+    await Promise.allSettled(this.executions)
   }
 }

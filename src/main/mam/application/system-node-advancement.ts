@@ -6,6 +6,7 @@ import type { SchedulerCommand } from '../../../shared/mam/scheduler-protocol'
 import { GitCommandRetryCoordinator } from '../state-store/git-command-retry-coordinator'
 import type { GitStateRepository } from '../state-store/git-state-repository'
 import { readUpstreamArtifacts } from './workflow-node-artifact-context'
+import { verifyLocalBinaryArtifact } from './binary-artifact-verifier'
 import { buildSystemArtifacts } from './system-node-artifact-builder'
 import { projectWorkflowRun } from './workflow-run-projection'
 
@@ -71,6 +72,7 @@ function executeSystemNode(input: {
 }) {
   try {
     const sources = readUpstreamArtifacts({
+      verifyAssetBundle: verifyLocalBinaryArtifact,
       bundle: input.bundle,
       projection: input.projection,
       nodeId: input.node.id,

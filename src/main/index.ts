@@ -1,5 +1,8 @@
-import { app, BrowserWindow, dialog, protocol, safeStorage, shell } from 'electron'
-import { isAbsolute, join } from 'node:path'
+import { desktopComponentExecution } from './desktop-component-execution'
+import { app, BrowserWindow, dialog, safeStorage, shell } from 'electron'
+import { registerCreativeProtocol } from './register-creative-protocol'
+import { join } from 'node:path'
+import { configuredStateRepository, stateRepositoryOptions } from './desktop-state-repository'
 import { ProfileCatalog } from './mam/profiles/profile-catalog'
 import { GitStateRepository } from './mam/state-store/git-state-repository'
 import { MamUiQueryService } from './mam/application/mam-ui-query-service'
@@ -16,6 +19,7 @@ import { MamWorkflowRunCommandService } from './mam/application/mam-workflow-run
 import { MamAttemptExecutionService } from './mam/application/mam-attempt-execution-service'
 import { AttemptResourceMaterializer } from './mam/profiles/attempt-resource-materializer'
 import { LocalArtifactStore } from './mam/artifacts/local-artifact-store'
+import { configureBinaryArtifactVerifier } from './mam/application/binary-artifact-verifier'
 import { AttemptArtifactValidator } from './mam/application/attempt-artifact-validator'
 import { PiRpcAdapter } from './mam/executors/pi-rpc-adapter'
 import { createSnapshotChangeNotifier } from './window-snapshot-notifier'
@@ -47,9 +51,7 @@ import {
   exportExecutionActivityDialog
 } from './mam/diagnostics/desktop-diagnostic-dialogs'
 let unregisterMamIpc: (() => void) | undefined
-protocol.registerSchemesAsPrivileged([
-  { scheme: 'mam-component', privileges: { standard: true, secure: true, supportFetchAPI: true } }
-])
+registerCreativeProtocol()
 configureSmokeUserData()
 const mamRoot = join(app.getPath('userData'), 'mam')
 const localSettings = new MamLocalSettingsStore(
@@ -78,6 +80,7 @@ function createMainWindow(): void {
   const notifySnapshotChanged = createSnapshotChangeNotifier(window)
   runtimeLogger.record('main', 'window_create_start', { platform: process.platform })
   const profiles = new ProfileCatalog(join(mamRoot, 'catalog'))
+  configureBinaryArtifactVerifier(new LocalArtifactStore(join(mamRoot, 'artifacts')))
   ensureBuiltinPiProfile(profiles, localSettings, join(mamRoot, 'executors', 'pi'))
   const localSecrets = new EncryptedLocalSecretStore(join(mamRoot, 'secrets.enc.json'), {
     encrypt: (value) => {
@@ -170,6 +173,10 @@ function createMainWindow(): void {
     catalog: profiles,
     settings: localSettings,
     executor: new PiRpcAdapter(undefined, undefined, undefined, logDirectory),
+    ...desktopComponentExecution(
+      mamRoot,
+      desktopMediaDependencies(profiles, localSettings, secretValues)
+    ),
     enabledExecutorKinds: ['pi-rpc'],
     claimantInstanceId: `claimant.${localSettings.get().bindingIdentity}`,
     resources: new AttemptResourceMaterializer(
@@ -270,25 +277,8 @@ function createMainWindow(): void {
   else void window.loadFile(join(__dirname, '../renderer/index.html'))
 }
 
-function configuredStateRepository(
-  settings: MamLocalSettingsStore
-): GitStateRepository | undefined {
-  const projectDirectory = process.env.MAM_PROJECT_DIRECTORY
-  if (!projectDirectory) return undefined
-  if (!isAbsolute(projectDirectory)) {
-    throw new Error('MAM_PROJECT_DIRECTORY must be an absolute path')
-  }
-  return GitStateRepository.attach(projectDirectory, undefined, {
-    ...stateRepositoryOptions(settings),
-    gitClient: createGitCommandClient(settings.get().gitExecutable)
-  })
-}
-
-function stateRepositoryOptions(settings: MamLocalSettingsStore): { remote?: null } {
-  return settings.get().collaborationMode === 'local' ? { remote: null } : {}
-}
-
-void app.whenReady().then(() => {
+void app.whenReady().then(async () => {
+  await new LocalArtifactStore(join(mamRoot, 'artifacts')).prepareAllBinaryArtifacts()
   createMainWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createMainWindow()

@@ -1,0 +1,16 @@
+{
+  "upstreamCommit": "6542241e440dead6cee60440afd8e658dd0ce0ca",
+  "status": "manifest-validation-and-serialized-native-bridge-core",
+  "entries": [{
+    "source": "src-tauri/src/music_resources.rs",
+    "symbols": ["validate", "Manifest", "Component", "Part"],
+    "target": "src/main/mam/music-native/resource-manifest.ts",
+    "status": "ported-bounded-pinned-coordinate-validation"
+  }],
+  "remainingBoundary": {
+    "resourceInstaller": "Port fetch_manifest, multipart SHA256 verification, ZIP entry safety and bounded extraction, immutable stage publication, operation lock and cancellation from music_resources.rs before enabling resource install/importOffline.",
+    "runtime": "Copy provenance-verified modules/music_workbench unchanged to managed runtime; serialize bridge.py JSON-lines dispatch (protocol has no request ids), use managed engine Python only, adapt LEVELUP_MUSIC_DATA/MODELS/RUNTIME/ENGINE_ROOTS, implement process-tree shutdown before exposing generation.",
+    "history": "Port music_workbench.rs unavailable-runtime history fallback and safe artifact/export path authorization. No existing library is read or modified by this implementation.",
+    "trust": "Upstream manifest validator checks pinned release coordinates and hashes, not publisher signatures. Do not claim cryptographic publisher authentication."
+  }
+}

@@ -47,7 +47,7 @@ function mergeSourceTaskIds(
   const cancelled = projectWorkflowRoute(bundle, projection).cancelledNodeIds
   const staticIds = bundle.taskCatalog.flatMap((task) => {
     const node = bundle.definition.nodes.find((candidate) => candidate.id === task.nodeId)
-    return node?.type === 'role_task' &&
+    return (node?.type === 'role_task' || node?.type === 'component_task') &&
       node.workspaceMode === 'write' &&
       ancestors.has(node.id) &&
       !cancelled.has(node.id)

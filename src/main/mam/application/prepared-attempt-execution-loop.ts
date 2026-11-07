@@ -5,7 +5,10 @@ import { AttemptExecutorEventObserver } from './attempt-executor-event-observer'
 import { continuePreparedAttempt } from './pi-session-continuation'
 import { recoveredReviewExecution } from './review-output-recovery'
 import { executePreparedAttempt } from './prepared-attempt-executor'
-import { recordPreparedAttemptDraftState, recordPreparedAttemptRunning } from './prepared-attempt-draft'
+import {
+  recordPreparedAttemptDraftState,
+  recordPreparedAttemptRunning
+} from './prepared-attempt-draft'
 import { isRetryableConnectionFailure } from '../executors/pi-rpc-connection-failure'
 import {
   attemptRunnerErrorCode as errorCode,
@@ -36,6 +39,7 @@ export async function executePreparedAttemptWithTimeoutRecovery(
       return { prepared, execution, eventObserver, executorCompleted: true }
     } catch (error) {
       eventObserver.flush()
+      if (prepared.task.component) throw error
       const retryLimit = prepared.retryMaxAttempts ?? 1
       const continuationAttempts = prepared.continuationAttempts ?? 0
       if (!isRetryableConnectionFailure(errorCode(error)) || !input.drafts) throw error
@@ -54,7 +58,9 @@ export async function executePreparedAttemptWithTimeoutRecovery(
       })
       try {
         prepared = continuePreparedAttempt(
-          prepared, input.drafts, input.createId('executor-invocation')
+          prepared,
+          input.drafts,
+          input.createId('executor-invocation')
         )
       } catch {
         throw error

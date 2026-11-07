@@ -20,18 +20,32 @@ const mimeTypes: Readonly<Record<string, string>> = {
   '.wasm': 'application/wasm'
 }
 
+export function componentPartition(projectId: string, componentId: string): string {
+  return `persist:mam-component-${createHash('sha256')
+    .update(JSON.stringify([projectId, componentId]))
+    .digest('hex')}`
+}
+
 export async function openComponentWindow(
   registry: ComponentRegistry,
   id: ComponentId,
   host?: {
     preloadPath: string
+    partitionKey?: string
     bind(window: BrowserWindow, manifest: ComponentManifest): void
     asset?(request: Request): Promise<Response | undefined>
   }
 ): Promise<void> {
   const lease = await registry.acquire(id)
-  const isolated = session.fromPartition(`mam-component-${randomUUID()}`)
+  const isolated = session.fromPartition(host?.partitionKey ?? `mam-component-${randomUUID()}`)
   const allowedHost = 'package'
+  let released = false
+  const release = () => {
+    if (released) return
+    released = true
+    isolated.protocol.unhandle('mam-component')
+    lease.release()
+  }
   try {
     isolated.setPermissionRequestHandler((_contents, _permission, callback) => callback(false))
     isolated.setPermissionCheckHandler(() => false)
@@ -92,8 +106,7 @@ export async function openComponentWindow(
     window.webContents.on('will-navigate', (event) => event.preventDefault())
     window.webContents.on('will-attach-webview', (event) => event.preventDefault())
     window.once('closed', () => {
-      isolated.protocol.unhandle('mam-component')
-      lease.release()
+      release()
     })
     try {
       const entry = lease.manifest.uiEntrypoint.split('/').map(encodeURIComponent).join('/')
@@ -104,8 +117,7 @@ export async function openComponentWindow(
       throw error
     }
   } catch (error) {
-    isolated.protocol.unhandle('mam-component')
-    lease.release()
+    release()
     throw error
   }
 }

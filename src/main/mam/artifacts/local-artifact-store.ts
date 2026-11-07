@@ -1,3 +1,6 @@
+import type { ArtifactWriteRequest } from './artifact-write-request'
+export type { ArtifactWriteRequest } from './artifact-write-request'
+import { resolveVerifiedReference, authorizeNodeInputs } from './binary-input-authority'
 import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, readFile, readdir, rename, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
@@ -5,7 +8,6 @@ import {
   ArtifactContractSchema,
   ArtifactRefSchema,
   ArtifactVersionSchema,
-  type ArtifactContract,
   type ArtifactRef,
   type ArtifactVersion
 } from '../../../shared/mam/domain/artifact'
@@ -14,23 +16,53 @@ import {
   validateAndEncodeArtifactContent
 } from './artifact-content-validator'
 import { ArtifactStoreError } from './artifact-store-error'
+import { BinaryArtifactStorage } from './binary-asset-storage'
+import { prepareStoredBinaryArtifacts } from './binary-startup-preparation'
+import {
+  exportBinaryBundle,
+  importBinaryBundle,
+  writeBinaryBundle,
+  materializeBinaryBundle
+} from './binary-bundle-transfer'
 
 export { ArtifactStoreError } from './artifact-store-error'
 
-export type ArtifactWriteRequest = Readonly<{
-  artifactId: string
-  artifactType: string
-  workflowRunId: string
-  nodeRunId: string
-  taskId: string
-  attemptId: string
-  roleInstanceId: string
-  contract: ArtifactContract
-  inputs: readonly ArtifactRef[]
-  content: unknown
-}>
-
 export class LocalArtifactStore {
+  private inputAuthority = () => ({
+    metadataDirectory: this.metadataDirectory.bind(this),
+    readMetadata: this.readMetadata.bind(this),
+    readVerifiedBytes: this.readVerifiedBytes.bind(this),
+    registerNodeInputs: this.registerNodeInputs.bind(this)
+  })
+  resolveVerifiedReference = (input: Parameters<typeof resolveVerifiedReference>[1]) =>
+    resolveVerifiedReference(this.inputAuthority(), input)
+  authorizeNodeInputs = (run: string, node: string, refs: readonly ArtifactRef[]) =>
+    authorizeNodeInputs(this.inputAuthority(), run, node, refs)
+  prepareAllBinaryArtifacts() {
+    return prepareStoredBinaryArtifacts(resolve(this.rootDirectory))
+  }
+  private binaryStorage() {
+    return new BinaryArtifactStorage(join(resolve(this.rootDirectory), 'binary'))
+  }
+  verifyAssetBundleSync(manifest: unknown): void {
+    this.binaryStorage().verifySync(manifest)
+  }
+  prepareAssetBundleVerification = (manifest: unknown) =>
+    this.binaryStorage()
+      .verify(manifest)
+      .then(() => {})
+  exportBundleForNode(...args: [string, string, ArtifactRef, string]) {
+    return exportBinaryBundle(this, this.binaryStorage(), ...args)
+  }
+  importAssetBundle(request: Omit<ArtifactWriteRequest, 'content'> & { directory: string }) {
+    return importBinaryBundle(this, this.binaryStorage(), request)
+  }
+  writeAssetBundle(request: Parameters<typeof writeBinaryBundle>[2]): Promise<ArtifactVersion> {
+    return writeBinaryBundle(this, this.binaryStorage(), request)
+  }
+  materializeAssetBundleForNode(...args: [string, string, ArtifactRef, string]) {
+    return materializeBinaryBundle(this, this.binaryStorage(), ...args)
+  }
   private readonly nodeInputs = new Map<string, Set<string>>()
   private readonly versionLocks = new Map<string, Promise<unknown>>()
 
@@ -47,6 +79,8 @@ export class LocalArtifactStore {
       }
       const inputs = request.inputs.map((input) => ArtifactRefSchema.parse(input))
       const bytes = validateAndEncodeArtifactContent(contract, request.content)
+      if (contract.format === 'asset-bundle')
+        await this.binaryStorage().verify(JSON.parse(bytes.toString('utf8')))
       if (bytes.byteLength > contract.maxBytes) {
         throw new ArtifactStoreError(
           'artifact_too_large',
@@ -170,6 +204,8 @@ export class LocalArtifactStore {
     if (bytes.byteLength !== version.byteSize || sha256(bytes) !== version.contentHash) {
       throw new ArtifactStoreError('artifact_hash_mismatch', 'Artifact content was modified')
     }
+    if (version.format === 'asset-bundle')
+      await this.binaryStorage().verify(JSON.parse(bytes.toString('utf8')))
     return bytes
   }
 

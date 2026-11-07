@@ -9,6 +9,7 @@ import type { MamLocalSecretWriter, MamUiWritableProfiles } from './mam-profile-
 import { normalizeOpenAiProviderBaseUrl } from './openai-provider-url'
 import type { ModelProfile, ProviderProfile } from '../../../shared/mam/domain/execution-profile'
 import { classifyMediaModel } from '../media/native'
+import { videoModel } from '../media/video'
 
 export function saveModelConnectionProfiles(
   input: unknown,
@@ -39,15 +40,16 @@ export function saveModelConnectionProfiles(
       ? { defaultInference: { reasoningEffort: 'medium' } }
       : {}),
     capabilities: {
-      modalities: ['text'],
+      modalities: parsed.supportsImageInput ? ['text', 'image'] : ['text'],
       supportsTools: true,
       supportsStructuredOutput: true,
       maxContextTokens: 100_000
     }
   }
   const media = classifyMediaModel(model, provider)
-  if (media) {
-    model.capabilities.modalities = [media.kind === 'image' ? 'image' : 'audio']
+  const video = videoModel(model, provider)
+  if (media || video) {
+    model.capabilities.modalities = [video ? 'video' : media?.kind === 'image' ? 'image' : 'audio']
     model.capabilities.supportsTools = false
     model.capabilities.supportsStructuredOutput = false
     delete model.capabilities.maxContextTokens

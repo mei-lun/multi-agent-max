@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdir, open, readFile, rename, rm, lstat } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { assertAncestors } from './registry/persistence'
+import { recoverExitedServiceOwner } from './recover-service-root-lock'
 
 export async function acquireServiceRootLock(root: string) {
   const directory = resolve(root)
@@ -22,8 +23,9 @@ export async function acquireServiceRootLock(root: string) {
     if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
     if ((await lstat(lock)).isSymbolicLink()) throw new Error('Unsafe creative service lock')
     let previous: { pid: number; token: string }
+    const previousText = await readFile(lock, 'utf8')
     try {
-      previous = JSON.parse(await readFile(lock, 'utf8')) as typeof previous
+      previous = JSON.parse(previousText) as typeof previous
     } catch {
       throw new Error(
         'Incomplete creative service lock; close all instances and inspect .creative-owner before removing it'
@@ -38,10 +40,10 @@ export async function acquireServiceRootLock(root: string) {
     try {
       process.kill(previous.pid, 0)
     } catch (probe) {
-      if ((probe as NodeJS.ErrnoException).code === 'ESRCH')
-        throw new Error(
-          `Stale creative service lock for exited PID ${previous.pid}; close all instances and remove ${lock} to retry`
-        )
+      if ((probe as NodeJS.ErrnoException).code === 'ESRCH') {
+        await recoverExitedServiceOwner(lock, previousText, previous.pid)
+        return acquireServiceRootLock(root)
+      }
       throw new Error('Cannot establish creative service owner status; lock retained')
     }
     throw new Error(`Creative services already owned by process ${previous.pid}`)

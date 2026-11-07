@@ -34,7 +34,7 @@ export const ProviderProfileSchema = z
 
 export const ModelCapabilitiesSchema = z
   .object({
-    modalities: z.array(z.enum(['text', 'image', 'audio'])).min(1),
+    modalities: z.array(z.enum(['text', 'image', 'audio', 'video'])).min(1),
     supportsTools: z.boolean(),
     supportsStructuredOutput: z.boolean(),
     maxContextTokens: z.number().int().positive().optional()

@@ -1,2 +1,3 @@
 # Imported snapshots must retain the exact bytes recorded in provenance on every platform.
 vendor/levelup/** -text
+packages/**/upstream-input/** -text

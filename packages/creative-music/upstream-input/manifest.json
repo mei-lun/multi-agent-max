@@ -1,0 +1,14 @@
+[
+  {
+    "file": "ResourceRemovalControl.css",
+    "source": "src/components/ResourceRemovalControl.css",
+    "commit": "6542241",
+    "sha256": "d46e4c520a086396c31844a3bc5d62a8a86ac472185e3ae52f8812bc02a0f4c7"
+  },
+  {
+    "file": "ResourceRemovalControl.tsx",
+    "source": "src/components/ResourceRemovalControl.tsx",
+    "commit": "6542241",
+    "sha256": "1a267ed4686f8eae8cfe725e1c2e29510afe27d421bce85cc50aa7131acb1588"
+  }
+]

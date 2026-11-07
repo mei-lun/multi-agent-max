@@ -9,7 +9,12 @@ test('media connections retain media capabilities without being advertised as co
   const root = await mkdtemp(join(tmpdir(), 'mam-media-connection-'))
   try {
     const profiles = new ProfileCatalog(root)
-    for (const remoteModelId of ['gpt-image-2', 'tts-1', 'gpt-text-fixture']) {
+    for (const remoteModelId of [
+      'gpt-image-2',
+      'tts-1',
+      'gpt-text-fixture',
+      'grok-imagine-video'
+    ]) {
       saveModelConnectionProfiles(
         {
           displayName: remoteModelId,
@@ -29,11 +34,27 @@ test('media connections retain media capabilities without being advertised as co
     })
     expect(image.defaultInference).toBeUndefined()
     expect(
+      models.find((model) => model.remoteModelId === 'grok-imagine-video')?.capabilities
+    ).toEqual({ modalities: ['video'], supportsTools: false, supportsStructuredOutput: false })
+    expect(
       models.find((model) => model.remoteModelId === 'tts-1')?.capabilities.modalities
     ).toEqual(['audio'])
     expect(
       models.find((model) => model.remoteModelId === 'gpt-text-fixture')?.capabilities.supportsTools
     ).toBe(true)
+    saveModelConnectionProfiles(
+      {
+        displayName: 'Vision',
+        protocol: 'openai-completions',
+        remoteModelId: 'vision-fixture',
+        supportsImageInput: true
+      },
+      profiles
+    )
+    expect(
+      profiles.models.listActive().find((model) => model.remoteModelId === 'vision-fixture')
+        ?.capabilities.modalities
+    ).toEqual(['text', 'image'])
   } finally {
     await rm(root, { recursive: true, force: true })
   }

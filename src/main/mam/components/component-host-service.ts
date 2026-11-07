@@ -1,4 +1,6 @@
-import { ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
+import { ipcMain, type BrowserWindow } from 'electron'
+import { authorizeComponentSender } from './component-sender-authority'
+export { authorizeComponentSender } from './component-sender-authority'
 import {
   COMPONENT_HOST_CHANNEL,
   componentHostRequestSchema
@@ -6,25 +8,17 @@ import {
 import { componentIdSchema, type ComponentManifest } from '../../../shared/mam/components'
 import type { BinaryAssetStore, CreativeJobManager, HandlerRegistry } from '../creative-runtime'
 import type { ComponentRegistry } from './registry'
-import { openComponentWindow } from './component-window'
+import { openComponentWindow, componentPartition } from './component-window'
 import { AssetGrants } from './host-asset-grants'
 import { randomUUID } from 'node:crypto'
 import type { AssetRef } from '../../../shared/mam/creative-runtime'
 import { decodeImage, importNativeAsset, exportNativeAsset } from './host-native-assets'
+import { bindComponentCloseLifecycle } from './component-close-lifecycle'
+import { projectMedia } from './host-project-media'
+import type { RifeSettings } from './host-rife-settings'
+import { ConstellationToolSessions } from './host-constellation-tools'
 
 export type ComponentHostContext = { projectId: string; manifest: ComponentManifest }
-export function authorizeComponentSender(
-  event: Pick<IpcMainInvokeEvent, 'sender' | 'senderFrame'>,
-  window: BrowserWindow
-) {
-  if (
-    window.isDestroyed() ||
-    event.sender !== window.webContents ||
-    event.senderFrame !== window.webContents.mainFrame ||
-    !event.senderFrame?.url.startsWith('mam-component://package/')
-  )
-    throw new Error('Untrusted component sender')
-}
 export function createComponentHostService(options: {
   registry: ComponentRegistry
   jobs: CreativeJobManager
@@ -35,8 +29,13 @@ export function createComponentHostService(options: {
   authorizationDirectory: string
   protectedDirectories?: readonly string[]
   listModels?: () => unknown | Promise<unknown>
+  rifeSettings?: RifeSettings
 }) {
   const grants = new AssetGrants(options.authorizationDirectory)
+  const tools = new ConstellationToolSessions(
+    options.protectedDirectories?.[0] ?? options.authorizationDirectory,
+    options.assets
+  )
   const pins = new Map<string, { release(): void }>()
   const subscriptions = new Map<string, () => void>()
   const settled = new Set(['succeeded', 'failed', 'cancelled'])
@@ -72,6 +71,9 @@ export function createComponentHostService(options: {
   })()
   const windows = new Map<number, { window: BrowserWindow; context: ComponentHostContext }>()
   const previews = new Map<string, { sender: number; ref: AssetRef }>()
+  const opening = new Map<string, Promise<void>>()
+  const closers = new Map<number, ReturnType<typeof bindComponentCloseLifecycle>>()
+  let disposed = false
   ipcMain.handle(COMPONENT_HOST_CHANNEL, async (event, input: unknown) => {
     await ready
     const binding = windows.get(event.sender.id)
@@ -90,7 +92,30 @@ export function createComponentHostService(options: {
       return job
     }
     if (request.action === 'context') return structuredClone(binding.context)
+    if (request.action === 'toolCheck')
+      return tools.check(binding.window, manifest, projectId, request.call)
+    if (request.action === 'toolExecute')
+      return tools.execute(binding.window, manifest, projectId, request.token)
     if (request.action === 'listModels') return options.listModels?.() ?? []
+    if (request.action === 'configureRife') {
+      if (manifest.id !== 'creative.spine' || !options.rifeSettings)
+        throw new Error('RIFE configuration unavailable')
+      return options.rifeSettings.configure(binding.window)
+    }
+    if (request.action === 'listProjectMedia') {
+      const result = projectMedia(
+        options.jobs.list(),
+        projectId,
+        manifest,
+        request.kind,
+        request.limit
+      )
+      for (const item of result.assets) {
+        await options.assets.read(item.ref)
+        await grants.grant(projectId, manifest.id, item.ref)
+      }
+      return result
+    }
     if (request.action === 'storeImage') {
       const bytes = Buffer.from(request.bytes)
       const mime = decodeImage(bytes)
@@ -159,7 +184,9 @@ export function createComponentHostService(options: {
       return true
     }
     if (request.action === 'importAsset') {
-      const ref = await importNativeAsset(binding.window, options.assets)
+      if (request.kind === 'file' && manifest.id !== 'creative.constellation')
+        throw new Error('Generic file import unavailable')
+      const ref = await importNativeAsset(binding.window, options.assets, request.kind)
       if (!ref) return null
       await grants.grant(projectId, manifest.id, ref)
       return ref
@@ -203,10 +230,27 @@ export function createComponentHostService(options: {
     }
   })
   return {
+    closeAll: async () => {
+      await Promise.allSettled(opening.values())
+      for (const closer of closers.values()) if (!(await closer.requestClose())) return false
+      return true
+    },
     ready: () => ready,
     open: (id: ComponentManifest['id']) => {
+      if (disposed) return Promise.reject(new Error('Component host disposed'))
+      const pending = opening.get(id)
+      if (pending) return pending
+      const existing = [...windows.values()].find(
+        (binding) => binding.context.manifest.id === id && !binding.window.isDestroyed()
+      )
+      if (existing) {
+        existing.window.show()
+        existing.window.focus()
+        return Promise.resolve()
+      }
       let senderId: number | undefined
-      return openComponentWindow(options.registry, id, {
+      const result = openComponentWindow(options.registry, id, {
+        partitionKey: componentPartition(options.projectId, id),
         preloadPath: options.preloadPath,
         asset: async (request) => {
           const url = new URL(request.url)
@@ -224,20 +268,29 @@ export function createComponentHostService(options: {
           })
         },
         bind: (window, manifest) => {
+          if (disposed) {
+            window.destroy()
+            throw new Error('Component host disposed')
+          }
           senderId = window.webContents.id
           windows.set(window.webContents.id, {
             window,
             context: { manifest, projectId: options.projectId }
           })
           const key = window.webContents.id
+          closers.set(key, bindComponentCloseLifecycle(window))
           window.once('closed', () => {
             windows.delete(key)
+            closers.delete(key)
             for (const [token, entry] of previews) if (entry.sender === key) previews.delete(token)
           })
         }
-      })
+      }).finally(() => opening.delete(id))
+      opening.set(id, result)
+      return result
     },
     dispose: () => {
+      disposed = true
       ipcMain.removeHandler(COMPONENT_HOST_CHANNEL)
       for (const { window } of windows.values()) if (!window.isDestroyed()) window.destroy()
       windows.clear()

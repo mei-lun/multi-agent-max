@@ -50,6 +50,7 @@ export type ResolvedAttemptConfig = Readonly<{
 }>
 
 export type AttemptConfigResolutionInput = Readonly<{
+  componentExecution?: boolean
   workflowRunId: string
   taskId: string
   attemptId: string
@@ -145,7 +146,7 @@ export class AttemptConfigResolver {
       },
       availableSecretRefs: new Set(localSecrets.map((binding) => binding.secretRef))
     })
-    if (!compatibility.ok) {
+    if (!compatibility.ok && !input.componentExecution) {
       throw new AttemptConfigResolutionError(
         compatibility.issues[0]!.code,
         compatibility.issues.map((issue) => issue.message).join('; '),

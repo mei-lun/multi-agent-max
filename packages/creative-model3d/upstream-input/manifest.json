@@ -1,0 +1,26 @@
+[
+  {
+    "file": "model-viewer-LICENSE",
+    "source": "public/model-viewer-LICENSE",
+    "commit": "6542241",
+    "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+  },
+  {
+    "file": "model-viewer.min.js",
+    "source": "public/model-viewer.min.js",
+    "commit": "6542241",
+    "sha256": "774edda21e1be2a0934e460ca5943af1fe3f88da130a9f98bd6a9d611576cacf"
+  },
+  {
+    "file": "ResourceRemovalControl.css",
+    "source": "src/components/ResourceRemovalControl.css",
+    "commit": "6542241",
+    "sha256": "d46e4c520a086396c31844a3bc5d62a8a86ac472185e3ae52f8812bc02a0f4c7"
+  },
+  {
+    "file": "ResourceRemovalControl.tsx",
+    "source": "src/components/ResourceRemovalControl.tsx",
+    "commit": "6542241",
+    "sha256": "1a267ed4686f8eae8cfe725e1c2e29510afe27d421bce85cc50aa7131acb1588"
+  }
+]

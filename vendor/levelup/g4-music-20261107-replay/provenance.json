@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "commit": "88c84da987e1bd916d08eb9301f3eb4657259f55",
+  "selection": {
+    "rules": [
+      {
+        "prefix": "src/lib/musicWorkbench.ts",
+        "component": "creative.music",
+        "target": "patched"
+      }
+    ]
+  },
+  "files": [
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "7f2afee8c12e341817e9cd487383ddc5b778c42b",
+      "path": "src/lib/musicWorkbench.ts",
+      "sha256": "e6217effcff197fbf34a7e4699f24f580d628bb8664de03828eb416a9bbb8ad1"
+    }
+  ],
+  "dependencyGaps": [],
+  "dependencyAnalysis": "Relative JS/TS imports only; no semantic dependency resolution",
+  "dependencyEdges": [],
+  "adaptedFrom": "g4-music-20261107-new",
+  "patches": [
+    {
+      "path": "src/lib/musicWorkbench.ts",
+      "expectedSha256": "1bfe933f04af131df25dba60b7a68b9341dd8e64553c5f23f5bbe6aaa0d88d04",
+      "before": "aW1wb3J0IHsgY29udmVydEZpbGVTcmMsIGludm9rZSB9IGZyb20gIkB0YXVyaS1hcHBzL2FwaS9jb3JlIjsKCmV4cG9ydCB0eXBlIE11c2ljRW5naW5lID0gIm11c2ljZ2VuIiB8ICJhY2VzdGVwIiB8ICJ5dWUyIjsKZXhwb3J0IGNvbnN0IG11c2lj",
+      "after": "Y29uc3QgY29udmVydEZpbGVTcmMgPSAodmFsdWU6IHN0cmluZykgPT4gdmFsdWU7IGNvbnN0IGludm9rZSA9IGFzeW5jICguLi5fYXJnczogdW5rbm93bltdKSA9PiB7IHRocm93IG5ldyBFcnJvcigiTUFNIGJyaWRnZSByZXF1aXJlZCIpOyB9OwoKZXhwb3J0IHR5cGUgTXVzaWNFbmdpbmUgPSAibXVzaWNnZW4iIHwgImFjZXN0ZXAiIHwgInl1ZTIiOwpleHBvcnQgY29uc3QgbXVzaWM=",
+      "sourceSha256": "116fbc9b5caec63216cdcd840c25a175603bf4f76776e5bd328d80d2efaaad9a",
+      "transformedSha256": "e6217effcff197fbf34a7e4699f24f580d628bb8664de03828eb416a9bbb8ad1"
+    }
+  ]
+}

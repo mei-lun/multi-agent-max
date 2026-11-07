@@ -147,6 +147,7 @@ function createTaskDefinition(
     nodeRunId: nodeRunIds.get(node.id)!,
     nodeId: node.id,
     nodeType: node.type,
+    ...(node.type === 'component_task' ? { component: node.component } : {}),
     iteration: 1,
     initialStatus:
       planNode.dependencies.length === 0 ? 'waiting_role_assignment' : 'waiting_dependencies',
@@ -186,7 +187,7 @@ function upstreamTaskIds(
 function taskOutputs(
   node: Extract<WorkflowNode, { recommendedRoleProfileIds: string[] }>
 ): ArtifactContract[] {
-  if (node.type === 'role_task') return [...node.outputs]
+  if (node.type === 'role_task' || node.type === 'component_task') return [...node.outputs]
   if (node.type === 'dynamic_tasks') return [node.planContract]
   if (node.type === 'review_gate') return [node.reportContract]
   return []
@@ -202,7 +203,7 @@ function taskTitle(node: Extract<WorkflowNode, { recommendedRoleProfileIds: stri
 function taskSpecification(
   node: Extract<WorkflowNode, { recommendedRoleProfileIds: string[] }>
 ): string {
-  if (node.type === 'role_task') return node.instruction
+  if (node.type === 'role_task' || node.type === 'component_task') return node.instruction
   if (node.type === 'git_merge') return `Merge approved task commits into ${node.targetBranch}.`
   if (node.type === 'review_gate') return `Review immutable inputs for ${node.id}.`
   return `Produce the dynamic task plan for ${node.id}.`

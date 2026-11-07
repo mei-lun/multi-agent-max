@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto'
 import type { BinaryAssetStore } from '../creative-runtime'
 import type { AssetRef } from '../../../shared/mam/creative-runtime'
 import { inspectImage } from './host-image-inspection'
+import { inspectVideo } from './host-video-inspection'
 
 export function decodeImage(bytes: Buffer): string {
   const mime = inspectImage(bytes)
@@ -16,14 +17,27 @@ export function decodeImage(bytes: Buffer): string {
   return mime
 }
 
-export async function importNativeAsset(window: BrowserWindow, assets: BinaryAssetStore) {
+export async function importNativeAsset(
+  window: BrowserWindow,
+  assets: BinaryAssetStore,
+  kind: 'media' | 'file' = 'media'
+) {
   const selected = await dialog.showOpenDialog(window, { properties: ['openFile'] })
   const file = selected.filePaths[0]
   if (selected.canceled || !file) return null
   const bytes = await readImportSnapshot(file)
+  if (kind === 'file')
+    return assets.import(
+      (async function* () {
+        yield bytes
+      })(),
+      { filename: basename(file), mime: 'application/octet-stream' }
+    )
   const header = bytes.subarray(0, 65536)
   let mime: string
-  if (header.toString('ascii', 0, 4) === 'RIFF' && header.toString('ascii', 8, 12) === 'WAVE')
+  const video = inspectVideo(header)
+  if (video) mime = video
+  else if (header.toString('ascii', 0, 4) === 'RIFF' && header.toString('ascii', 8, 12) === 'WAVE')
     mime = 'audio/wav'
   else if (header.toString('ascii', 0, 4) === 'OggS') mime = 'audio/ogg'
   else if (header.toString('ascii', 0, 4) === 'fLaC') mime = 'audio/flac'

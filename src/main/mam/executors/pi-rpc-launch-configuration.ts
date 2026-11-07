@@ -101,7 +101,10 @@ export function piArguments(
   const tools = [
     ...workspaceTools(snapshot),
     ...snapshot.tools
-      .filter((tool) => !tool.startsWith('mcp.') && !resourceTools.has(tool))
+      .filter(
+        (tool) =>
+          !tool.startsWith('mcp.') && !tool.startsWith('component:') && !resourceTools.has(tool)
+      )
       .map((tool) => (tool === 'shell' ? 'bash' : tool)),
     ...bridgeTools
   ]
@@ -127,6 +130,14 @@ export function piBridgeTools(snapshot: EffectiveRoleConfigSnapshot): string[] {
   return [
     'mam_ask_user',
     'mam_confirm_understanding',
+    ...(snapshot.tools.some((tool) => tool.startsWith('component:'))
+      ? [
+          'mam_component_list',
+          'mam_component_invoke',
+          'mam_component_status',
+          'mam_component_cancel'
+        ]
+      : []),
     ...(snapshot.mcpBindings.length ? ['mam_mcp'] : []),
     ...(snapshot.knowledgeBaseBindings.length ? ['mam_knowledge_search', 'mam_knowledge_read'] : [])
   ]

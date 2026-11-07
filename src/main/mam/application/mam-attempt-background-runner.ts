@@ -1,14 +1,8 @@
+import type { PreparedAttemptRunnerInput } from './prepared-attempt-runner-input'
+export type { PreparedAttemptRunnerInput } from './prepared-attempt-runner-input'
 import { existsSync } from 'node:fs'
 import { isRetryableConnectionFailure } from '../executors/pi-rpc-connection-failure'
 import { diagnosticError } from '../diagnostics/diagnostic-error'
-import type { DiagnosticsRecorder } from '../diagnostics/diagnostics-recorder'
-import type { GitStateRepository } from '../state-store/git-state-repository'
-import type { AttemptArtifactValidator } from './attempt-artifact-validator'
-import type { AttemptWorktreeManager } from './attempt-worktree-manager'
-import type { ConflictResolutionWorktreeManager } from './conflict-resolution-worktree-manager'
-import type { GitCommandClient } from '../state-store/git-command-client'
-import type { ExecutorRouter, PreparedAttempt } from './mam-attempt-execution-types'
-import type { LocalExecutionDraftStore } from './local-execution-draft-store'
 import { recordPreparedAttemptDraftState } from './prepared-attempt-draft'
 import { advanceReadyReviewPanel } from './review-panel-advancement'
 import { finalizeMergeConflictAttempt } from './merge-conflict-attempt-finalizer'
@@ -35,23 +29,6 @@ import {
   recordAttemptRunnerCost as recordCost,
   recordAttemptRunnerEvent as record
 } from './attempt-runner-diagnostics'
-
-export type PreparedAttemptRunnerInput = Readonly<{
-  prepared: PreparedAttempt
-  executor: ExecutorRouter
-  artifacts: AttemptArtifactValidator
-  worktrees: AttemptWorktreeManager
-  conflicts: ConflictResolutionWorktreeManager
-  git: GitCommandClient
-  repository: GitStateRepository
-  diagnostics: DiagnosticsRecorder
-  schedulerId: string
-  now(): string
-  createId(kind: string): string
-  onActivityChanged?(): void
-  drafts?: LocalExecutionDraftStore
-}>
-
 export async function runPreparedAttempt(input: PreparedAttemptRunnerInput): Promise<void> {
   let prepared = normalizePreparedReviewContracts(input.prepared)
   let runnerInput = { ...input, prepared }

@@ -13,6 +13,7 @@ export function readUpstreamArtifacts(input: {
   readGitBlob(commit: string, projectRelativePath: string): string
   readStateArtifact?(storageRef: string): Buffer
   artifactTypes?: ReadonlySet<string>
+  verifyAssetBundle?(manifest: unknown): void
 }): Readonly<Record<string, unknown>> {
   const workflowNode = input.bundle.definition.nodes.find((node) => node.id === input.nodeId)
   if (!workflowNode) throw new Error('workflow_node_not_found')
@@ -31,7 +32,13 @@ export function readUpstreamArtifacts(input: {
       if (Object.hasOwn(artifacts, artifact.artifactType)) {
         throw new Error(`workflow_artifact_ambiguous:${artifact.artifactType}`)
       }
-      artifacts[artifact.artifactType] = decodeArtifactContent(artifact.format, bytes)
+      const content = decodeArtifactContent(artifact.format, bytes)
+      if (artifact.format === 'asset-bundle') {
+        if (!input.verifyAssetBundle)
+          throw new Error('binary_artifact_availability_verifier_missing')
+        input.verifyAssetBundle(content)
+      }
+      artifacts[artifact.artifactType] = content
     }
     const taskDefinitions = input.bundle.taskCatalog.filter(
       (task) => task.nodeId === dependencyNodeId
@@ -57,6 +64,11 @@ export function readUpstreamArtifacts(input: {
           contract,
           expectedHash: claim.sha256
         })
+        if (contract.format === 'asset-bundle') {
+          if (!input.verifyAssetBundle)
+            throw new Error('binary_artifact_availability_verifier_missing')
+          input.verifyAssetBundle(value)
+        }
         if (Object.hasOwn(artifacts, claim.type)) {
           throw new Error(`workflow_artifact_ambiguous:${claim.type}`)
         }
@@ -87,6 +99,7 @@ function readGitArtifact(input: {
   if (
     input.contract.format === 'json-schema' ||
     input.contract.format === 'file-set' ||
+    input.contract.format === 'asset-bundle' ||
     input.contract.format === 'test-report'
   ) {
     return JSON.parse(text)

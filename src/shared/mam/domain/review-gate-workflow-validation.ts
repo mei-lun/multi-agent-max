@@ -47,7 +47,7 @@ function upstreamRoleTaskIds(
     const id = pending.pop()!
     if (visited.has(id)) continue
     visited.add(id)
-    if (byId.get(id)?.type === 'role_task') {
+    if (byId.get(id)?.type === 'role_task' || byId.get(id)?.type === 'component_task') {
       found.add(id)
       continue
     }

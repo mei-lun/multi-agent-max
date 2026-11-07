@@ -6,6 +6,7 @@ import {
 } from '../gateways/attempt-gateway-authority'
 import type { AttemptResourceApplicationApi } from './attempt-resource-application-service'
 import type { AttemptHumanAttentionApplicationApi } from './attempt-human-attention-application-service'
+import { ComponentToolInvokeSchema } from './component-tool-port'
 
 const ExecutorMcpRequestSchema = z.discriminatedUnion('operation', [
   z
@@ -39,6 +40,22 @@ const KnowledgeBaseRequestSchema = z.object({
 })
 
 export const ExecutorCapabilityBridgeRequestSchema = z.discriminatedUnion('method', [
+  z
+    .object({ method: z.literal('component.listCapabilities'), request: z.object({}).strict() })
+    .strict(),
+  z.object({ method: z.literal('component.invoke'), request: ComponentToolInvokeSchema }).strict(),
+  z
+    .object({
+      method: z.literal('component.status'),
+      request: z.object({ jobId: z.uuid() }).strict()
+    })
+    .strict(),
+  z
+    .object({
+      method: z.literal('component.cancel'),
+      request: z.object({ jobId: z.uuid() }).strict()
+    })
+    .strict(),
   z.object({ method: z.literal('mcp.execute'), request: ExecutorMcpRequestSchema }).strict(),
   z
     .object({
@@ -69,7 +86,9 @@ export class ExecutorCapabilityBridge {
 
   constructor(
     private readonly applicationApi: AttemptResourceApplicationApi &
-      Partial<AttemptHumanAttentionApplicationApi>,
+      Partial<AttemptHumanAttentionApplicationApi> & {
+        componentExecute?(input: unknown): Promise<unknown>
+      },
     context: GatewayRequestContext
   ) {
     this.context = GatewayRequestContextSchema.parse(context)
@@ -78,6 +97,15 @@ export class ExecutorCapabilityBridge {
   async execute(input: unknown): Promise<unknown> {
     const request = ExecutorCapabilityBridgeRequestSchema.parse(input)
     const authorityFields = { schemaVersion: '1.0.0' as const, context: this.context }
+    if (
+      request.method === 'component.listCapabilities' ||
+      request.method === 'component.invoke' ||
+      request.method === 'component.status' ||
+      request.method === 'component.cancel'
+    ) {
+      if (!this.applicationApi.componentExecute) throw new Error('component_tools_unavailable')
+      return this.applicationApi.componentExecute({ ...request, context: this.context })
+    }
     if (request.method === 'mcp.execute') {
       return this.applicationApi.executeMcp({ ...authorityFields, ...request.request })
     }

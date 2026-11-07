@@ -1,9 +1,5 @@
-# 图片预处理 — partial image port
+# 图像工作台
 
-Build with `node config/scripts/build-creative-image.mjs`, verify with `node packages/creative-image/verify.mjs`. Install the generated `.mam-local/component-packages/creative-image` directory through trusted local component import. Manifest targets host >=0.1.40 / host API 1.0.0, creative.image 0.1.0 and only browser-local image.removeSolidBackground.
+creative.image0.2.0，最低宿主0.1.41；本地候选与MAM0.1.42集成。支持模型生成、参考图编辑、透明蒙版重绘/扩图、批次、历史、重试/复用/取消/删除、原图预览导出，以及原始spineMatting本地纯色抠图。模型格式及蒙版能力来自宿主。
 
-The builder reads the immutable vendor snapshot's original src/lib/spineMatting.ts, verifies its SHA-256 appears in vendor provenance and transpiles it without a rewritten algorithm. Output records exact upstream commit/source hash and hashes every HTML/CSS/JS/provenance file. Installed output has no upstream path dependency or remote assets.
-
-UI supports local PNG/JPEG selection, bounded file/pixel dimensions, original and processed checkerboard previews, tolerance, apply, restore and PNG export. Light/dark semantic CSS follows system preference and paired panels fit a 720px window. This is local image preprocessing, not AI generation, persistent backend execution, M1 completion or a full MediaStudio port.
-
-Verified build, output hashes and actual upstream algorithm enclosed-green preservation, original-buffer preservation, alpha removal, empty-dimension rejection and blank transparent input. Native Electron QA (`node config/scripts/verify-creative-image.mjs`) additionally drives real file-input decoding, apply/restore controls, canvas original-buffer equality, browser PNG download intercepted into isolated output and native PNG decode/alpha checks. Captured and inspected system light/dark screenshots at 720px outer window width, with no horizontal overflow. Evidence lives under `.mam-local/creative-image-qa/` (light.png, dark.png, processed.png, result.json and metrics). The tiny 15px fixture renders at native size in both previews; screenshots demonstrate the compact control layout and checkerboard, not photographic quality. No cloud call or API credits used. Host component session must permit local file selection/download for these browser actions; do not add broad IPC or network permissions.
+验证：原始抠图算法与真实PNG导入/处理/导出、720px明暗布局、延迟批次/蒙版竞态和模拟宿主按钮测试通过。真实宿主本地HTTP提供商链路另有集成证据，不代表付费提供商质量。构建build-creative-image.mjs，验证verify-creative-image.mjs（均位于config/scripts）。原始算法与手动UI适配映射、哈希见产物provenance.json。

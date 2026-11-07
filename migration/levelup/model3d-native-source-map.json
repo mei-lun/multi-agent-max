@@ -1,0 +1,14 @@
+{
+  "upstreamReadOnly": true,
+  "commit": "6542241e440dead6cee60440afd8e658dd0ce0ca",
+  "sources": [
+    "src-tauri/src/model_workbench.rs",
+    "src-tauri/src/model_resources.rs",
+    "modules/model_workbench/launcher.py",
+    "modules/model_workbench/resources-windows.json"
+  ],
+  "target": "src/main/mam/model3d-native",
+  "adaptation": "Owned asset inputs replace renderer filesystem paths. Project data is scoped by host project/component. Exact installed package launcher and workers retain stage execution/validation and Windows parent job object; host supplies explicit bundled Python, resources, parent PID, heartbeat and cancellation marker. Native ZIP64 resource bootstrap uses pinned Windows2026.10.15/cu118 manifest plus verified generic downloader/extractor.",
+  "verification": "Five tests cover real controlled subprocess stdin/CLI/env success/failure/cancel, scoped owned project imports/references/artifacts and tiny verified offline ZIP component registration/corruption. TypeScript/scoped lint passed.",
+  "limits": "No CUDA generation, real resource download or original heavyweight worker execution verified. Native resource bootstrap currently Windows x64; Linux tar/bootstrap support remains unimplemented and is not claimed. Hash integrity does not imply signature authentication."
+}

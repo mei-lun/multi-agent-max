@@ -5,6 +5,9 @@ import { AttemptResultSchema, type AttemptResult } from '../../../shared/mam/dom
 import type { ArtifactContract, ArtifactVersion } from '../../../shared/mam/domain/artifact'
 import type { ArtifactRef } from '../../../shared/mam/domain/artifact'
 import type { LocalArtifactStore } from '../artifacts/local-artifact-store'
+import type { WorkflowRunBundle } from '../../../shared/mam/domain/run-bundle'
+import type { WorkflowRunProjection } from '../state-store/git-state-projection'
+import type { ExecutableAttemptTask } from './mam-attempt-execution-types'
 
 export type AttemptArtifactContent = Readonly<{ bytes: Buffer; value: unknown }>
 
@@ -20,6 +23,45 @@ export type ValidatedAttemptArtifacts = Readonly<{
 
 export class AttemptArtifactValidator {
   constructor(private readonly store: LocalArtifactStore) {}
+  async authorizeComponentInputs(
+    bundle: WorkflowRunBundle,
+    projection: WorkflowRunProjection,
+    task: ExecutableAttemptTask
+  ): Promise<readonly ArtifactRef[]> {
+    const references: ArtifactRef[] = []
+    for (const context of task.inputArtifactContext ?? []) {
+      if (context.source === 'workflow') {
+        const attempt = context.producerAttemptId
+          ? projection.attempts[context.producerAttemptId]
+          : undefined
+        if (!attempt || attempt.status !== 'submitted' || !attempt.result)
+          throw new Error('component_input_delivery_missing')
+        const index = attempt.result.artifacts.findIndex(
+          (claim) => claim.type === context.artifactType && claim.sha256 === context.expectedHash
+        )
+        const claim = attempt.result.artifacts[index]
+        if (!claim || !context.producerAttemptId) throw new Error('component_input_claim_mismatch')
+        references.push(
+          await this.store.resolveVerifiedReference({
+            artifactId: artifactId(context.producerAttemptId, claim.contractId, index),
+            contentHash: claim.sha256,
+            workflowRunId: bundle.run.id
+          })
+        )
+      } else {
+        const reference = bundle.plan.inputArtifacts.find(
+          (ref) =>
+            ref.artifactId === context.artifactType && ref.contentHash === context.expectedHash
+        )
+        if (!reference) throw new Error('component_external_input_not_declared')
+        references.push(reference)
+      }
+    }
+    if (references.length !== task.inputArtifacts.length)
+      throw new Error('component_input_context_incomplete')
+    await this.store.authorizeNodeInputs(bundle.run.id, task.nodeId, references)
+    return references
+  }
 
   async validate(input: {
     result: AttemptResult
@@ -103,6 +145,7 @@ async function readClaimedContent(
   const value =
     contract.format === 'json-schema' ||
     contract.format === 'file-set' ||
+    contract.format === 'asset-bundle' ||
     contract.format === 'test-report'
       ? JSON.parse(text)
       : text

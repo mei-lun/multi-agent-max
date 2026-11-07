@@ -3,6 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
+import type * as ComponentWindowModule from './component-window'
 type Host = {
   bind: (window: BrowserWindow, manifest: unknown) => void
   asset: (request: Request) => Promise<Response>
@@ -17,6 +18,8 @@ vi.mock('electron', () => ({
     createFromBuffer: () => ({ isEmpty: () => false, getSize: () => ({ width: 1, height: 1 }) })
   },
   ipcMain: {
+    on() {},
+    removeListener() {},
     handle: (_: string, fn: typeof fake.invoke) => {
       fake.invoke = fn
     },
@@ -24,13 +27,18 @@ vi.mock('electron', () => ({
   },
   dialog: { showSaveDialog: async () => ({ canceled: true }) }
 }))
-vi.mock('./component-window', () => ({
+vi.mock('./component-window', async (importOriginal) => ({
+  ...(await importOriginal<typeof ComponentWindowModule>()),
   openComponentWindow: async (_: unknown, id: string, host: Host) => {
     const mainFrame = { url: 'mam-component://package/index.html' }
     const window = {
-      webContents: { id: fake.hosts.length + 1, mainFrame },
+      webContents: { id: fake.hosts.length + 1, mainFrame, send() {} },
       isDestroyed: () => false,
       once() {},
+      on() {},
+      removeListener() {},
+      show: vi.fn(),
+      focus: vi.fn(),
       destroy() {}
     }
     host.bind(window as unknown as BrowserWindow, {
@@ -67,7 +75,9 @@ test('real assets and jobs remain scoped behind the fake Electron bridge', async
     listModels: () => [{ id: 'safe' }]
   })
   try {
-    await service.open('creative.image')
+    await Promise.all([service.open('creative.image'), service.open('creative.image')])
+    await Promise.all([service.open('creative.image'), service.open('creative.image')])
+    expect(fake.hosts).toHaveLength(1)
     await service.open('creative.video')
     const a = fake.hosts[0]!,
       b = fake.hosts[1]!

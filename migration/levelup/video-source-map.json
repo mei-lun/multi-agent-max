@@ -1,0 +1,9 @@
+{
+  "commit": "6542241e440dead6cee60440afd8e658dd0ce0ca",
+  "upstreamReadOnly": true,
+  "sources": ["src/components/MediaStudio.tsx", "src-tauri/src/media/native_media.rs", "src-tauri/src/media.rs:5243 seedance_uploads_local_frames_once_before_parallel_generation"],
+  "targets": ["src/main/mam/media/video.ts", "src/main/mam/media/video-protocol.ts", "src/main/mam/components/host-video-receipts.ts", "packages/creative-video"],
+  "behavior": "Case-insensitive native family selection; Grok text/image/reference/video, MiniMax direct and compatible relay text/image/first_last/reference, Seedance local upload then text/image/first_last/reference, Sora text and Veo long-running operation. Credentials stay on the configured provider origin; external result downloads use public-DNS-pinned unauthenticated transport. Durable owned receipt precedes polling; refresh only queries and never submits a new generation. Ambiguous post-send failures require reconciliation.",
+  "verification": "18 tests cover local HTTP routes for Grok/Sora/MiniMax direct+relay/Seedance/Veo, ordered frame uploads, receipt-before-query, GET-only refresh, reference modes, bad IDs/abort, Veo scoped operation recovery and actual JobManager uncertainty. MP4 brand/box/mdat/moov validation rejects placeholders.",
+  "limits": "Synthetic MP4 fixtures establish container structure, not successful decoder playback. No live provider credential/quality verification or large remote downloads. No first_last support claimed for Grok/Sora/Veo where backend does not implement it."
+}

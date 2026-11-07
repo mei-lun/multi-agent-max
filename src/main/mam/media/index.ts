@@ -5,6 +5,10 @@ import type { HandlerRegistry } from '../creative-runtime/jobs'
 import type { BinaryAssetStore } from '../creative-runtime/assets'
 import { execute } from './transport'
 import { classifyMediaModel } from './native'
+import { createVideoHandler, videoModel, type VideoReceipt } from './video'
+import { videoParamsSchema, videoRefreshSchema } from '../../../shared/mam/video-requests'
+import type { CreativeRequest } from '../../../shared/mam/creative-runtime'
+export type { VideoReceipt } from './video'
 export { classifyMediaModel } from './native'
 
 export type MediaCatalog = {
@@ -17,13 +21,63 @@ export function createMediaServices(options: {
   assets: BinaryAssetStore
   fetch?: typeof fetch
   validateImage?: (bytes: Buffer) => string
+  resolveVideoReceipt?: (sourceJobId: string, request: CreativeRequest) => VideoReceipt | undefined
 }) {
   const classify = (model: ModelProfile): MediaModel | undefined => {
     const provider = options.catalog.providers.getActive(model.providerProfileId)
+    if (provider && videoModel(model, provider))
+      return {
+        id: model.id,
+        label: model.displayName,
+        modelId: model.remoteModelId,
+        kind: 'video',
+        supportsVideoModes: /^grok-/i.test(model.remoteModelId)
+          ? ['text', 'image', 'reference', 'video']
+          : /^(minimax-h3|seedance-)/i.test(model.remoteModelId)
+            ? ['text', 'image', 'first_last', 'reference']
+            : ['text'],
+        operations: [
+          'video.generate',
+          ...(/^grok-/i.test(model.remoteModelId) ? ['video.edit'] : [])
+        ]
+      }
     return provider ? classifyMediaModel(model, provider) : undefined
   }
   const listModels = () => options.catalog.models.listActive().flatMap((m) => classify(m) ?? [])
   const handlers: HandlerRegistry = (request) => {
+    if (['video.generate', 'video.edit', 'video.refresh'].includes(request.operation)) {
+      const receipt =
+        request.operation === 'video.refresh'
+          ? options.resolveVideoReceipt?.(
+              videoRefreshSchema.parse(request.params).sourceJobId,
+              request
+            )
+          : undefined
+      if (request.operation === 'video.refresh' && !receipt)
+        throw new Error('Trusted video receipt required')
+      const model = structuredClone(
+        receipt?.model ??
+          options.catalog.models.getActive(videoParamsSchema.parse(request.params).modelProfileId)
+      )
+      if (!model) throw new Error('Unknown video model')
+      const provider = structuredClone(
+        receipt?.provider ?? options.catalog.providers.getActive(model.providerProfileId)
+      )
+      if (!provider || !videoModel(model, provider))
+        throw new Error('Unsupported video provider/model')
+      const secret = provider.secretRef ? options.resolveSecret(provider.secretRef) : undefined
+      if (provider.secretRef && !secret) throw new Error('Video credential unavailable')
+      return createVideoHandler({
+        request,
+        model,
+        provider,
+        secret,
+        assets: options.assets,
+        fetcher: options.fetch ?? fetch,
+        ...(receipt ? { receipt } : {}),
+        ...(options.validateImage ? { validateImage: options.validateImage } : {})
+      })
+    }
     if (!['image.generate', 'image.edit', 'speech.generate'].includes(request.operation)) return
     const params = mediaParamsSchema.parse(request.params)
     const model = options.catalog.models.getActive(params.modelProfileId)

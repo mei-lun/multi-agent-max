@@ -22,7 +22,7 @@ export function safe(p) {
     throw Error(`Unsafe path: ${p}`)
   return p
 }
-function destination(name) {
+export function destination(name) {
   if (!/^[a-zA-Z0-9_-]+$/.test(name)) throw Error('Invalid destination name')
   for (let p = managed; p !== path.dirname(p); p = path.dirname(p))
     if (fs.existsSync(p) && fs.lstatSync(p).isSymbolicLink()) throw Error('Symlink destination')
@@ -38,7 +38,7 @@ function selectionCheck(s) {
   if (!s || !Array.isArray(s.rules) || !s.rules.length) throw Error('Invalid selection')
   for (const r of s.rules) safe(r.prefix)
 }
-function dependencies(dir, files) {
+export function dependencies(dir, files) {
   const edges = []
   for (const f of files.filter((f) => /\.[cm]?[jt]sx?$/.test(f.path))) {
     for (const match of fs
@@ -120,7 +120,7 @@ export function verify(dir) {
     throw Error('Undeclared inventory file')
   return m
 }
-function promote(name, build) {
+export function promote(name, build) {
   const dest = destination(name)
   if (fs.existsSync(dest))
     throw Error('Destination exists; use a new candidate name (adapted files are never replaced)')
@@ -267,7 +267,11 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
           : cmd === 'replay'
             ? replay(args[0], read(args[1]), args[2])
             : (() => {
-                throw Error('Use snapshot, verify, diff, replay')
+                if (cmd === 'rebase' || cmd === 'sync')
+                  return import('./rebase.mjs').then((module) =>
+                    module.rebase(args[0], args[1], read(args[2]), args[3])
+                  )
+                throw Error('Use snapshot, verify, diff, replay, rebase')
               })()
-  console.log(JSON.stringify(result, null, 2))
+  console.log(JSON.stringify(await result, null, 2))
 }

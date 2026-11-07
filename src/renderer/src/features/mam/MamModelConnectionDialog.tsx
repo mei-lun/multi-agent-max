@@ -17,6 +17,8 @@ import {
   DialogTrigger
 } from '../../components/ui/dialog'
 import { MamProfileSelectField, MamProfileTextField } from './MamProfileFieldControls'
+import { Checkbox } from '../../components/ui/checkbox'
+import { useUiLocale } from '../../i18n/ui-locale'
 
 const protocolOptions = [
   { value: 'openai-completions', label: 'OpenAI compatible (most relay services)' },
@@ -31,6 +33,7 @@ type ConnectionDraft = Readonly<{
   baseUrl: string
   apiKey: string
   remoteModelId: string
+  supportsImageInput: boolean
 }>
 
 const emptyDraft: ConnectionDraft = {
@@ -38,7 +41,8 @@ const emptyDraft: ConnectionDraft = {
   protocol: 'openai-completions',
   baseUrl: '',
   apiKey: '',
-  remoteModelId: ''
+  remoteModelId: '',
+  supportsImageInput: false
 }
 
 export function MamModelConnectionDialog({
@@ -51,6 +55,7 @@ export function MamModelConnectionDialog({
   onFetchModels(input: MamFetchModelCatalogInput): Promise<MamModelCatalogResult>
 }>): React.JSX.Element {
   const [open, setOpen] = useState(false)
+  const { locale } = useUiLocale()
   const [draft, setDraft] = useState(emptyDraft)
   const [models, setModels] = useState<readonly MamModelCatalogItem[]>([])
   const [fetching, setFetching] = useState(false)
@@ -171,7 +176,9 @@ export function MamModelConnectionDialog({
                     ? `${model.displayName} · ${model.id}`
                     : model.id
               }))}
-              onChange={(remoteModelId) => setDraft({ ...draft, remoteModelId })}
+              onChange={(remoteModelId) =>
+                setDraft({ ...draft, remoteModelId, supportsImageInput: false })
+              }
             />
           )}
           {models.length === 0 && (
@@ -186,6 +193,24 @@ export function MamModelConnectionDialog({
             placeholder="For example: My coding model"
             onChange={(displayName) => setDraft({ ...draft, displayName })}
           />
+          <label className="flex items-start gap-2 text-sm">
+            <Checkbox
+              checked={draft.supportsImageInput}
+              onCheckedChange={(value) =>
+                setDraft({ ...draft, supportsImageInput: value === true })
+              }
+            />
+            <span>
+              {locale === 'zh-CN'
+                ? '此文字模型可以理解图片'
+                : 'This text model can understand images'}
+              <span className="mt-1 block text-xs text-muted-foreground">
+                {locale === 'zh-CN'
+                  ? '用于 Spine 姿态识别等视觉创作。仅在模型服务支持图片输入时启用。'
+                  : 'Used for visual creation such as Spine pose recognition. Enable when your model service supports image inputs.'}
+              </span>
+            </span>
+          </label>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>
@@ -200,7 +225,8 @@ export function MamModelConnectionDialog({
                   protocol: draft.protocol,
                   ...(draft.baseUrl.trim() ? { baseUrl: draft.baseUrl.trim() } : {}),
                   ...(draft.apiKey.trim() ? { apiKey: draft.apiKey.trim() } : {}),
-                  remoteModelId: draft.remoteModelId.trim()
+                  remoteModelId: draft.remoteModelId.trim(),
+                  supportsImageInput: draft.supportsImageInput
                 })
               } catch {
                 return

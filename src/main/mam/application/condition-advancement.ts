@@ -2,6 +2,7 @@ import type { GitStateRepository } from '../state-store/git-state-repository'
 import { GitCommandRetryCoordinator } from '../state-store/git-command-retry-coordinator'
 import { projectWorkflowRun } from './workflow-run-projection'
 import { readUpstreamArtifacts } from './workflow-node-artifact-context'
+import { verifyLocalBinaryArtifact } from './binary-artifact-verifier'
 import { selectConditionBranch } from './condition-expression-evaluator'
 import type { SchedulerCommand } from '../../../shared/mam/scheduler-protocol'
 
@@ -26,6 +27,7 @@ export function advanceReadyConditions(input: {
       )
     if (!node || node.type !== 'condition') return resolved
     const artifacts = readUpstreamArtifacts({
+      verifyAssetBundle: verifyLocalBinaryArtifact,
       bundle,
       projection,
       nodeId: node.id,

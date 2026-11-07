@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>视频工作台</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>视频工作台</h1>
+        <p>从文字或参考素材生成视频，任务由主机持续跟踪。</p>
+      </header>
+      <p id="status" role="status"></p>
+      <form id="generation">
+        <label>模型<select id="model"></select></label><label>模式<select id="mode"></select></label
+        ><label class="wide"
+          >提示词<textarea id="prompt" rows="4" required maxlength="16000"></textarea></label
+        ><label>时长<select id="duration"></select></label
+        ><label>分辨率<select id="resolution"></select></label
+        ><label>画幅<select id="ratio"></select></label>
+        <div class="wide" id="reference-area">
+          <button type="button" id="import">导入本地素材</button>
+          <p id="reference-help"></p>
+          <ol id="references"></ol>
+        </div>
+        <button id="submit" type="submit">提交视频任务</button>
+      </form>
+      <section>
+        <h2>任务历史</h2>
+        <button id="refresh" type="button">刷新历史</button>
+        <div id="history"></div>
+      </section>
+    </main>
+    <script type="module" src="workbench.js"></script>
+  </body>
+</html>

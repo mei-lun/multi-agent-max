@@ -1,0 +1,28 @@
+{
+  "component": "WritingStudio",
+  "upstreamReadOnly": true,
+  "sources": [
+    "src/components/WritingStudio.tsx",
+    "src/lib/writing.ts",
+    "src-tauri/src/agent.rs:2934 OpenAI Chat image_url",
+    "src-tauri/src/agent.rs:3022 Responses input_image",
+    "src-tauri/src/agent.rs:3084 Anthropic base64 source",
+    "src-tauri/src/agent.rs:3163 Gemini inlineData"
+  ],
+  "target": [
+    "src/main/mam/creative-text/index.ts",
+    "src/main/mam/creative-text/request.ts",
+    "src/main/mam/creative-text/transport.ts",
+    "src/shared/mam/creative-text.ts"
+  ],
+  "adaptation": "Writing UI constructs its context prompt; MAM submits text.generate jobs with safe model profile IDs. Streaming log data text_delta and final text replace upstream generation transport. No Agent runtime, sessions, tools, fallback or automatic retry.",
+  "protocols": [
+    "openai-responses",
+    "openai-completions",
+    "anthropic-messages",
+    "google-generative-ai"
+  ],
+  "verification": "Local HTTP fragmented SSE fixtures for all four protocols; accepted model/provider identity pinned; interrupted/empty/tool streams rejected; strict params reject tools. Full TypeScript and scoped lint passed.",
+  "limits": "No live provider credential test. Reasoning effort is passed to OpenAI protocols only. Fixed 180 second timeout and 8 MiB stream limit.",
+  "vision": "vision.generate reads verified owned image refs; ordered 1-16 images, 32MiB each/64MiB total; explicit text+image capabilities only; provider image payloads adapted without tools or Agent runtime"
+}
