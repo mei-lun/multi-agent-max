@@ -1,4 +1,5 @@
 import { BaseEdge, EdgeLabelRenderer, getSmoothStepPath, type EdgeProps } from '@xyflow/react'
+import type { WorkflowEdgeLabelPlacement } from './mam-workflow-edge-label-layout'
 
 export function MamWorkflowMotionEdge(props: EdgeProps): React.JSX.Element {
   const [path, labelX, labelY] = getSmoothStepPath({
@@ -12,6 +13,7 @@ export function MamWorkflowMotionEdge(props: EdgeProps): React.JSX.Element {
   })
   const artifact = props.data?.motionKind === 'artifact'
   const live = props.data?.motionEnabled === true
+  const labelPlacement = props.data?.labelPlacement as WorkflowEdgeLabelPlacement | undefined
   return (
     <>
       <BaseEdge
@@ -66,8 +68,11 @@ export function MamWorkflowMotionEdge(props: EdgeProps): React.JSX.Element {
       {props.label && (
         <EdgeLabelRenderer>
           <div
-            className="pointer-events-none absolute rounded border border-border bg-card px-1.5 py-0.5 text-[11px] text-card-foreground shadow-sm"
-            style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}
+            className="pointer-events-none absolute rounded border border-border bg-card px-1.5 py-0.5 text-center text-[11px] leading-[14px] text-card-foreground shadow-sm whitespace-normal break-all"
+            style={{
+              maxWidth: labelPlacement?.maxWidth,
+              transform: `translate(-50%, -50%) translate(${labelPlacement?.x ?? labelX}px, ${labelPlacement?.y ?? labelY}px)`
+            }}
           >
             {props.label}
           </div>

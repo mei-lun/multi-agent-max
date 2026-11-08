@@ -8,6 +8,7 @@ import { MamWorkflowReturnEdge } from './MamWorkflowReturnEdge'
 import { MamWorkflowMotionEdge } from './MamWorkflowMotionEdge'
 import { useMamWorkflowMotion } from './use-mam-workflow-motion'
 import { workflowParallelRegions } from './mam-workflow-parallel-regions'
+import { placeWorkflowEdgeLabels } from './mam-workflow-edge-label-layout'
 import { runWorkflowCanvasModel } from './mam-run-workflow-view-model'
 
 const nodeTypes = { 'mam-workflow': MamWorkflowCanvasNodeView }
@@ -36,7 +37,7 @@ export function MamRunWorkflowGraph({
           })),
           ...model.dataEdges
         ]
-  const displayEdges = edges.map((edge) => ({
+  const displayEdges = placeWorkflowEdgeLabels(model.nodes, edges).map((edge) => ({
     ...edge,
     data: {
       ...edge.data,

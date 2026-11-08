@@ -4,6 +4,7 @@ import type { NodeRun } from '../../../../shared/mam/domain/workflow'
 import { analyzeWorkflowVisual } from './mam-workflow-visual-analysis'
 import { layoutWorkflow } from './mam-workflow-layout'
 import { returnEdgeChannels, type ReturnChannel } from './mam-workflow-return-channels'
+import type { WorkflowEdgeLabelPlacement } from './mam-workflow-edge-label-layout'
 import type {
   WorkflowDefinition,
   WorkflowEdge,
@@ -19,6 +20,7 @@ export type MamWorkflowCanvasEdge = Edge<
     returnChannel?: ReturnChannel
     motionKind?: 'artifact'
     motionEnabled?: boolean
+    labelPlacement?: WorkflowEdgeLabelPlacement
   }>
 >
 

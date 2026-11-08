@@ -22,8 +22,8 @@ describe('MAM Workflow canvas model', () => {
     const nodes = toCanvasNodes(definition)
     expect(nodes.map((node) => node.data.node)).toEqual(definition.nodes)
     expect(nodes.find((node) => node.id === 'fan-out')?.position.x).toBe(0)
-    expect(nodes.find((node) => node.id === 'task-a')?.position.x).toBe(260)
-    expect(nodes.find((node) => node.id === 'join')?.position.x).toBe(520)
+    expect(nodes.find((node) => node.id === 'task-a')?.position.x).toBe(340)
+    expect(nodes.find((node) => node.id === 'join')?.position.x).toBe(680)
     expect(toCanvasEdges(definition).map((edge) => edge.data?.edge)).toEqual(definition.edges)
   })
 
