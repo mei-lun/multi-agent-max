@@ -1,0 +1,14 @@
+{
+  "upstreamReadOnly": true,
+  "sources": [
+    "src-tauri/src/spine_comfy.rs",
+    "src-tauri/src/spine_rife.rs",
+    "src/lib/spineComfy.ts",
+    "src/lib/spineBridge.ts"
+  ],
+  "target": "src/main/mam/spine-native",
+  "comfy": "Loopback-only fixed seven-node See-through graph; upload owned PNG asset; auto_download false; durable scoped receipt ledger; bounded object_info/history/queue and job-namespaced image requests. No global interrupt, arbitrary graph or renderer filesystem paths.",
+  "rife": "Optional host-owned executable/model configuration; owned bounded PNG endpoints; fraction/GPU bounded; fixed original CLI arguments and no shell; timeout/cancellation waits for exit before temp cleanup. Result decoded and reimported as scoped asset.",
+  "verification": "Actual isolated loopback HTTP fixture upload/submit/history/recover/output and foreign receipt rejection; real controlled Node subprocess verifies fixed RIFE args/output/cleanup. No user ComfyUI instance, weights download or GPU inference exercised.",
+  "limits": "Host must explicitly configure RIFE executable/model paths. No GPU/model quality verification. UI bridge must translate original dataURLs into storeImage grants and assetRef outputs back into preview URLs/dataURLs."
+}

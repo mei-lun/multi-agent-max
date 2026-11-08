@@ -7,6 +7,7 @@ import {
   Sha256Schema
 } from './primitives'
 import { ReviewAggregateNodeSchema } from './review-aggregate'
+import { ComponentTaskDescriptorSchema } from './component-task'
 import { validateWorkflowDefinition } from './workflow-definition-validation'
 
 const roleSelection = {
@@ -137,6 +138,10 @@ const finishNode = z
 
 export const WorkflowNodeSchema = z.discriminatedUnion('type', [
   roleTaskNode,
+  roleTaskNode.extend({
+    type: z.literal('component_task'),
+    component: ComponentTaskDescriptorSchema
+  }),
   dynamicTasksNode,
   reviewGateNode,
   ReviewAggregateNodeSchema,

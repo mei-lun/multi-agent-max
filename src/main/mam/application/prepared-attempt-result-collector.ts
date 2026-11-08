@@ -4,6 +4,7 @@ import { collectDirectAttemptResult, materializeDirectAttemptResult } from './di
 import type { PreparedAttempt } from './mam-attempt-execution-types'
 import { collectWorkspaceAttemptResult } from './workspace-attempt-result'
 import { normalizeAutomaticReviewReport } from './automatic-review-submission'
+import { collectComponentPublications } from '../components/attempt-component-ledger'
 
 export async function collectPreparedAttemptResult(input: {
   prepared: PreparedAttempt
@@ -12,6 +13,48 @@ export async function collectPreparedAttemptResult(input: {
   git: GitCommandClient
   authority: Parameters<typeof collectDirectAttemptResult>[0]['authority']
 }) {
+  const published = await collectComponentPublications(
+    input.authority,
+    input.prepared.worktree.path,
+    input.prepared.task.outputContracts,
+    input.prepared.snapshot
+  )
+  if (published) {
+    const remaining = input.prepared.task.outputContracts.filter(
+      (contract) => !published.contents.has(contract.artifactType)
+    )
+    const collected = remaining.length
+      ? await collectUnpublishedAttemptResult({
+          ...input,
+          excludedContentRefs: published.claims.map((claim) => claim.contentRef),
+          prepared: {
+            ...input.prepared,
+            task: { ...input.prepared.task, outputContracts: remaining }
+          }
+        })
+      : collectDirectAttemptResult({
+          text: undefined,
+          outputContracts: [],
+          authority: input.authority,
+          usage: input.usage
+        })
+    return {
+      result: {
+        ...collected.result,
+        summary: 'MAM verified host-published component claims and remaining executor outputs.',
+        artifacts: [...published.claims, ...collected.result.artifacts]
+      },
+      contents: new Map([...published.contents, ...collected.contents])
+    }
+  }
+  return collectUnpublishedAttemptResult(input)
+}
+
+async function collectUnpublishedAttemptResult(
+  input: Parameters<typeof collectPreparedAttemptResult>[0] & {
+    excludedContentRefs?: readonly string[]
+  }
+) {
   if (input.prepared.snapshot.permissions.writePaths.length === 0) {
     return collectDirectAttemptResult({
       text: directAssistantText(input.prepared, input.assistantText),
@@ -24,6 +67,7 @@ export async function collectPreparedAttemptResult(input: {
     return await collectWorkspaceAttemptResult({
       workspacePath: input.prepared.worktree.path,
       baseCommit: input.prepared.worktree.baseCommit,
+      ...(input.excludedContentRefs ? { excludedContentRefs: input.excludedContentRefs } : {}),
       outputContracts: input.prepared.task.outputContracts,
       git: input.git,
       authority: input.authority,

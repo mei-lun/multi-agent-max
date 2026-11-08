@@ -1,4 +1,6 @@
 import type { ExecutorProfile } from '../../../shared/mam/domain/execution-profile'
+export type { ComponentExecutionPort } from './component-execution-port'
+export type { ComponentToolPortFactory } from './component-tool-port'
 import type { StaticTaskDefinition } from '../../../shared/mam/domain/run-bundle'
 import type {
   StructuredExecutorInput,
@@ -33,6 +35,7 @@ export type ExecutorRouter = Readonly<{
 }>
 
 export type ExecutableAttemptTask = Readonly<{
+  component?: StaticTaskDefinition['component']
   nodeRunId: string
   nodeId: string
   specification: string

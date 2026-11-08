@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { spawnSync } from 'node:child_process'
+import crossSpawn from 'cross-spawn'
 import { parseValidationCommand } from './validation-command-parser'
 
 export type ValidationCommandResult = Readonly<{
@@ -20,13 +20,13 @@ export function runValidationCommand(
   workingDirectory: string
 ): ValidationCommandResult {
   const parsed = parseValidationCommand(command)
-  const result = spawnSync(parsed.executable, [...parsed.arguments], {
+  const result = crossSpawn.sync(parsed.executable, [...parsed.arguments], {
     cwd: workingDirectory,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
     timeout: 10 * 60 * 1000,
     maxBuffer: 1024 * 1024,
-    shell: process.platform === 'win32'
+    shell: false
   })
   const stdout = result.stdout ?? ''
   const stderr = result.stderr || result.error?.message || ''

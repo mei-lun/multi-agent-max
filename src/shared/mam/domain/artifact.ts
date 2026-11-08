@@ -10,6 +10,7 @@ export const ArtifactFormatSchema = z.enum([
   'json-schema',
   'markdown',
   'file-set',
+  'asset-bundle',
   'diff',
   'test-report'
 ])

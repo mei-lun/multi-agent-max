@@ -1,0 +1,128 @@
+{
+  "schema": 1,
+  "commit": "6542241e440dead6cee60440afd8e658dd0ce0ca",
+  "selection": {
+    "schema": 1,
+    "components": [
+      "dependency-manifests"
+    ],
+    "rules": [
+      {
+        "prefix": "package.json",
+        "component": "dependency-manifests",
+        "target": "audit-only",
+        "strategy": "verbatim"
+      },
+      {
+        "prefix": "pnpm-lock.yaml",
+        "component": "dependency-manifests",
+        "target": "audit-only",
+        "strategy": "verbatim"
+      },
+      {
+        "prefix": "src-tauri/Cargo.toml",
+        "component": "dependency-manifests",
+        "target": "audit-only",
+        "strategy": "verbatim"
+      },
+      {
+        "prefix": "src-tauri/Cargo.lock",
+        "component": "dependency-manifests",
+        "target": "audit-only",
+        "strategy": "verbatim"
+      },
+      {
+        "prefix": "modules/model_workbench/resources",
+        "component": "model",
+        "target": "audit-only",
+        "strategy": "verbatim"
+      },
+      {
+        "prefix": "modules/music_workbench/resources",
+        "component": "music",
+        "target": "audit-only",
+        "strategy": "verbatim"
+      },
+      {
+        "prefix": "packaging/model-workbench/requirements",
+        "component": "model",
+        "target": "audit-only",
+        "strategy": "verbatim"
+      },
+      {
+        "prefix": "packaging/music-workbench/requirements",
+        "component": "music",
+        "target": "audit-only",
+        "strategy": "verbatim"
+      }
+    ]
+  },
+  "files": [
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "448d40739905fefdf7361290093dc2b493c76516",
+      "path": "modules/model_workbench/resources-windows.json",
+      "sha256": "41250c262a190d4c7d9f62ea7b3fd69bbe52db1447b99052979dfa09e778a194"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "8bff6231174929f3bf62da442cdfe3dafbe97a71",
+      "path": "modules/model_workbench/resources.json",
+      "sha256": "ac188041dcfcb7f93bdbbcbe4e2d50b7cea6aca79415e40a6a5c87ff20133a24"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "55cb456d8848a8921ac095fc635268055c321133",
+      "path": "modules/music_workbench/resources.json",
+      "sha256": "ea6bf51a37cac818a819ba5e21c4d629af52f283a5cd9c511c7d299af97318d2"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "cf1902df233d180d84fd2ccd29538f014acdb605",
+      "path": "package.json",
+      "sha256": "04dc1bcae0884f2043b489b73536b0ea75814e9eb3eb46e848bf2889f3266c0d"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "754301a4f67cca3bc24a972977d0f3001d305915",
+      "path": "packaging/model-workbench/requirements.txt",
+      "sha256": "70fa5af2d39da027a1ba968fc8e68d2c6c7d02d33ed08b2ff81a5dea73590bca"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "d268ee295b8ccaa75576ce698c542e04e15e9cc5",
+      "path": "packaging/music-workbench/requirements.lock.txt",
+      "sha256": "823266d2aa57fea6e7eaee134ed25b53245bd43155246c3b0ba3f21ee9c1feb0"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "d5aeda080f88962feed63c9fb7ccd34c7cafabe9",
+      "path": "pnpm-lock.yaml",
+      "sha256": "3989b77d1811d1241fd79dc943e299b6a9d807adaf503558be30a330281f5952"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "31ed01a2af11d3c625334b7918e33a0e3c7e175f",
+      "path": "src-tauri/Cargo.lock",
+      "sha256": "a51fd456efac59e6a67558631b9e373ba7c9e5352f4e6605cfe9bb945b0c9170"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "265908a2323cc2c8ea057b345a45aec4fccc3719",
+      "path": "src-tauri/Cargo.toml",
+      "sha256": "6ce8c470c0a38f47dc07bb69a7b5b81d6a70bcd25bcc7ec417e2641d2a0dd098"
+    }
+  ],
+  "dependencyGaps": [],
+  "dependencyAnalysis": "Relative JS/TS imports only; no semantic dependency resolution",
+  "dependencyEdges": []
+}

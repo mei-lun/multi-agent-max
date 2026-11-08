@@ -1,0 +1,18 @@
+{
+  "oldCommit": "208862f560d4a4180fb5d211ae5b30884bf67a78",
+  "newCommit": "88c84da987e1bd916d08eb9301f3eb4657259f55",
+  "source": "src/lib/musicWorkbench.ts",
+  "candidate": "g4-music-20261107-candidate",
+  "replay": "g4-music-20261107-replay",
+  "input": {
+    "engine": "yue2",
+    "duration": 500,
+    "reference_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "reference_name": "reference",
+    "reference_duration": 120
+  },
+  "before": { "duration": 60, "referenceMetadata": "discarded" },
+  "after": { "duration": 500, "referenceMetadata": "preserved and validated" },
+  "evidence": "Actual committed original TypeScript pure normalizeMusicParams executed before/after three-way merge; MAM bridge import adaptation preserved; regenerated replay byte-identical.",
+  "limits": "Upstream feature upgrade contains normalization repair; not standalone bugfix commit or GPU verification. Existing baseline snapshots/original repo unchanged."
+}

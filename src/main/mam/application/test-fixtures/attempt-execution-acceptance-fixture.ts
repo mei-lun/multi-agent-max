@@ -15,8 +15,11 @@ export function createAttemptExecutionAcceptanceFixture(input?: {
   mergeValidations?: readonly string[]
   executorKind?: 'codex-cli' | 'pi-rpc'
   retryMaxAttempts?: number
+  componentTask?: boolean
+  root?: string
+  configureWorkflow?(definition: WorkflowDefinition): void
 }) {
-  const root = mkdtempSync(join(tmpdir(), 'mam-attempt-execution-'))
+  const root = input?.root ?? mkdtempSync(join(tmpdir(), 'mam-attempt-execution-'))
   const origin = join(root, 'origin.git')
   const project = join(root, 'project')
   git(root, ['init', '--bare', origin])
@@ -57,13 +60,32 @@ export function createAttemptExecutionAcceptanceFixture(input?: {
       supportsStructuredOutput: true
     }
   })
-  const role = catalog.roles.save(
-    roleProfile('role.builder', 'Builder', executor.id, model.id, input?.retryMaxAttempts)
-  )
+  const role = catalog.roles.save({
+    ...roleProfile('role.builder', 'Builder', executor.id, model.id, input?.retryMaxAttempts),
+    ...(input?.componentTask ? { tools: ['component:creative.image'] } : {})
+  })
   const reviewerRole = catalog.roles.save(
     roleProfile('role.reviewer', 'Reviewer', executor.id, model.id, input?.retryMaxAttempts)
   )
-  const definition = catalog.workflows.save(workflow(input?.mergeValidations))
+  const sourceWorkflow = workflow(input?.mergeValidations)
+  if (input?.componentTask)
+    sourceWorkflow.nodes = sourceWorkflow.nodes.map((node) =>
+      node.type === 'role_task'
+        ? {
+            ...node,
+            type: 'component_task' as const,
+            component: {
+              id: 'creative.image' as const,
+              version: '1.0.0',
+              hostApiVersion: '1.0.0',
+              operation: 'image.generate',
+              params: { prompt: 'test', modelProfileId: 'forged' }
+            }
+          }
+        : node
+    )
+  input?.configureWorkflow?.(sourceWorkflow)
+  const definition = catalog.workflows.save(sourceWorkflow)
   const settings = new MamLocalSettingsStore(join(root, 'local-settings.json'), 'machine.test')
   settings.save({
     schemaVersion: '1.0.0',

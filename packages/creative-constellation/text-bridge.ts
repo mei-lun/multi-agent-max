@@ -1,0 +1,101 @@
+import { resolveAttachmentRef } from './media-bridge'
+const request = (action: string, params = {}) =>
+  window.componentHost?.request({ action, ...params })
+export async function exportWritingFile(filename: string, content: string) {
+  if (new TextEncoder().encode(content).length > 16 * 1024 * 1024)
+    throw new Error('导出超过 16 MiB')
+  const url = URL.createObjectURL(new Blob([content], { type: 'text/plain;charset=utf-8' }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(url), 30000)
+}
+export async function getModelCatalog() {
+  const models = (await request('listModels')) || []
+  return {
+    errors: [],
+    models: models
+      .filter((m: any) => m.kind === 'text')
+      .map((m: any) => ({
+        ...m,
+        id: m.modelId || m.id,
+        profileId: m.id,
+        name: m.label,
+        provider: 'MAM',
+        protocol: 'openai'
+      }))
+  }
+}
+const runs = new Map<string, string>()
+const cancelled = new Set<string>()
+export async function cancelAgentTurn(id: string) {
+  cancelled.add(id)
+  const jobId = runs.get(id)
+  if (jobId) await request('cancel', { jobId })
+}
+export async function agentTurnStream(
+  profile: any,
+  messages: any[],
+  _mode: any,
+  _workspace: any,
+  operationId: string,
+  onDelta: (text: string) => void
+) {
+  if (!window.componentHost) throw new Error('请在 MAM 设置中配置文本模型。')
+  const inputAssets = messages
+    .flatMap((message) => message.attachments || [])
+    .filter((item) => item.kind === 'image' || item.mimeType?.startsWith('image/'))
+    .map(resolveAttachmentRef)
+  const jobId = await request('submit', {
+    operation: inputAssets.length ? 'vision.generate' : 'text.generate',
+    idempotencyKey: operationId,
+    params: {
+      modelProfileId: profile.id,
+      prompt: messages
+        .map(
+          (message) =>
+            `${message.role}: ${message.content}${(message.attachments || [])
+              .filter((item) => !item.mimeType?.startsWith('image/'))
+              .map(
+                (item) =>
+                  '\n附件 ' +
+                  item.name +
+                  ': ' +
+                  (item.content || '未解析内容；' + item.mimeType + ', ' + item.size + ' bytes')
+              )
+              .join('')}`
+        )
+        .join('\n\n')
+    },
+    inputAssets
+  })
+  runs.set(operationId, jobId)
+  if (cancelled.has(operationId)) await request('cancel', { jobId })
+  let sequence = 0,
+    content = ''
+  try {
+    for (;;) {
+      const events = await request('events', { jobId, afterSequence: sequence })
+      for (const event of events) {
+        sequence = Math.max(sequence, event.sequence)
+        if (event.type === 'log' && event.data?.type === 'text_delta') {
+          const delta = typeof event.data === 'string' ? event.data : event.data?.text || ''
+          content += delta
+          onDelta(delta)
+        }
+        if (event.type === 'succeeded') {
+          const final = event.data?.text || content
+          if (!content && final) onDelta(final)
+          return { content: final }
+        }
+        if (['failed', 'cancelled', 'reconciliation-required'].includes(event.type))
+          throw new Error(event.data?.message || '文本生成已停止')
+      }
+      await new Promise((resolve) => setTimeout(resolve, 400))
+    }
+  } finally {
+    runs.delete(operationId)
+    cancelled.delete(operationId)
+  }
+}

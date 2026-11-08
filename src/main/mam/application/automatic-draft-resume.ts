@@ -44,6 +44,12 @@ function canResume(
   >,
   draft: ReturnType<LocalExecutionDraftStore['listUnfinished']>[number]
 ): boolean {
+  if (
+    input
+      .repository!.loadRunBundle(draft.workflowRunId)
+      ?.taskCatalog.some((task) => task.id === draft.taskId && task.nodeType === 'component_task')
+  )
+    return false
   const projection = input.repository!.rebuild(draft.workflowRunId)
   if (
     projection.tasks[draft.taskId]?.activeClaim?.claimantInstanceId !== input.claimantInstanceId

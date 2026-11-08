@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { RoleComponentBindingSchema, FrozenComponentBindingSchema } from './component-binding'
 import {
   ExecutorKindSchema,
   InferenceOptionsSchema,
@@ -65,6 +66,7 @@ export const RoleProfileSchema = z
     version: z.number().int().positive(),
     displayName: z.string().min(1).max(120),
     execution: RoleExecutionBindingSchema,
+    componentBindings: z.array(RoleComponentBindingSchema).max(8).optional(),
     systemPromptRef: z.string().min(1),
     skillBindings: z.array(RoleSkillBindingSchema),
     mcpBindings: z.array(RoleMcpBindingSchema),
@@ -88,6 +90,7 @@ export const EffectiveRoleConfigSnapshotSchema = z
     executorProfile: ResolvedProfileRefSchema.extend({ kind: ExecutorKindSchema }).strict(),
     providerProfile: ResolvedProfileRefSchema,
     modelProfile: ResolvedProfileRefSchema,
+    componentBindings: z.array(FrozenComponentBindingSchema).max(8).optional(),
     systemPromptRef: z.string().min(1),
     execution: z
       .object({

@@ -8,6 +8,7 @@ import {
   MamProfileTextField
 } from './MamProfileFieldControls'
 import { MamRoleResourceFields } from './MamRoleResourceFields'
+import { MamRoleComponentFields } from './MamRoleComponentFields'
 
 export function MamRoleProfileFields({
   profile,
@@ -71,6 +72,7 @@ export function MamRoleProfileFields({
         />
       </MamWorkflowLabeledField>
       <MamRoleResourceFields profile={profile} snapshot={snapshot} onChange={onChange} />
+      <MamRoleComponentFields profile={profile} models={snapshot.models} onChange={onChange} />
       <details className="rounded-md border border-border p-3">
         <summary className="cursor-pointer text-xs font-medium">Limits</summary>
         <div className="mt-3 space-y-3">

@@ -1,0 +1,9 @@
+# Offline signed catalogs
+
+No official publisher key is bundled and no online catalog is published. Existing explicit trusted-local imports remain available. Signing is an operator tool; private keys must remain outside the repository and packages.
+
+Catalog JSON: `{ "schemaVersion":1, "packages":[{"id":"creative.image","version":"1.0.0","manifestSha256":"<SHA256 of canonical parsed manifest>"}] }`. Canonicalization sorts object keys recursively, preserves array order, and uses UTF-8 compact JSON. Ed25519 signs those exact catalog bytes. Trusted key JSON maps externally provisioned key IDs to SPKI PEM public keys. A key in an envelope never establishes trust.
+
+Use Node24 `config/scripts/sign-creative-catalog.mjs sign catalog.json private.pem key-id signed.json`, then `verify signed.json trusted-keys.json` and `verify-package signed.json trusted-keys.json package/manifest.json`. Output files are created exclusively. The package tool is verification only: import through normal byte-verified local import after verification, then explicitly activate the intended version. No automatic activation or downgrade occurs. For atomic verification/import integration, use `installSignedCatalogPackage` with an externally trusted map; its manifest authorization is rechecked inside the serialized installer before staged byte hashing. Registry verification label remains honestly `trusted-local-import`; signed catalog trust is separate from package publisher identity and should not be presented as official verification.
+
+Catalogs have no online freshness service. Replaying an old valid signed catalog is allowed for explicit offline installation; it cannot silently change active versions. Operators must deliberately choose activation. Strong anti-rollback publication sequences would require persistent channel state and explicit rollback authorization and are not claimed here.

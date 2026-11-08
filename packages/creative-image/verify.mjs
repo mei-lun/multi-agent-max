@@ -1,0 +1,22 @@
+import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+const root = new URL('../../.mam-local/component-packages/creative-image/', import.meta.url)
+const manifest = JSON.parse(await readFile(new URL('manifest.json', root)))
+for (const [file, expected] of Object.entries(manifest.files)) assert.equal(createHash('sha256').update(await readFile(new URL(file, root))).digest('hex'), expected)
+const { matteSpineSolidBackground: matte } = await import(new URL('matting.js', root))
+const pixels = new Uint8ClampedArray(15 * 15 * 4)
+for (let i = 0; i < 225; i++) pixels.set([0, 255, 0, 255], i * 4)
+for (let y = 4; y <= 10; y++) for (let x = 4; x <= 10; x++) pixels.set([220, 40, 40, 255], (y * 15 + x) * 4)
+pixels.set([0, 255, 0, 255], (7 * 15 + 7) * 4)
+const before = pixels.slice(), result = matte(pixels, 15, 15, 24)
+assert.equal(result.pixels[3], 0)
+assert.deepEqual([...result.pixels.slice((7 * 15 + 7) * 4, (7 * 15 + 7) * 4 + 4)], [0, 255, 0, 255])
+assert.deepEqual(pixels, before)
+assert.throws(() => matte(new Uint8ClampedArray(), 0, 0, 24), /Invalid/)
+assert.equal(matte(new Uint8ClampedArray(4 * 4 * 4), 4, 4, 24).pixels.every(value => value === 0), true)
+const ui = await readFile(new URL('workbench.js', root), 'utf8')
+assert.match(ui, /'image\/png'/)
+assert.match(ui, /new ImageData\(result.pixels/)
+assert.doesNotMatch(await readFile(new URL('index.html', root), 'utf8'), /https?:\/\//)
+console.log('Verified manifest hashes, upstream matting enclosed details/input preservation/alpha/blank handling, local PNG export path.')

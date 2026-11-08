@@ -1,0 +1,8 @@
+{
+  "upstreamRoot": "vendor/levelup/baseline-6542241",
+  "paths": [
+    { "source": "src/lib/spineMatting.ts", "destination": "matting.js", "method": "verbatim TypeScript transpilation with verified vendor SHA-256" },
+    { "source": "src/components/MediaStudio.tsx:MediaStudio, MediaAssetCard, MediaHistoryGrid, clampMediaCount", "destination": "generation.js", "method": "manual semantic adaptation to capability-scoped MAM host jobs; no upstream JavaScript copied" },
+    { "source": "src/components/MediaStudio.tsx:applyCanvasEdit, studioImagePrompt, imageModeDescription", "destination": "mask-editor.js", "method": "independent canvas implementation; transparent replacement PNG, extension, undo" }
+  ]
+}

@@ -1,0 +1,266 @@
+{
+  "schema": 1,
+  "workbenches": [
+    "media",
+    "music",
+    "model",
+    "spine",
+    "writing",
+    "constellation"
+  ],
+  "components": [
+    "MediaStudio",
+    "MusicWorkbench",
+    "ModelWorkbench",
+    "SpineStudio",
+    "WritingStudio",
+    "ConstellationStudio",
+    "ModelViewer",
+    "CreativeStudioHeader"
+  ],
+  "rules": [
+    {
+      "prefix": "LICENSE",
+      "component": "licenses",
+      "target": "audit",
+      "strategy": "verbatim"
+    },
+    {
+      "prefix": "src/components/Media",
+      "component": "MediaStudio",
+      "target": "audit; explicit MAM adapter required",
+      "strategy": "verbatim provenance",
+      "knownDependencies": [
+        "See dependencyGaps; Rust/Python runtime requires manual review"
+      ]
+    },
+    {
+      "prefix": "src/lib/media",
+      "component": "MediaStudio",
+      "target": "audit; explicit MAM adapter required",
+      "strategy": "verbatim provenance",
+      "knownDependencies": [
+        "See dependencyGaps; Rust/Python runtime requires manual review"
+      ]
+    },
+    {
+      "prefix": "src-tauri/src/media",
+      "component": "MediaStudio",
+      "target": "audit; explicit MAM adapter required",
+      "strategy": "verbatim provenance",
+      "knownDependencies": [
+        "See dependencyGaps; Rust/Python runtime requires manual review"
+      ]
+    },
+    {
+      "prefix": "src/components/Music",
+      "component": "MusicWorkbench",
+      "target": "audit; explicit MAM adapter required",
+      "strategy": "verbatim provenance",
+      "knownDependencies": [
+        "See dependencyGaps; Rust/Python runtime requires manual review"
+      ]
+    },
+    {
+      "prefix": "src/lib/music",
+      "component": "MusicWorkbench",
+      "target": "audit; explicit MAM adapter required",
+      "strategy": "verbatim provenance",
+      "knownDependencies": [
+        "See dependencyGaps; Rust/Python runtime requires manual review"
+      ]
+    },
+    {
+      "prefix": "src-tauri/src/music_",
+      "component": "MusicWorkbench",
+      "target": "audit; explicit MAM adapter required",
+      "strategy": "verbatim provenance",
+      "knownDependencies": [
+        "See dependencyGaps; Rust/Python runtime requires manual review"
+      ]
+    },
+    {
+      "prefix": "modules/music",
+      "component": "MusicWorkbench",
+      "target": "audit; explicit MAM adapter required",
+      "strategy": "verbatim provenance",
+      "knownDependencies": [
+        "See dependencyGaps; Rust/Python runtime requires manual review"
+      ]
+    },
+    {
+      "prefix": "packaging/music",
+      "component": "MusicWorkbench",
+      "target": "audit; explicit MAM adapter required",
+      "strategy": "verbatim provenance",
+      "knownDependencies": [
+        "See dependencyGaps; Rust/Python runtime requires manual review"
+      ]
+    },
+    {
+      "prefix": "src/components/Model",
+      "component": "ModelWorkbench",
+      "target": "audit; explicit MAM adapter required",
+      "strategy": "verbatim provenance",
+      "knownDependencies": [
+        "See dependencyGaps; Rust/Python runtime requires manual review"
+      ]
+    },
+    {
+      "prefix": "src/lib/modelWorkbench",
+      "component": "ModelWorkbench",
+      "target": "audit; explicit MAM adapter required",
+      "strategy": "verbatim provenance",
+      "knownDependencies": [
+        "See dependencyGaps; Rust/Python runtime requires manual review"
+      ]
+    },
+    {
+      "prefix": "src-tauri/src/model_",
+      "component": "ModelWorkbench",
+      "target": "audit; explicit MAM adapter required",
+      "strategy": "verbatim provenance",
+      "knownDependencies": [
+        "See dependencyGaps; Rust/Python runtime requires manual review"
+      ]
+    },
+    {
+      "prefix": "modules/model",
+      "component": "ModelWorkbench",
+      "target": "audit; explicit MAM adapter required",
+      "strategy": "verbatim provenance",
+      "knownDependencies": [
+        "See dependencyGaps; Rust/Python runtime requires manual review"
+      ]
+    },
+    {
+      "prefix": "packaging/model",
+      "component": "ModelWorkbench",
+      "target": "audit; explicit MAM adapter required",
+      "strategy": "verbatim provenance",
+      "knownDependencies": [
+        "See dependencyGaps; Rust/Python runtime requires manual review"
+      ]
+    },
+    {
+      "prefix": "public/model-viewer",
+      "component": "ModelWorkbench",
+      "target": "audit; explicit MAM adapter required",
+      "strategy": "verbatim provenance",
+      "knownDependencies": [
+        "See dependencyGaps; Rust/Python runtime requires manual review"
+      ]
+    },
+    {
+      "prefix": "src/components/Spine",
+      "component": "SpineStudio",
+      "target": "audit; explicit MAM adapter required",
+      "strategy": "verbatim provenance",
+      "knownDependencies": [
+        "See dependencyGaps; Rust/Python runtime requires manual review"
+      ]
+    },
+    {
+      "prefix": "src/lib/spine",
+      "component": "SpineStudio",
+      "target": "audit; explicit MAM adapter required",
+      "strategy": "verbatim provenance",
+      "knownDependencies": [
+        "See dependencyGaps; Rust/Python runtime requires manual review"
+      ]
+    },
+    {
+      "prefix": "src-tauri/src/spine",
+      "component": "SpineStudio",
+      "target": "audit; explicit MAM adapter required",
+      "strategy": "verbatim provenance",
+      "knownDependencies": [
+        "See dependencyGaps; Rust/Python runtime requires manual review"
+      ]
+    },
+    {
+      "prefix": "modules/spine",
+      "component": "SpineStudio",
+      "target": "audit; explicit MAM adapter required",
+      "strategy": "verbatim provenance",
+      "knownDependencies": [
+        "See dependencyGaps; Rust/Python runtime requires manual review"
+      ]
+    },
+    {
+      "prefix": "src/components/Writing",
+      "component": "WritingStudio",
+      "target": "audit; explicit MAM adapter required",
+      "strategy": "verbatim provenance",
+      "knownDependencies": [
+        "See dependencyGaps; Rust/Python runtime requires manual review"
+      ]
+    },
+    {
+      "prefix": "src/lib/writing",
+      "component": "WritingStudio",
+      "target": "audit; explicit MAM adapter required",
+      "strategy": "verbatim provenance",
+      "knownDependencies": [
+        "See dependencyGaps; Rust/Python runtime requires manual review"
+      ]
+    },
+    {
+      "prefix": "src/components/Constellation",
+      "component": "ConstellationStudio",
+      "target": "audit; explicit MAM adapter required",
+      "strategy": "verbatim provenance",
+      "knownDependencies": [
+        "See dependencyGaps; Rust/Python runtime requires manual review"
+      ]
+    },
+    {
+      "prefix": "src/lib/constellation",
+      "component": "ConstellationStudio",
+      "target": "audit; explicit MAM adapter required",
+      "strategy": "verbatim provenance",
+      "knownDependencies": [
+        "See dependencyGaps; Rust/Python runtime requires manual review"
+      ]
+    },
+    {
+      "prefix": "src/components/CreativeStudioHeader",
+      "component": "CreativeStudioHeader",
+      "target": "audit; explicit MAM adapter required",
+      "strategy": "verbatim provenance",
+      "knownDependencies": [
+        "See dependencyGaps; Rust/Python runtime requires manual review"
+      ]
+    },
+    {
+      "prefix": "scripts/test-spine",
+      "component": "spine",
+      "target": "audit tests",
+      "strategy": "verbatim"
+    },
+    {
+      "prefix": "scripts/test-model",
+      "component": "model",
+      "target": "audit tests",
+      "strategy": "verbatim"
+    },
+    {
+      "prefix": "scripts/test-music",
+      "component": "music",
+      "target": "audit tests",
+      "strategy": "verbatim"
+    },
+    {
+      "prefix": "scripts/test-writing",
+      "component": "writing",
+      "target": "audit tests",
+      "strategy": "verbatim"
+    },
+    {
+      "prefix": "scripts/test-media",
+      "component": "media",
+      "target": "audit tests",
+      "strategy": "verbatim"
+    }
+  ]
+}

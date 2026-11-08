@@ -25,8 +25,11 @@ export async function collectWorkspaceAttemptResult(input: {
   git: GitCommandClient
   authority: AttemptResultAuthority
   usage: ExecutorUsage
+  excludedContentRefs?: readonly string[]
 }): Promise<WorkspaceAttemptResult> {
-  const paths = changedWorkspacePaths(input.git, input.workspacePath, input.baseCommit)
+  const paths = changedWorkspacePaths(input.git, input.workspacePath, input.baseCommit).filter(
+    (path) => !input.excludedContentRefs?.includes(path)
+  )
   const contents = new Map<string, AttemptArtifactContent>()
   const claims: AttemptResult['artifacts'] = []
   const usedPaths = new Set<string>()

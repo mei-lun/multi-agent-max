@@ -22,7 +22,8 @@ export const MamSaveModelConnectionInputSchema = z
     protocol: MamModelConnectionProtocolSchema,
     baseUrl: z.url().optional(),
     apiKey: z.string().trim().min(1).max(20_000).optional(),
-    remoteModelId: z.string().trim().min(1).max(400)
+    remoteModelId: z.string().trim().min(1).max(400),
+    supportsImageInput: z.boolean().optional()
   })
   .strict()
 

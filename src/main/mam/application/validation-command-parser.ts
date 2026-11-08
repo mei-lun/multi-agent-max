@@ -22,7 +22,7 @@ export function parseValidationCommand(command: string): ParsedValidationCommand
       else token += character
       continue
     }
-    if (character === "'") {
+    if (character === "'" && quote !== 'double') {
       quote = 'single'
       tokenStarted = true
       continue

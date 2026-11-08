@@ -8,12 +8,14 @@ import {
 } from './primitives'
 import { WorkflowDefinitionSchema, WorkflowRunSchema } from './workflow'
 import { RoleProfileSchema } from './role'
+import { ComponentTaskDescriptorSchema } from './component-task'
 
 export const ExecutionPlanNodeSchema = z
   .object({
     id: MamEntityIdSchema,
     type: z.enum([
       'role_task',
+      'component_task',
       'dynamic_tasks',
       'review_gate',
       'approval_gate',
@@ -27,12 +29,17 @@ export const ExecutionPlanNodeSchema = z
       'finish'
     ]),
     ordinal: z.number().int().nonnegative(),
+    component: ComponentTaskDescriptorSchema.optional(),
     dependencies: z.array(MamEntityIdSchema),
     successors: z.array(MamEntityIdSchema),
     requiredArtifacts: z.array(MamEntityIdSchema),
     producedArtifacts: z.array(MamEntityIdSchema)
   })
   .strict()
+  .refine(
+    (node) => (node.type === 'component_task') === (node.component !== undefined),
+    'Component descriptor must match node type'
+  )
 
 export const WorkflowExecutionPlanSchema = z
   .object({
@@ -65,7 +72,8 @@ export const StaticTaskDefinitionSchema = z
     workflowRunId: MamEntityIdSchema,
     nodeRunId: MamEntityIdSchema,
     nodeId: MamEntityIdSchema,
-    nodeType: z.enum(['role_task', 'dynamic_tasks', 'review_gate', 'git_merge']),
+    nodeType: z.enum(['role_task', 'component_task', 'dynamic_tasks', 'review_gate', 'git_merge']),
+    component: ComponentTaskDescriptorSchema.optional(),
     iteration: z.number().int().positive(),
     initialStatus: z.enum(['waiting_dependencies', 'waiting_role_assignment']),
     title: z.string().min(1).max(240),
@@ -77,6 +85,10 @@ export const StaticTaskDefinitionSchema = z
     allowedRoleProfileIds: z.array(MamEntityIdSchema)
   })
   .strict()
+  .refine(
+    (node) => (node.nodeType === 'component_task') === (node.component !== undefined),
+    'Component descriptor must match task type'
+  )
 
 export const WorkflowRunBundleSchema = z
   .object({

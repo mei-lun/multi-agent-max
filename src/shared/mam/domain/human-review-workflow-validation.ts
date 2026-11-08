@@ -20,7 +20,7 @@ export function validateHumanReviewWorkflow(
   for (const node of definition.nodes) {
     if (node.type !== 'human_review_gate' || !node.revisionTargetNodeId) continue
     const target = definition.nodes.find((candidate) => candidate.id === node.revisionTargetNodeId)
-    if (target?.type !== 'role_task') {
+    if (target?.type !== 'role_task' && target?.type !== 'component_task') {
       context.addIssue({
         code: 'custom',
         path: ['nodes'],

@@ -81,6 +81,7 @@ export function materializeMamDesignProposal(
         knowledgeBaseProfileId
       })),
       tools: role.tools,
+      componentBindings: role.componentBindings,
       permissions: role.permissions,
       budget: role.budget,
       retry: role.retry,
@@ -129,7 +130,12 @@ function buildArtifactTypes(proposal: MamDesignProposalSpec): ReadonlyMap<string
 }
 
 function nodeArtifacts(node: MamDesignProposalSpec['workflow']['nodes'][number]) {
-  if (node.type === 'role_task' || node.type === 'artifact_transform' || node.type === 'command') {
+  if (
+    node.type === 'role_task' ||
+    node.type === 'component_task' ||
+    node.type === 'artifact_transform' ||
+    node.type === 'command'
+  ) {
     return node.outputs
   }
   if (node.type === 'dynamic_tasks') return [node.planContract]
@@ -142,10 +148,12 @@ function materializeNode(
   roleIds: ReadonlyMap<string, string>,
   artifactTypes: ReadonlyMap<string, string>
 ): WorkflowNode {
-  if (node.type === 'role_task') {
+  if (node.type === 'role_task' || node.type === 'component_task') {
     return {
       id: node.key,
-      type: node.type,
+      ...(node.type === 'component_task'
+        ? { type: node.type, component: node.component }
+        : { type: node.type }),
       ...roleSelection(node, roleIds),
       instruction: node.instruction,
       workspaceMode: node.workspaceMode,

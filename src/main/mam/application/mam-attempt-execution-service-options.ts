@@ -10,12 +10,16 @@ import type { MamUiQueryService } from './mam-ui-query-service'
 import type { AttemptSecretValueProvider } from './local-attempt-secrets'
 import type { ExecutorRouter } from './mam-attempt-execution-types'
 import type { LocalExecutionDraftStore } from './local-execution-draft-store'
+import type { ComponentExecutionPort } from './component-execution-port'
+import type { ComponentToolPortFactory } from './component-tool-port'
 
 export type MamAttemptExecutionServiceOptions = Readonly<{
   query: MamUiQueryService
   catalog: ProfileCatalog
   settings: MamLocalSettingsStore
   executor: ExecutorRouter
+  componentExecutor?: ComponentExecutionPort
+  componentTools?: ComponentToolPortFactory
   resources: AttemptResourceMaterializer
   artifacts: AttemptArtifactValidator
   diagnostics: DiagnosticsRecorder

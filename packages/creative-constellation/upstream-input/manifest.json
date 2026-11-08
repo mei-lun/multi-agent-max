@@ -1,0 +1,32 @@
+[
+  {
+    "file": "AttachmentChip.tsx",
+    "source": "src/components/AttachmentChip.tsx",
+    "commit": "6542241",
+    "sha256": "0ed0f736f96f31fe77571eef4b6eb0a0cadf1ccdfbfe16a45f6a4769d503fd77"
+  },
+  {
+    "file": "canvasEditorState.ts",
+    "source": "src/lib/canvasEditorState.ts",
+    "commit": "6542241",
+    "sha256": "9ac94178a7e706ed40ef2cdc0b7353e67520447c2f7f09a6ccad784f81ee4355"
+  },
+  {
+    "file": "clipboard.ts",
+    "source": "src/lib/clipboard.ts",
+    "commit": "6542241",
+    "sha256": "c2d8d1daea9764b45b42f8cc5d40e4c058c931142977723f7fe501392aed9f7b"
+  },
+  {
+    "file": "IconButton.tsx",
+    "source": "src/components/IconButton.tsx",
+    "commit": "6542241",
+    "sha256": "d01b4bfc9b26944f7279a09f0bd46ec0a06be76d4f7d69f5fcb74565f3588bc1"
+  },
+  {
+    "file": "useImageCopy.tsx",
+    "source": "src/components/useImageCopy.tsx",
+    "commit": "6542241",
+    "sha256": "967418dc27f87d8c4328c2746f221d088930a1991e202da5b0f2029f4fd71e39"
+  }
+]

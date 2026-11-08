@@ -8,6 +8,7 @@ export function shouldAutomaticallyRetryAttempt(input: {
   error: unknown
   executorCompleted: boolean
 }): boolean {
+  if (input.prepared.task?.component) return false
   if (!input.executorCompleted) return false
   const message = input.error instanceof Error ? input.error.message : String(input.error)
   if (!isRecoverableResultError(message)) return false

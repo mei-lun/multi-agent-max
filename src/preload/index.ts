@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import { exposeCreativeApi } from './creative-api'
 import {
   MAM_ASSIGN_TASK_CHANNEL,
   MAM_CLAIM_TASK_CHANNEL,
@@ -205,3 +206,4 @@ const api: MamRendererApi = Object.freeze({
 })
 
 contextBridge.exposeInMainWorld('mam', api)
+exposeCreativeApi()

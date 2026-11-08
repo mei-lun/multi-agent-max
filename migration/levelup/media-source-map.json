@@ -1,0 +1,11 @@
+{
+  "upstreamCommit": "6542241",
+  "syncMode": "manually-synced-adapter",
+  "entries": [
+    { "source": "src-tauri/src/media.rs", "symbols": ["classify_media_model", "generate_batch_with_mask", "bearer_auth_if_present"], "target": "src/main/mam/media/index.ts", "status": "partial-openai-only" },
+    { "source": "src-tauri/src/media.rs", "symbols": ["generate_batch"], "target": "src/main/mam/media/transport.ts", "status": "partial-openai-json-multipart-speech" },
+    { "source": "src/lib/mediaCapabilities.ts", "symbols": ["mediaModelSupportsExplicitImageMask"], "target": "src/shared/mam/media-models.ts", "status": "partial-no-native-provider-support" }
+  ],
+  "nativeAdapters": { "target": "src/main/mam/media/native.ts", "sourceSymbols": ["call_gemini_image", "call_openai_images", "minimax_image_body", "minimax_image_sources"], "status": "implemented-tested-supported-subset" },
+  "limitations": ["Imagen and native Gemini/Grok speech not advertised", "Image inspection validates dimensions/headers rather than full decode", "Manually synced adapter does not claim complete upstream parity"]
+}

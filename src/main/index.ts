@@ -1,12 +1,17 @@
+import { desktopComponentExecution } from './desktop-component-execution'
 import { app, BrowserWindow, dialog, safeStorage, shell } from 'electron'
-import { mkdirSync } from 'node:fs'
-import { isAbsolute, join } from 'node:path'
+import { registerCreativeProtocol } from './register-creative-protocol'
+import { join } from 'node:path'
+import { configuredStateRepository, stateRepositoryOptions } from './desktop-state-repository'
 import { ProfileCatalog } from './mam/profiles/profile-catalog'
 import { GitStateRepository } from './mam/state-store/git-state-repository'
 import { MamUiQueryService } from './mam/application/mam-ui-query-service'
 import { MamUiCommandService } from './mam/application/mam-ui-command-service'
 import { registerMamIpc } from './ipc/mam-ipc'
+import { registerCreativeIpc } from './ipc/mam-creative-ipc'
+import { desktopMediaDependencies } from './mam/components/desktop-media-dependencies'
 import { installDesktopSmokeProbe } from './desktop-smoke-probe'
+import { configureSmokeUserData } from './desktop-smoke-user-data'
 import { MamLocalSettingsStore } from './mam/profiles/mam-local-settings-store'
 import { createGitCommandClient } from './mam/state-store/git-command-client'
 import { DiagnosticsRecorder } from './mam/diagnostics/diagnostics-recorder'
@@ -14,9 +19,10 @@ import { MamWorkflowRunCommandService } from './mam/application/mam-workflow-run
 import { MamAttemptExecutionService } from './mam/application/mam-attempt-execution-service'
 import { AttemptResourceMaterializer } from './mam/profiles/attempt-resource-materializer'
 import { LocalArtifactStore } from './mam/artifacts/local-artifact-store'
+import { configureBinaryArtifactVerifier } from './mam/application/binary-artifact-verifier'
 import { AttemptArtifactValidator } from './mam/application/attempt-artifact-validator'
 import { PiRpcAdapter } from './mam/executors/pi-rpc-adapter'
-import { MAM_UI_SNAPSHOT_CHANGED_CHANNEL } from '../shared/mam/application-api'
+import { createSnapshotChangeNotifier } from './window-snapshot-notifier'
 import { MamAttemptInspectionService } from './mam/application/mam-attempt-inspection-service'
 import { MamMergeQueueExecutionService } from './mam/application/mam-merge-queue-execution-service'
 import { EncryptedLocalSecretStore } from './mam/application/encrypted-local-secret-store'
@@ -45,6 +51,7 @@ import {
   exportExecutionActivityDialog
 } from './mam/diagnostics/desktop-diagnostic-dialogs'
 let unregisterMamIpc: (() => void) | undefined
+registerCreativeProtocol()
 configureSmokeUserData()
 const mamRoot = join(app.getPath('userData'), 'mam')
 const localSettings = new MamLocalSettingsStore(
@@ -73,6 +80,7 @@ function createMainWindow(): void {
   const notifySnapshotChanged = createSnapshotChangeNotifier(window)
   runtimeLogger.record('main', 'window_create_start', { platform: process.platform })
   const profiles = new ProfileCatalog(join(mamRoot, 'catalog'))
+  configureBinaryArtifactVerifier(new LocalArtifactStore(join(mamRoot, 'artifacts')))
   ensureBuiltinPiProfile(profiles, localSettings, join(mamRoot, 'executors', 'pi'))
   const localSecrets = new EncryptedLocalSecretStore(join(mamRoot, 'secrets.enc.json'), {
     encrypt: (value) => {
@@ -97,7 +105,9 @@ function createMainWindow(): void {
     ],
     previousLogDirectories
   )
-  const initialRepository = configuredStateRepository(localSettings); const executionDrafts = new LocalExecutionDraftStore(join(mamRoot, 'execution-drafts'))
+  const initialRepository = configuredStateRepository(localSettings)
+  let creativeRepository = initialRepository
+  const executionDrafts = new LocalExecutionDraftStore(join(mamRoot, 'execution-drafts'))
   let activeProjectDirectory =
     initialRepository?.projectDirectory ??
     localSettings.get().defaultProjectDirectory ??
@@ -164,6 +174,10 @@ function createMainWindow(): void {
     catalog: profiles,
     settings: localSettings,
     executor: new PiRpcAdapter(undefined, undefined, undefined, logDirectory),
+    ...desktopComponentExecution(
+      mamRoot,
+      desktopMediaDependencies(profiles, localSettings, secretValues)
+    ),
     enabledExecutorKinds: ['pi-rpc'],
     claimantInstanceId: `claimant.${localSettings.get().bindingIdentity}`,
     resources: new AttemptResourceMaterializer(
@@ -215,6 +229,7 @@ function createMainWindow(): void {
         gitClient: createGitCommandClient(localSettings.get().gitExecutable)
       })
       activeProjectDirectory = repository.projectDirectory
+      creativeRepository = repository
       service.setRunSource(repository)
       commands.setRepository(repository)
       workflowRuns.setRepository(repository)
@@ -240,6 +255,22 @@ function createMainWindow(): void {
     createDesktopResourceOperations(resourceServices, service, notifySnapshotChanged),
     runtimeLogger
   )
+  const unregisterCreativeIpc = registerCreativeIpc(
+    window,
+    mamRoot,
+    desktopMediaDependencies(profiles, localSettings, secretValues),
+    () => service.getSnapshot().projectBinding?.projectDirectory,
+    () => {
+      const repository = creativeRepository
+      return repository
+        ? {
+            directory: repository.projectDirectory,
+            snapshot: service.getSnapshot(),
+            readProjectBlob: (commit, path) => repository.readProjectBlob(commit, path)
+          }
+        : undefined
+    }
+  )
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('https://')) void shell.openExternal(url)
     return { action: 'deny' }
@@ -251,6 +282,7 @@ function createMainWindow(): void {
     runtimeLogger.record('main', 'window_closed')
     unregisterMamIpc?.()
     unregisterMamIpc = undefined
+    unregisterCreativeIpc()
   })
 
   const developmentUrl = process.env.ELECTRON_RENDERER_URL
@@ -258,44 +290,8 @@ function createMainWindow(): void {
   else void window.loadFile(join(__dirname, '../renderer/index.html'))
 }
 
-function createSnapshotChangeNotifier(window: BrowserWindow): () => void {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  return () => {
-    if (timer || window.isDestroyed()) return
-    timer = setTimeout(() => {
-      timer = undefined
-      if (!window.isDestroyed()) window.webContents.send(MAM_UI_SNAPSHOT_CHANGED_CHANNEL)
-    }, 120)
-  }
-}
-
-function configuredStateRepository(
-  settings: MamLocalSettingsStore
-): GitStateRepository | undefined {
-  const projectDirectory = process.env.MAM_PROJECT_DIRECTORY
-  if (!projectDirectory) return undefined
-  if (!isAbsolute(projectDirectory)) {
-    throw new Error('MAM_PROJECT_DIRECTORY must be an absolute path')
-  }
-  return GitStateRepository.attach(projectDirectory, undefined, {
-    ...stateRepositoryOptions(settings),
-    gitClient: createGitCommandClient(settings.get().gitExecutable)
-  })
-}
-
-function stateRepositoryOptions(settings: MamLocalSettingsStore): { remote?: null } {
-  return settings.get().collaborationMode === 'local' ? { remote: null } : {}
-}
-
-function configureSmokeUserData(): void {
-  const directory = process.env.MAM_DESKTOP_SMOKE_USER_DATA
-  if (process.env.MAM_DESKTOP_SMOKE !== '1' || !directory) return
-  if (!isAbsolute(directory)) throw new Error('MAM_DESKTOP_SMOKE_USER_DATA must be absolute')
-  mkdirSync(directory, { recursive: true })
-  app.setPath('userData', directory)
-}
-
-void app.whenReady().then(() => {
+void app.whenReady().then(async () => {
+  await new LocalArtifactStore(join(mamRoot, 'artifacts')).prepareAllBinaryArtifacts()
   createMainWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createMainWindow()

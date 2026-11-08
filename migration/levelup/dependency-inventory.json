@@ -1,0 +1,13 @@
+{
+  "status": "partial-audit-not-runtime-ready",
+  "baseline": "6542241e440dead6cee60440afd8e658dd0ce0ca",
+  "requiredCommittedManifests": ["package.json", "pnpm-lock.yaml", "src-tauri/Cargo.toml", "src-tauri/Cargo.lock"],
+  "sourceMap": [
+    {"component":"ModelViewer","source":"src/components/ModelViewer.tsx","target":"MAM model preview adapter","strategy":"review only; imported verbatim under ModelWorkbench prefix"},
+    {"component":"shared dependencies","source":["src/lib/canvasEditorState.ts","src/lib/bridge.ts","src/lib/types.ts","src/lib/i18n.ts","src/components/CreationModeSwitch.css"],"target":"MAM shared contracts and semantic styles","strategy":"explicit exclusion from executable port; replace bridge/types/i18n with MAM contracts; review canvas behavior independently"}
+  ],
+  "knownDependencies": {"typescript":"React, Tauri invoke bridge, shared LevelUp types/i18n", "rust":"Tauri application state and resource managers", "python":"engine-specific requirements and platform resource manifests"},
+  "manifestSnapshot": "vendor/levelup/manifests-6542241/provenance.json",
+  "inheritanceSnapshots": ["vendor/levelup/inheritance-before/provenance.json", "vendor/levelup/inheritance-after/provenance.json"],
+  "limits": "Baseline retained exactly. Root package/lock and Cargo manifests, engine resource manifests and packaging requirements are captured in the bounded manifest snapshot. Relative import gaps require explicit MAM adapters, not automatic semantic resolution. Runtime-ready integration requires separate host acceptance."
+}

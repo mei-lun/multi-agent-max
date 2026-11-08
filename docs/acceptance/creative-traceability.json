@@ -1,0 +1,238 @@
+{
+  "schemaVersion": 1,
+  "hostCommit": "b3f447ae7d6a0f694f06e12c250f5fcb383b2f7b",
+  "sourceFingerprint": "fab2409c2716b9e1ca61e43f1a7861bbfa1a55059391ce75db04503f4d8fa9b8",
+  "platform": "win32-x64",
+  "runtime": "v24.19.0",
+  "packageManifestHashes": {
+    "creative-constellation": "4738334bf7011151b9e3fc66e17265e2f3f1121aa7c81df221b65a2b6c432b9d",
+    "creative-image": "519bf09bbea4cd311d2f2488636e2e096271397394ce9f3cad492733027ef78d",
+    "creative-model3d": "1eecfa1e5711ddd727ef852653a34014875e54e4eff16ab6d3d099b7b31e3e90",
+    "creative-music": "2552afff33506ba2623c09c45e823557c6667e5fcfbe64d840934d9f23739b0d",
+    "creative-speech": "537be49ab1632291002e5aa1a15186665bbf5b7f48c2d3dbad7d181e59f24082",
+    "creative-spine": "2957b7fd0a02f6246d9af319adc9456ad117ede9817cd7ba753039c9a4110966",
+    "creative-video": "b2b4e8c56d4c7a0f628e3ac09d5b9c1777e4ac06d9ddbebf088b70b402e00831",
+    "creative-writing": "e4915943d59603542f7a92f153d049c5f64703ab895960fd349bbb98ba7f3c54"
+  },
+  "dirtyFingerprint": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "generatedAt": "2026-11-08T10:57:16.679Z",
+  "hostVersion": "0.1.43",
+  "status": "partial",
+  "localEvidencePassed": true,
+  "evidence": [
+    {
+      "requirement": "MAM-CREATIVE-001",
+      "criterion": "local-component-lifecycle",
+      "path": ".mam-local/creative-desktop-qa/latest.json",
+      "status": "passed",
+      "binding": {
+        "hostCommit": "b3f447ae7d6a0f694f06e12c250f5fcb383b2f7b",
+        "sourceFingerprint": "fab2409c2716b9e1ca61e43f1a7861bbfa1a55059391ce75db04503f4d8fa9b8",
+        "platform": "win32-x64",
+        "runtime": "v24.19.0",
+        "packageManifestHashes": {
+          "creative-constellation": "4738334bf7011151b9e3fc66e17265e2f3f1121aa7c81df221b65a2b6c432b9d",
+          "creative-image": "519bf09bbea4cd311d2f2488636e2e096271397394ce9f3cad492733027ef78d",
+          "creative-model3d": "1eecfa1e5711ddd727ef852653a34014875e54e4eff16ab6d3d099b7b31e3e90",
+          "creative-music": "2552afff33506ba2623c09c45e823557c6667e5fcfbe64d840934d9f23739b0d",
+          "creative-speech": "537be49ab1632291002e5aa1a15186665bbf5b7f48c2d3dbad7d181e59f24082",
+          "creative-spine": "2957b7fd0a02f6246d9af319adc9456ad117ede9817cd7ba753039c9a4110966",
+          "creative-video": "b2b4e8c56d4c7a0f628e3ac09d5b9c1777e4ac06d9ddbebf088b70b402e00831",
+          "creative-writing": "e4915943d59603542f7a92f153d049c5f64703ab895960fd349bbb98ba7f3c54"
+        }
+      },
+      "scope": "local fixture"
+    },
+    {
+      "requirement": "MAM-CREATIVE-003",
+      "criterion": "image-speech-host",
+      "path": ".mam-local/media-desktop-qa/latest.json",
+      "status": "passed",
+      "binding": {
+        "hostCommit": "b3f447ae7d6a0f694f06e12c250f5fcb383b2f7b",
+        "sourceFingerprint": "fab2409c2716b9e1ca61e43f1a7861bbfa1a55059391ce75db04503f4d8fa9b8",
+        "platform": "win32-x64",
+        "runtime": "v24.19.0",
+        "packageManifestHashes": {
+          "creative-constellation": "4738334bf7011151b9e3fc66e17265e2f3f1121aa7c81df221b65a2b6c432b9d",
+          "creative-image": "519bf09bbea4cd311d2f2488636e2e096271397394ce9f3cad492733027ef78d",
+          "creative-model3d": "1eecfa1e5711ddd727ef852653a34014875e54e4eff16ab6d3d099b7b31e3e90",
+          "creative-music": "2552afff33506ba2623c09c45e823557c6667e5fcfbe64d840934d9f23739b0d",
+          "creative-speech": "537be49ab1632291002e5aa1a15186665bbf5b7f48c2d3dbad7d181e59f24082",
+          "creative-spine": "2957b7fd0a02f6246d9af319adc9456ad117ede9817cd7ba753039c9a4110966",
+          "creative-video": "b2b4e8c56d4c7a0f628e3ac09d5b9c1777e4ac06d9ddbebf088b70b402e00831",
+          "creative-writing": "e4915943d59603542f7a92f153d049c5f64703ab895960fd349bbb98ba7f3c54"
+        }
+      },
+      "scope": "local HTTP fixture; no live provider call"
+    },
+    {
+      "requirement": "MAM-CREATIVE-003",
+      "criterion": "video-playback-recovery",
+      "path": ".mam-local/video-desktop-qa/latest.json",
+      "status": "passed",
+      "binding": {
+        "hostCommit": "b3f447ae7d6a0f694f06e12c250f5fcb383b2f7b",
+        "sourceFingerprint": "fab2409c2716b9e1ca61e43f1a7861bbfa1a55059391ce75db04503f4d8fa9b8",
+        "platform": "win32-x64",
+        "runtime": "v24.19.0",
+        "packageManifestHashes": {
+          "creative-constellation": "4738334bf7011151b9e3fc66e17265e2f3f1121aa7c81df221b65a2b6c432b9d",
+          "creative-image": "519bf09bbea4cd311d2f2488636e2e096271397394ce9f3cad492733027ef78d",
+          "creative-model3d": "1eecfa1e5711ddd727ef852653a34014875e54e4eff16ab6d3d099b7b31e3e90",
+          "creative-music": "2552afff33506ba2623c09c45e823557c6667e5fcfbe64d840934d9f23739b0d",
+          "creative-speech": "537be49ab1632291002e5aa1a15186665bbf5b7f48c2d3dbad7d181e59f24082",
+          "creative-spine": "2957b7fd0a02f6246d9af319adc9456ad117ede9817cd7ba753039c9a4110966",
+          "creative-video": "b2b4e8c56d4c7a0f628e3ac09d5b9c1777e4ac06d9ddbebf088b70b402e00831",
+          "creative-writing": "e4915943d59603542f7a92f153d049c5f64703ab895960fd349bbb98ba7f3c54"
+        }
+      },
+      "scope": "locally encoded real MP4 served by local HTTP fixture; no external generation"
+    },
+    {
+      "requirement": "MAM-CREATIVE-005",
+      "criterion": "original-writing-persistence",
+      "path": ".mam-local/writing-desktop-qa/latest.json",
+      "status": "passed",
+      "binding": {
+        "hostCommit": "b3f447ae7d6a0f694f06e12c250f5fcb383b2f7b",
+        "sourceFingerprint": "fab2409c2716b9e1ca61e43f1a7861bbfa1a55059391ce75db04503f4d8fa9b8",
+        "platform": "win32-x64",
+        "runtime": "v24.19.0",
+        "packageManifestHashes": {
+          "creative-constellation": "4738334bf7011151b9e3fc66e17265e2f3f1121aa7c81df221b65a2b6c432b9d",
+          "creative-image": "519bf09bbea4cd311d2f2488636e2e096271397394ce9f3cad492733027ef78d",
+          "creative-model3d": "1eecfa1e5711ddd727ef852653a34014875e54e4eff16ab6d3d099b7b31e3e90",
+          "creative-music": "2552afff33506ba2623c09c45e823557c6667e5fcfbe64d840934d9f23739b0d",
+          "creative-speech": "537be49ab1632291002e5aa1a15186665bbf5b7f48c2d3dbad7d181e59f24082",
+          "creative-spine": "2957b7fd0a02f6246d9af319adc9456ad117ede9817cd7ba753039c9a4110966",
+          "creative-video": "b2b4e8c56d4c7a0f628e3ac09d5b9c1777e4ac06d9ddbebf088b70b402e00831",
+          "creative-writing": "e4915943d59603542f7a92f153d049c5f64703ab895960fd349bbb98ba7f3c54"
+        }
+      },
+      "scope": "local HTTP fixture; no live model call"
+    },
+    {
+      "requirement": "MAM-CREATIVE-005",
+      "criterion": "original-spine-vision",
+      "path": ".mam-local/spine-desktop-qa/latest.json",
+      "status": "passed",
+      "binding": {
+        "hostCommit": "b3f447ae7d6a0f694f06e12c250f5fcb383b2f7b",
+        "sourceFingerprint": "fab2409c2716b9e1ca61e43f1a7861bbfa1a55059391ce75db04503f4d8fa9b8",
+        "platform": "win32-x64",
+        "runtime": "v24.19.0",
+        "packageManifestHashes": {
+          "creative-constellation": "4738334bf7011151b9e3fc66e17265e2f3f1121aa7c81df221b65a2b6c432b9d",
+          "creative-image": "519bf09bbea4cd311d2f2488636e2e096271397394ce9f3cad492733027ef78d",
+          "creative-model3d": "1eecfa1e5711ddd727ef852653a34014875e54e4eff16ab6d3d099b7b31e3e90",
+          "creative-music": "2552afff33506ba2623c09c45e823557c6667e5fcfbe64d840934d9f23739b0d",
+          "creative-speech": "537be49ab1632291002e5aa1a15186665bbf5b7f48c2d3dbad7d181e59f24082",
+          "creative-spine": "2957b7fd0a02f6246d9af319adc9456ad117ede9817cd7ba753039c9a4110966",
+          "creative-video": "b2b4e8c56d4c7a0f628e3ac09d5b9c1777e4ac06d9ddbebf088b70b402e00831",
+          "creative-writing": "e4915943d59603542f7a92f153d049c5f64703ab895960fd349bbb98ba7f3c54"
+        }
+      },
+      "scope": "local HTTP/process fixtures; no paid model or GPU inference"
+    },
+    {
+      "requirement": "MAM-CREATIVE-001",
+      "criterion": "native-workbench-status",
+      "path": ".mam-local/native-workbenches-qa/latest.json",
+      "status": "passed",
+      "binding": {
+        "hostCommit": "b3f447ae7d6a0f694f06e12c250f5fcb383b2f7b",
+        "sourceFingerprint": "fab2409c2716b9e1ca61e43f1a7861bbfa1a55059391ce75db04503f4d8fa9b8",
+        "platform": "win32-x64",
+        "runtime": "v24.19.0",
+        "packageManifestHashes": {
+          "creative-constellation": "4738334bf7011151b9e3fc66e17265e2f3f1121aa7c81df221b65a2b6c432b9d",
+          "creative-image": "519bf09bbea4cd311d2f2488636e2e096271397394ce9f3cad492733027ef78d",
+          "creative-model3d": "1eecfa1e5711ddd727ef852653a34014875e54e4eff16ab6d3d099b7b31e3e90",
+          "creative-music": "2552afff33506ba2623c09c45e823557c6667e5fcfbe64d840934d9f23739b0d",
+          "creative-speech": "537be49ab1632291002e5aa1a15186665bbf5b7f48c2d3dbad7d181e59f24082",
+          "creative-spine": "2957b7fd0a02f6246d9af319adc9456ad117ede9817cd7ba753039c9a4110966",
+          "creative-video": "b2b4e8c56d4c7a0f628e3ac09d5b9c1777e4ac06d9ddbebf088b70b402e00831",
+          "creative-writing": "e4915943d59603542f7a92f153d049c5f64703ab895960fd349bbb98ba7f3c54"
+        }
+      },
+      "scope": "real host component rendering and no-resource statuses; no GPU inference"
+    },
+    {
+      "requirement": "MAM-CREATIVE-001",
+      "criterion": "offscreen-source",
+      "path": ".mam-local/creative-offscreen/latest.json",
+      "status": "passed",
+      "binding": {
+        "hostCommit": "b3f447ae7d6a0f694f06e12c250f5fcb383b2f7b",
+        "sourceFingerprint": "fab2409c2716b9e1ca61e43f1a7861bbfa1a55059391ce75db04503f4d8fa9b8",
+        "platform": "win32-x64",
+        "runtime": "v24.19.0",
+        "packageManifestHashes": {
+          "creative-constellation": "4738334bf7011151b9e3fc66e17265e2f3f1121aa7c81df221b65a2b6c432b9d",
+          "creative-image": "519bf09bbea4cd311d2f2488636e2e096271397394ce9f3cad492733027ef78d",
+          "creative-model3d": "1eecfa1e5711ddd727ef852653a34014875e54e4eff16ab6d3d099b7b31e3e90",
+          "creative-music": "2552afff33506ba2623c09c45e823557c6667e5fcfbe64d840934d9f23739b0d",
+          "creative-speech": "537be49ab1632291002e5aa1a15186665bbf5b7f48c2d3dbad7d181e59f24082",
+          "creative-spine": "2957b7fd0a02f6246d9af319adc9456ad117ede9817cd7ba753039c9a4110966",
+          "creative-video": "b2b4e8c56d4c7a0f628e3ac09d5b9c1777e4ac06d9ddbebf088b70b402e00831",
+          "creative-writing": "e4915943d59603542f7a92f153d049c5f64703ab895960fd349bbb98ba7f3c54"
+        }
+      },
+      "scope": "local fixture"
+    },
+    {
+      "requirement": "MAM-CREATIVE-001",
+      "criterion": "packaged-components",
+      "path": ".mam-local/packaged-creative-qa/latest.json",
+      "status": "passed",
+      "binding": {
+        "hostCommit": "b3f447ae7d6a0f694f06e12c250f5fcb383b2f7b",
+        "sourceFingerprint": "fab2409c2716b9e1ca61e43f1a7861bbfa1a55059391ce75db04503f4d8fa9b8",
+        "platform": "win32-x64",
+        "runtime": "v24.19.0",
+        "packageManifestHashes": {
+          "creative-constellation": "4738334bf7011151b9e3fc66e17265e2f3f1121aa7c81df221b65a2b6c432b9d",
+          "creative-image": "519bf09bbea4cd311d2f2488636e2e096271397394ce9f3cad492733027ef78d",
+          "creative-model3d": "1eecfa1e5711ddd727ef852653a34014875e54e4eff16ab6d3d099b7b31e3e90",
+          "creative-music": "2552afff33506ba2623c09c45e823557c6667e5fcfbe64d840934d9f23739b0d",
+          "creative-speech": "537be49ab1632291002e5aa1a15186665bbf5b7f48c2d3dbad7d181e59f24082",
+          "creative-spine": "2957b7fd0a02f6246d9af319adc9456ad117ede9817cd7ba753039c9a4110966",
+          "creative-video": "b2b4e8c56d4c7a0f628e3ac09d5b9c1777e4ac06d9ddbebf088b70b402e00831",
+          "creative-writing": "e4915943d59603542f7a92f153d049c5f64703ab895960fd349bbb98ba7f3c54"
+        }
+      },
+      "scope": "packaged executable with isolated seeded data; no model calls"
+    },
+    {
+      "requirement": "MAM-CREATIVE-005",
+      "criterion": "graph-file-tool-conversation",
+      "path": ".mam-local/graph-desktop-qa/latest.json",
+      "status": "passed",
+      "binding": {
+        "hostCommit": "b3f447ae7d6a0f694f06e12c250f5fcb383b2f7b",
+        "sourceFingerprint": "fab2409c2716b9e1ca61e43f1a7861bbfa1a55059391ce75db04503f4d8fa9b8",
+        "platform": "win32-x64",
+        "runtime": "v24.19.0",
+        "packageManifestHashes": {
+          "creative-constellation": "4738334bf7011151b9e3fc66e17265e2f3f1121aa7c81df221b65a2b6c432b9d",
+          "creative-image": "519bf09bbea4cd311d2f2488636e2e096271397394ce9f3cad492733027ef78d",
+          "creative-model3d": "1eecfa1e5711ddd727ef852653a34014875e54e4eff16ab6d3d099b7b31e3e90",
+          "creative-music": "2552afff33506ba2623c09c45e823557c6667e5fcfbe64d840934d9f23739b0d",
+          "creative-speech": "537be49ab1632291002e5aa1a15186665bbf5b7f48c2d3dbad7d181e59f24082",
+          "creative-spine": "2957b7fd0a02f6246d9af319adc9456ad117ede9817cd7ba753039c9a4110966",
+          "creative-video": "b2b4e8c56d4c7a0f628e3ac09d5b9c1777e4ac06d9ddbebf088b70b402e00831",
+          "creative-writing": "e4915943d59603542f7a92f153d049c5f64703ab895960fd349bbb98ba7f3c54"
+        }
+      },
+      "scope": "real Electron+package processes with local HTTP; no paid inference"
+    }
+  ],
+  "pending": [
+    "Paid provider online compatibility and output quality",
+    "Real music/model3d GPU inference and ComfyUI layer inference",
+    "macOS native acceptance",
+    "Publisher-signed online component catalog",
+    "Spine editor import/edit/save/reopen roundtrip"
+  ]
+}

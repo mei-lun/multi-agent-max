@@ -26,6 +26,7 @@ export type MamWorkflowCanvasEdge = Edge<
 
 export const workflowNodeTypes: WorkflowNode['type'][] = [
   'role_task',
+  'component_task',
   'dynamic_tasks',
   'review_gate',
   'review_aggregate',
@@ -117,6 +118,24 @@ export function createWorkflowNode(
     artifactId: 'artifact.input',
     version: 1,
     contentHash: '0'.repeat(64)
+  }
+  if (type === 'component_task') {
+    return {
+      id,
+      type,
+      ...roleSelection,
+      instruction: `Run ${id}.`,
+      workspaceMode: 'none',
+      inputs: [],
+      outputs: [{ ...output, format: 'asset-bundle' }],
+      component: {
+        id: 'creative.image',
+        version: '0.3.0',
+        hostApiVersion: '2.0.0',
+        operation: 'image.generate',
+        params: { prompt: '' }
+      }
+    }
   }
   if (type === 'role_task') {
     return {

@@ -7,6 +7,9 @@ import { MamEntityIdSchema } from '../../../shared/mam/domain/primitives'
 import type { MamLocalSettingsStore } from '../profiles/mam-local-settings-store'
 import type { MamLocalSecretWriter, MamUiWritableProfiles } from './mam-profile-write-ports'
 import { normalizeOpenAiProviderBaseUrl } from './openai-provider-url'
+import type { ModelProfile, ProviderProfile } from '../../../shared/mam/domain/execution-profile'
+import { classifyMediaModel } from '../media/native'
+import { videoModel } from '../media/video'
 
 export function saveModelConnectionProfiles(
   input: unknown,
@@ -19,14 +22,15 @@ export function saveModelConnectionProfiles(
   const ids = connectionIds()
   requireSecretStorage(parsed, localSettings, localSecrets)
   if (parsed.apiKey) localSecrets!.save(ids.secretRef, parsed.apiKey)
-  profiles.providers.save({
+  const provider: ProviderProfile = {
     id: ids.providerId,
     version: 1,
     protocol: parsed.protocol,
     ...(baseUrl ? { baseUrl } : {}),
     ...(parsed.apiKey ? { secretRef: ids.secretRef } : {})
-  })
-  profiles.models.save({
+  }
+  profiles.providers.save(provider)
+  const model: ModelProfile = {
     id: ids.modelId,
     version: 1,
     displayName: parsed.displayName,
@@ -36,12 +40,22 @@ export function saveModelConnectionProfiles(
       ? { defaultInference: { reasoningEffort: 'medium' } }
       : {}),
     capabilities: {
-      modalities: ['text'],
+      modalities: parsed.supportsImageInput ? ['text', 'image'] : ['text'],
       supportsTools: true,
       supportsStructuredOutput: true,
       maxContextTokens: 100_000
     }
-  })
+  }
+  const media = classifyMediaModel(model, provider)
+  const video = videoModel(model, provider)
+  if (media || video) {
+    model.capabilities.modalities = [video ? 'video' : media?.kind === 'image' ? 'image' : 'audio']
+    model.capabilities.supportsTools = false
+    model.capabilities.supportsStructuredOutput = false
+    delete model.capabilities.maxContextTokens
+    delete model.defaultInference
+  }
+  profiles.models.save(model)
   if (parsed.apiKey) saveSecretBinding(localSettings!, ids.secretRef)
 }
 

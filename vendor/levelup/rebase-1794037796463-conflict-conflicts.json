@@ -1,0 +1,13 @@
+{
+  "old": "rebase-1794037796463",
+  "new": "rebase-1794037796463-next",
+  "conflicts": [
+    {
+      "path": "a.mjs",
+      "reason": "Three-way conflict",
+      "hunks": [
+        "<<<<<<< D:\\Github-Poj\\multi-agent-max-creative-components\\vendor\\levelup\\.stage-88cqFM\\.merge-AG0gzi\\adapted\nexport const normalize = value => String(value);\n||||||| D:\\Github-Poj\\multi-agent-max-creative-components\\vendor\\levelup\\.stage-88cqFM\\.merge-AG0gzi\\base\nexport const normalize = value => value;\n=======\nexport const normalize = value => value.trim();\n>>>>>>> D:\\Github-Poj\\multi-agent-max-creative-components\\vendor\\levelup\\.stage-88cqFM\\.merge-AG0gzi\\incoming"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "old": "rebase-1794037796463",
+  "new": "rebase-1794037796463-dependency",
+  "conflicts": [
+    {
+      "path": "a.mjs",
+      "reason": "Three-way conflict",
+      "hunks": [
+        "<<<<<<< D:\\Github-Poj\\multi-agent-max-creative-components\\vendor\\levelup\\.stage-dULlvI\\.merge-z8WveC\\adapted\nexport const host = \"MAM\";\n||||||| D:\\Github-Poj\\multi-agent-max-creative-components\\vendor\\levelup\\.stage-dULlvI\\.merge-z8WveC\\base\nexport const host = \"upstream\";\n=======\nexport const host = \"upstream\";\nimport \"./new-dependency.mjs\";\n>>>>>>> D:\\Github-Poj\\multi-agent-max-creative-components\\vendor\\levelup\\.stage-dULlvI\\.merge-z8WveC\\incoming"
+      ]
+    },
+    {
+      "source": "a.mjs",
+      "import": "./new-dependency.mjs",
+      "resolved": null,
+      "reason": "New dependency requires explicit adapter mapping/review reason"
+    }
+  ]
+}

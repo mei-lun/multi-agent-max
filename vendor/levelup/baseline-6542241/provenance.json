@@ -1,0 +1,1627 @@
+{
+  "schema": 1,
+  "commit": "6542241e440dead6cee60440afd8e658dd0ce0ca",
+  "selection": {
+    "schema": 1,
+    "workbenches": [
+      "media",
+      "music",
+      "model",
+      "spine",
+      "writing",
+      "constellation"
+    ],
+    "components": [
+      "MediaStudio",
+      "MusicWorkbench",
+      "ModelWorkbench",
+      "SpineStudio",
+      "WritingStudio",
+      "ConstellationStudio",
+      "ModelViewer",
+      "CreativeStudioHeader"
+    ],
+    "rules": [
+      {
+        "prefix": "LICENSE",
+        "component": "licenses",
+        "target": "audit",
+        "strategy": "verbatim"
+      },
+      {
+        "prefix": "src/components/Media",
+        "component": "MediaStudio",
+        "target": "audit; explicit MAM adapter required",
+        "strategy": "verbatim provenance",
+        "knownDependencies": [
+          "See dependencyGaps; Rust/Python runtime requires manual review"
+        ]
+      },
+      {
+        "prefix": "src/lib/media",
+        "component": "MediaStudio",
+        "target": "audit; explicit MAM adapter required",
+        "strategy": "verbatim provenance",
+        "knownDependencies": [
+          "See dependencyGaps; Rust/Python runtime requires manual review"
+        ]
+      },
+      {
+        "prefix": "src-tauri/src/media",
+        "component": "MediaStudio",
+        "target": "audit; explicit MAM adapter required",
+        "strategy": "verbatim provenance",
+        "knownDependencies": [
+          "See dependencyGaps; Rust/Python runtime requires manual review"
+        ]
+      },
+      {
+        "prefix": "src/components/Music",
+        "component": "MusicWorkbench",
+        "target": "audit; explicit MAM adapter required",
+        "strategy": "verbatim provenance",
+        "knownDependencies": [
+          "See dependencyGaps; Rust/Python runtime requires manual review"
+        ]
+      },
+      {
+        "prefix": "src/lib/music",
+        "component": "MusicWorkbench",
+        "target": "audit; explicit MAM adapter required",
+        "strategy": "verbatim provenance",
+        "knownDependencies": [
+          "See dependencyGaps; Rust/Python runtime requires manual review"
+        ]
+      },
+      {
+        "prefix": "src-tauri/src/music_",
+        "component": "MusicWorkbench",
+        "target": "audit; explicit MAM adapter required",
+        "strategy": "verbatim provenance",
+        "knownDependencies": [
+          "See dependencyGaps; Rust/Python runtime requires manual review"
+        ]
+      },
+      {
+        "prefix": "modules/music",
+        "component": "MusicWorkbench",
+        "target": "audit; explicit MAM adapter required",
+        "strategy": "verbatim provenance",
+        "knownDependencies": [
+          "See dependencyGaps; Rust/Python runtime requires manual review"
+        ]
+      },
+      {
+        "prefix": "packaging/music",
+        "component": "MusicWorkbench",
+        "target": "audit; explicit MAM adapter required",
+        "strategy": "verbatim provenance",
+        "knownDependencies": [
+          "See dependencyGaps; Rust/Python runtime requires manual review"
+        ]
+      },
+      {
+        "prefix": "src/components/Model",
+        "component": "ModelWorkbench",
+        "target": "audit; explicit MAM adapter required",
+        "strategy": "verbatim provenance",
+        "knownDependencies": [
+          "See dependencyGaps; Rust/Python runtime requires manual review"
+        ]
+      },
+      {
+        "prefix": "src/lib/modelWorkbench",
+        "component": "ModelWorkbench",
+        "target": "audit; explicit MAM adapter required",
+        "strategy": "verbatim provenance",
+        "knownDependencies": [
+          "See dependencyGaps; Rust/Python runtime requires manual review"
+        ]
+      },
+      {
+        "prefix": "src-tauri/src/model_",
+        "component": "ModelWorkbench",
+        "target": "audit; explicit MAM adapter required",
+        "strategy": "verbatim provenance",
+        "knownDependencies": [
+          "See dependencyGaps; Rust/Python runtime requires manual review"
+        ]
+      },
+      {
+        "prefix": "modules/model",
+        "component": "ModelWorkbench",
+        "target": "audit; explicit MAM adapter required",
+        "strategy": "verbatim provenance",
+        "knownDependencies": [
+          "See dependencyGaps; Rust/Python runtime requires manual review"
+        ]
+      },
+      {
+        "prefix": "packaging/model",
+        "component": "ModelWorkbench",
+        "target": "audit; explicit MAM adapter required",
+        "strategy": "verbatim provenance",
+        "knownDependencies": [
+          "See dependencyGaps; Rust/Python runtime requires manual review"
+        ]
+      },
+      {
+        "prefix": "public/model-viewer",
+        "component": "ModelWorkbench",
+        "target": "audit; explicit MAM adapter required",
+        "strategy": "verbatim provenance",
+        "knownDependencies": [
+          "See dependencyGaps; Rust/Python runtime requires manual review"
+        ]
+      },
+      {
+        "prefix": "src/components/Spine",
+        "component": "SpineStudio",
+        "target": "audit; explicit MAM adapter required",
+        "strategy": "verbatim provenance",
+        "knownDependencies": [
+          "See dependencyGaps; Rust/Python runtime requires manual review"
+        ]
+      },
+      {
+        "prefix": "src/lib/spine",
+        "component": "SpineStudio",
+        "target": "audit; explicit MAM adapter required",
+        "strategy": "verbatim provenance",
+        "knownDependencies": [
+          "See dependencyGaps; Rust/Python runtime requires manual review"
+        ]
+      },
+      {
+        "prefix": "src-tauri/src/spine",
+        "component": "SpineStudio",
+        "target": "audit; explicit MAM adapter required",
+        "strategy": "verbatim provenance",
+        "knownDependencies": [
+          "See dependencyGaps; Rust/Python runtime requires manual review"
+        ]
+      },
+      {
+        "prefix": "modules/spine",
+        "component": "SpineStudio",
+        "target": "audit; explicit MAM adapter required",
+        "strategy": "verbatim provenance",
+        "knownDependencies": [
+          "See dependencyGaps; Rust/Python runtime requires manual review"
+        ]
+      },
+      {
+        "prefix": "src/components/Writing",
+        "component": "WritingStudio",
+        "target": "audit; explicit MAM adapter required",
+        "strategy": "verbatim provenance",
+        "knownDependencies": [
+          "See dependencyGaps; Rust/Python runtime requires manual review"
+        ]
+      },
+      {
+        "prefix": "src/lib/writing",
+        "component": "WritingStudio",
+        "target": "audit; explicit MAM adapter required",
+        "strategy": "verbatim provenance",
+        "knownDependencies": [
+          "See dependencyGaps; Rust/Python runtime requires manual review"
+        ]
+      },
+      {
+        "prefix": "src/components/Constellation",
+        "component": "ConstellationStudio",
+        "target": "audit; explicit MAM adapter required",
+        "strategy": "verbatim provenance",
+        "knownDependencies": [
+          "See dependencyGaps; Rust/Python runtime requires manual review"
+        ]
+      },
+      {
+        "prefix": "src/lib/constellation",
+        "component": "ConstellationStudio",
+        "target": "audit; explicit MAM adapter required",
+        "strategy": "verbatim provenance",
+        "knownDependencies": [
+          "See dependencyGaps; Rust/Python runtime requires manual review"
+        ]
+      },
+      {
+        "prefix": "src/components/CreativeStudioHeader",
+        "component": "CreativeStudioHeader",
+        "target": "audit; explicit MAM adapter required",
+        "strategy": "verbatim provenance",
+        "knownDependencies": [
+          "See dependencyGaps; Rust/Python runtime requires manual review"
+        ]
+      },
+      {
+        "prefix": "scripts/test-spine",
+        "component": "spine",
+        "target": "audit tests",
+        "strategy": "verbatim"
+      },
+      {
+        "prefix": "scripts/test-model",
+        "component": "model",
+        "target": "audit tests",
+        "strategy": "verbatim"
+      },
+      {
+        "prefix": "scripts/test-music",
+        "component": "music",
+        "target": "audit tests",
+        "strategy": "verbatim"
+      },
+      {
+        "prefix": "scripts/test-writing",
+        "component": "writing",
+        "target": "audit tests",
+        "strategy": "verbatim"
+      },
+      {
+        "prefix": "scripts/test-media",
+        "component": "media",
+        "target": "audit tests",
+        "strategy": "verbatim"
+      }
+    ]
+  },
+  "files": [
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "463cb31005743a0d8572650e0c5341cfde442bcf",
+      "path": "LICENSE",
+      "sha256": "6fff706f0bf955f722e8baf87ffea4ece96e77652f13b1d503ce5161d2ca3a98"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "a1f7b34faf0faf32696978fa4ed3cabfb2285d6a",
+      "path": "LICENSE.GPL",
+      "sha256": "8ffc3d0e65a6f7692e7df3ac84cdc5d2efc7f9a8761f696af2044f4b53c66598"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "bdc73a68b75c198e2d4dd8e631be31b8b04cf9b5",
+      "path": "modules/model3d/lgm-lab.manifest.json",
+      "sha256": "78cab914c75e286b57a1ffd18fce1044acc6429d3e6b4740ad9fb3646c106c0b"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "624f883fa75e5fe5aec00288d6b8df0bccce908e",
+      "path": "modules/model_workbench/app/__init__.py",
+      "sha256": "8fd383aa377e5df99c180dce2f8101af810235f276ae4040919bd7a59147be92"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "cc64e595a3e58d7a3cac0c365551bbeec8aa4bbf",
+      "path": "modules/model_workbench/app/image_preparation.py",
+      "sha256": "360a50edc94a0aff7888d9cc5aaecd62ac1eee4de21c2ae0706358ae0a9a5bd3"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "694c02b4b6cf7f522a0c5e07b8e7e35edba4c1e7",
+      "path": "modules/model_workbench/app/mesh_geometry.py",
+      "sha256": "7a98f8d41ba6241fe13e698a0972a74e2e9c416c61fd1c4e2194ac3430659369"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "03205938d8b0d4ec972ac1311ea65e41e310791e",
+      "path": "modules/model_workbench/app/rig_worker.py",
+      "sha256": "6f6672cd75c5c33c9ad5a77a9cfe534c4666f4fd920c8c5ef11d4088eda00ee3"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "3ae9281fee74c0c4df8c4614a532fb5aa5eccfcb",
+      "path": "modules/model_workbench/app/texture_worker.py",
+      "sha256": "cf9bffb05c7a7738f60ccc851ef53c73d1d7fde00f690d7ed97283d0ad810208"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "ab72799869919bac31e5b1fd3bc92eeac9504154",
+      "path": "modules/model_workbench/app/triposg_worker.py",
+      "sha256": "87a138a16c11e4794e02c2ade928779ca8ea5b719afa3f742a52f1e2ca9b638d"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "f8f5baa9e46e9aa1ba4b5deac895f2a293f99bc1",
+      "path": "modules/model_workbench/app/worker.py",
+      "sha256": "0307ff0b814c48747f438763a3fb90ff4a2a93ca46f311e918e4aea60a6809a8"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "22c36840847a8e93a49e60204b5ca4dbcda89db8",
+      "path": "modules/model_workbench/launcher.py",
+      "sha256": "61a34adc52256e434a3313946baa10541082e6bc23213cf278839e6bc98922d4"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "448d40739905fefdf7361290093dc2b493c76516",
+      "path": "modules/model_workbench/resources-windows.json",
+      "sha256": "41250c262a190d4c7d9f62ea7b3fd69bbe52db1447b99052979dfa09e778a194"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "8bff6231174929f3bf62da442cdfe3dafbe97a71",
+      "path": "modules/model_workbench/resources.json",
+      "sha256": "ac188041dcfcb7f93bdbbcbe4e2d50b7cea6aca79415e40a6a5c87ff20133a24"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "1bbbc4fc420ecc9537802a92f96ecfc84d97d9d5",
+      "path": "modules/model_workbench/tests/test_image_preparation.py",
+      "sha256": "31e8065d4dda9da3f72942ed68ea689663ce8c0c5d515c432e76da5ce2b1c334"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "46ec5f21418a16994f137e64059a1f3466fa181f",
+      "path": "modules/model_workbench/tests/test_launcher.py",
+      "sha256": "7552aa8757425088566788dfd5827e234760edd6ef1995202255d2f134849bde"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "73948ab4693aec73d883716a755970bd0c21b447",
+      "path": "modules/model_workbench/tests/test_windows_lifecycle.py",
+      "sha256": "0c70d62fc67da2e4d0f09af5b7d118fb1cc4c733d5e950aae408189490a17fac"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "c5fade78d4c4d492dcee3252206bae045e0beccc",
+      "path": "modules/model_workbench/windows_process_tree.py",
+      "sha256": "8b4a1165edd7cb17353b2d81ad8d6197f30ce639c81b9cfe62abc12e47ce427c"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "8320c7e0fc3a9843388856d873dad7a4e87a0fa2",
+      "path": "modules/music_workbench/backend/__init__.py",
+      "sha256": "bd393c47c181a309d30dd0cc76a57ae6c9fb794770b79357ab509a99236628c0"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "0295d18787a90bd9fc394c51a6ab47bc5a892348",
+      "path": "modules/music_workbench/backend/acestep_worker.py",
+      "sha256": "b2369e1d5f19beed8133f956c0e9dfa071845b7ef3f8dc8c25ce232be4fc1e33"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "e07d7710a0c3ccc82bd9d7f911ffd7cfaf92bbe0",
+      "path": "modules/music_workbench/backend/core.py",
+      "sha256": "5f4970cb01231d5dff518894e5569f4858f6d06bbba977b728f854f23f1c80df"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "e93be83edda0d89a6e443fcfd67bd3aa0d2c6aa4",
+      "path": "modules/music_workbench/backend/engine.py",
+      "sha256": "e042955c5f0a42a2209bb23c6878e4a796ddd5572398090cc9eb245b36a885a3"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "d2631fcb328953a9abcec9c2a16d436cf2fcf2f1",
+      "path": "modules/music_workbench/backend/musicgen_worker.py",
+      "sha256": "e35b0a14533434cb3b3eda2d401887f65fc8900941592a6cd0fa27a15500eb07"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "c19b1cc2144e68097db4d807cd3d7b2ed45c0625",
+      "path": "modules/music_workbench/backend/sketch_worker.py",
+      "sha256": "f7b58be6966408b3cfa97be42b0fbf5142741f1882e5b4b6146d7478408512c4"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "0323173cc4467f8a686a2e492ca00c07da15f906",
+      "path": "modules/music_workbench/backend/yue2_audio.py",
+      "sha256": "8b55132c3ae32ae3107bf73cf1792f2ee13a2469634ecbd7cfc222a9147cdc00"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "f6b1780c681d2bc9a006aba84f56388eab3dfc35",
+      "path": "modules/music_workbench/backend/yue2_worker.py",
+      "sha256": "5627eb7da77567f04af577d45bd58e022def32127f43e5e5dc0781c7457f23b8"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "bdbcd63b88063106951d264370ff1cae9755222b",
+      "path": "modules/music_workbench/bridge.py",
+      "sha256": "898b67b157cc7cc892f3233eb66bd7fa40ca6113d89175111daa1d2d64b1f4ea"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "55cb456d8848a8921ac095fc635268055c321133",
+      "path": "modules/music_workbench/resources.json",
+      "sha256": "ea6bf51a37cac818a819ba5e21c4d629af52f283a5cd9c511c7d299af97318d2"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "0417b8569c65dedd8aac1530380bae1e75dcb892",
+      "path": "modules/music_workbench/song-resources.json",
+      "sha256": "5dcd700887705f38b2bf26e439702d9af84cfd03de6979adbcef77995069e5ba"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "ce157b8e8d3b06bc2d94debe2a220785239faa03",
+      "path": "modules/music_workbench/tests/test_bridge.py",
+      "sha256": "0577bd7f611f6e2be90f784bd044c0a0ee4d48b9ef6b8ea867b4ef78a7491cda"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "9a4b44d9ff1287db7b3581bff2759afca26cd266",
+      "path": "modules/music_workbench/tests/test_reference_audio.py",
+      "sha256": "1c4875b94ff681a131667023b4180586caab7c9dc1f2f667de7ea2226a15a7fe"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "a3fe517ed2a4ffd7616a4f7365bd69d4a6dde253",
+      "path": "modules/spine_comfy_bridge/README.md",
+      "sha256": "2367621aec41bce64a142ff62111e12f81c6b1ca81a4f6c9f417c0a711dce283"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "47113ad8852e6a03f0779126676475d458bad2c3",
+      "path": "modules/spine_comfy_bridge/__init__.py",
+      "sha256": "27203f323b546a71c6d62fff9e76af1262cb268c942305aef9da4061b5c969c9"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "3b11642a26bfb80a72f3deba8ef82a121117d045",
+      "path": "packaging/model-workbench/README.md",
+      "sha256": "a38ebef184949f0d6d31c050e2a4bffaffe648e5d0776e9ffaeb3e7972f4a3f9"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "0315893cf0ad57654947e0de6b52518ee42ea0d7",
+      "path": "packaging/model-workbench/WINDOWS.md",
+      "sha256": "648bcf5c33ea6663bcb0cff679d3567b016cba1e098694f8fa94034e18ec8d6c"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "b9df64258570083fe104ff695abd48a500d6e868",
+      "path": "packaging/model-workbench/conda-explicit.txt",
+      "sha256": "c8e49152b6d041fa4d233d4c3a64af49dbd53e97276d2b7b8d97d156f877c792"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "03d48a72bf4300895617d83933579ebc40d7a1cb",
+      "path": "packaging/model-workbench/cuda-sources.json",
+      "sha256": "b5389cabb419fae6555a09a3972295b0c7cc58e947768a50471d0d5bc645984b"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "5904461888f3a5ca05cda7d468f32df1b9165a03",
+      "path": "packaging/model-workbench/patch_mvadapter.py",
+      "sha256": "f015b0c4dc35fa8d8104ff7e1b7b78f2ba2a541a41911377cba91c3d84b56268"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "754301a4f67cca3bc24a972977d0f3001d305915",
+      "path": "packaging/model-workbench/requirements.txt",
+      "sha256": "70fa5af2d39da027a1ba968fc8e68d2c6c7d02d33ed08b2ff81a5dea73590bca"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "d17f67f874a29b7a7359d20c6d1dd12636ca6b2c",
+      "path": "packaging/model-workbench/sd21-sources.json",
+      "sha256": "7b8a8cafb69987280228373e930c29cd88171dc794c1fd2ba22d4aa2731b73ef"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "d97f50b7e286754a6ed57e50f052f6639a86ef7f",
+      "path": "packaging/model-workbench/sdxl-sources.json",
+      "sha256": "a856c4bb759aa25b4ee41a376af4b5a760c6e43f965eaa4a6fb21657ee010e52"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "7446375fd62232e6c1ffc272f171da008c4faf58",
+      "path": "packaging/model-workbench/triposg-sources.json",
+      "sha256": "6f6d5f2065b7ac0fdf792eebb2d266c35764424af7b02906fcbc6078608241f7"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "c07f885cfcc23d45ae833cc4348de6ea2b033004",
+      "path": "packaging/music-workbench/README.md",
+      "sha256": "65f1d4258c85b30023f1415a9cf494b8e84891cec877976840c32f3f7f4e96c8"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "d268ee295b8ccaa75576ce698c542e04e15e9cc5",
+      "path": "packaging/music-workbench/requirements.lock.txt",
+      "sha256": "823266d2aa57fea6e7eaee134ed25b53245bd43155246c3b0ba3f21ee9c1feb0"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "d645695673349e3947e8e5ae42332d0ac3164cd7",
+      "path": "public/model-viewer-LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "bebbca20b3e1fa6d32fffd1a0b13731d72b31254",
+      "path": "public/model-viewer.min.js",
+      "sha256": "774edda21e1be2a0934e460ca5943af1fe3f88da130a9f98bd6a9d611576cacf"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "e06a62bb25878819937071fb4e443be6d56d6560",
+      "path": "scripts/test-media-capabilities.mjs",
+      "sha256": "fdcb26622db6ded6371d3c79f495667b5b98409b0ec1b1e2d013b770864b3e00"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "9410c8e972bd49cc8b4a4ca4f5f9b9d5e72c32ce",
+      "path": "scripts/test-media-concurrency.mjs",
+      "sha256": "f3a2580e5aa5bf6f59150879eef24f245ee2b769de279dfa34579775aa81c0bb"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "d6a6642986ee44332f66dbfd5367a747d69ca917",
+      "path": "scripts/test-media-history-ui.mjs",
+      "sha256": "5fbbc77ef4349642124dd24daa44ab0d03384e50699b45931dba2f45044cb375"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "99aa95069832551d83400a17e4e15caabbdc82a2",
+      "path": "scripts/test-media-history.mjs",
+      "sha256": "fb5ed411b91f39924036e78cbe65ef650a70937089b4f80eb736fe88d5307fe6"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "cef11f160e985c85f2572a6488a6b1cbc6b7f429",
+      "path": "scripts/test-media-references.mjs",
+      "sha256": "c5b4ded3942b0d03938735ecb2461e1df29b9622addcea55a39d5df64d473c3a"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "7d2708203327818c0d8ca78c595218f15464fd54",
+      "path": "scripts/test-model-avatars.mjs",
+      "sha256": "b04033f1e1293e6497c8797fd5743d0d417e6222ad5a97ab807a4a0005543613"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "5eeddefbf34dcbd644c93fb228fc65c4bc8ba1f5",
+      "path": "scripts/test-model-resource-platform.mjs",
+      "sha256": "62a8c4ac7e61cd416ea23ee6dcb63c20b49f978a59be57ad27eaf111fd97f156"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "2459bc1497b5b502b6e5bb423bef9d4739fe8490",
+      "path": "scripts/test-model-selection.mjs",
+      "sha256": "57d1cebf13c34b4a04c001c42aba0f7c02d8d2bf3563fc6de13d52eff041e4a4"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "faceaf6398036f9a2da043c2fe746d9b31eed342",
+      "path": "scripts/test-model-viewer-csp.mjs",
+      "sha256": "4973f2bd251965e7c72d163c48ce56ee1fdd4e3256b825aa6c91ca08d457c773"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "fcf9cf54ebc233a5f319e49b91f8fa33c756f5ca",
+      "path": "scripts/test-model3d-integration.mjs",
+      "sha256": "266598523cb5381473923fe2652ccbcb6ef2809d4fe7bf0b91b80db3376df66a"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "a180a5b4f2d0c2e1dd0dc246252e22064d3e8738",
+      "path": "scripts/test-music-workbench-ui.mjs",
+      "sha256": "24f53638a5a6568c51cc74ab2c0dcee1abfde26be1be234800b065f42384c784"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "34a01e0353f9ecf2075c0eef80b07a6f38383470",
+      "path": "scripts/test-spine-motion-ui.mjs",
+      "sha256": "2a2fa1c79fb9ba4b3d2b3fd40d7f9631003e314062510a510886e1378471784b"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "85c844283c6d0bb4cccd519d1d3463ee51dc3e61",
+      "path": "scripts/test-spine-pose-ui.mjs",
+      "sha256": "a4e9564e9c33670e99967e88e950698dcff4148e0be130e8ca0c11cfe3d52892"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "06a867860fceaa98bf1c3261197d2a359c2ef0f0",
+      "path": "scripts/test-spine-ui.mjs",
+      "sha256": "9bd85647e6a7a0925a0a29af5bdea9ccaaa044cbe7f0f6f02bcde4f0fd0e636e"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "9dd49ababccd89fc3db57663a476386aae9ed015",
+      "path": "scripts/test-spine-v2-ui.mjs",
+      "sha256": "6827c76038a729aae2f78a3e608b67cc28ec730eb03318df73e024645410decd"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "377b62528d51b665c11d5c29eb365073f1c90a41",
+      "path": "scripts/test-spine-v2.mjs",
+      "sha256": "3d7fc2cffe0f9aba146c40ded7d12c981b757378070c759d407ae48fd2f87f81"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "55a77b3da49dee75673b46a34c6dbb1103bde012",
+      "path": "scripts/test-spine-v3-ui.mjs",
+      "sha256": "11b6e19fb5051a03597a3d1dc0e81a4fcb17153dcbe193ac2793bedef8d7c412"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "30cc5854924158eda1220ddca8080e00ea8417ed",
+      "path": "scripts/test-spine-v3.mjs",
+      "sha256": "89d81dbab01bf51559dc82f0db18514d25edb34367ffeb2b981ba5c744fee374"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "82572bd0472fa0c2631bc706d7cd0a750909b8cc",
+      "path": "scripts/test-spine-v4-plan-ui.mjs",
+      "sha256": "31ce5e47cea00057abc838927ee33bbe4e1150d98055d649bd615e31246eb527"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "54122213d65cbfb6125446a178ee0f649a442a7c",
+      "path": "scripts/test-spine-v4-ui.mjs",
+      "sha256": "cb084c76f5cf3df32ba97fad3e1e0ca34e9f3977b5a6bc993047ffdd1086f45f"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "140f8e573e8589da57f621f08330116fb9e78f69",
+      "path": "scripts/test-spine-v4.mjs",
+      "sha256": "9163efdc5e3209d1612d550654ee0f7b77849571d7f5eedc2cbaa55f560a6406"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "332f0914eddbd2e26fc35f217daa9b04d8aa64ea",
+      "path": "scripts/test-spine-v5-ui.mjs",
+      "sha256": "e911502b80dd374ab611ed9c760687b880b328557474583471c0547ed8e6e39f"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "b500087bd9eede221ef2c1cc3e163ad6a70ae9bf",
+      "path": "scripts/test-spine-v5.mjs",
+      "sha256": "87d73275963c6229a45e241c71d4b3bb15f7694281ecf844fad1d289d069591f"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "d40ab699dd744ba334195960f9d350d1e5152827",
+      "path": "scripts/test-spine.mjs",
+      "sha256": "36cbd4bad517fac50875a5e1598ca5f0512816fc5cc78ff6e4d6418bde350f8a"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "886ce1b7636ebce010597e0afa83172b719d2326",
+      "path": "scripts/test-writing.mjs",
+      "sha256": "6fe5ca863f7ac7e9e05d8a44ddf43e1c26a49a7646de973f6f6ce742f7745e1e"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "777654aca2f3a710e9a137dc31523720223b9191",
+      "path": "src-tauri/src/media.rs",
+      "sha256": "4a8c26369fdd6bf3120344c151e1fb9cf7e4dc30e0ea5fa613c6d614d0fac348"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "713cc57fb12cebf8ab9cf8e6bc0b0160dbe3d70b",
+      "path": "src-tauri/src/media/grok_audio.rs",
+      "sha256": "6def61cdb00584d985b56cf802fbae817a5728b60c0464e6c9229f1b0b55d319"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "34282b76d2ae1013a5bbe4f47dc8184897eb4dab",
+      "path": "src-tauri/src/media/native_media.rs",
+      "sha256": "b46b7c72e4b1cc642a9044982efa897bf86402c3a6918ba4f61d075b7a5db37b"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "6636eb2de15a138730d22decb3e36d131d7a5a9a",
+      "path": "src-tauri/src/media/refresh.rs",
+      "sha256": "b52a6877d4aa3a85b711efe6c50e925a865e07e7dc63cc14cefae08c4f1a0f3b"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "3351b9e468eeb5b79dac1054b92646c237a9667e",
+      "path": "src-tauri/src/media/video_recovery_tests.rs",
+      "sha256": "c29d2c3d513f487b90858fd2800877845f727c789d98525989d54a63fc6c03fb"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "2a7e876422daed39f0ee2c8ed6918367eea6abb5",
+      "path": "src-tauri/src/model_resources.rs",
+      "sha256": "695c2cd4bb17ea8d51c0e74e398ea0063c506ba7b9d40ec02fe7a11118a0ec46"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "824de3ac5a384aa1de6864ffd8a6ad40e45e3ae5",
+      "path": "src-tauri/src/model_workbench.rs",
+      "sha256": "864adfcbba2339621a38dcb9df16718d14c1f53a331248e613cafa224c563593"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "d1e486599be1fe4c2f80821cfd7239bd0b2e1d2c",
+      "path": "src-tauri/src/music_resources.rs",
+      "sha256": "9cca8b8500f9072050e4530694bf43cde27d025e5c427d6b4ebd6b74325dfae1"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "91c62a4366ac6a5216769c4f5d684e7044423294",
+      "path": "src-tauri/src/music_workbench.rs",
+      "sha256": "df90692440e2270bc5f4aa50f100ec1944b9ddaae9b3b1eb9fe6d6f7751f9850"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "83ad279ab36de031e8350f78479a05156c28b411",
+      "path": "src-tauri/src/spine.rs",
+      "sha256": "132dcb84bfddd1d96336582dda9d01d0a3e1ecbf4cbb49b68f1cf9faed9c50b1"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "2524e58ea9b850e08fb933f0ba694b4cf8be953a",
+      "path": "src-tauri/src/spine_comfy.rs",
+      "sha256": "f4caeb4b50a19f0a6bf0b883f53246a62fce88353dc8ddb5f9d1100e885d83ee"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "16e4f31979db608e7d45b3359fbc70d594b7a927",
+      "path": "src-tauri/src/spine_rife.rs",
+      "sha256": "66b5ae34c000d5f59eec836ff3afbc1619c1834e2a30511af39f2a5989f6e9f0"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "aa116626f39ed02d35ad18007be5d66e0892779d",
+      "path": "src/components/ConstellationCanvasEditor.tsx",
+      "sha256": "7197e0856d76be0c76a3ff73a1eca5834879b1a7f4981bc1da7beccb830865e2"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "64d3e7bf2429e9e07f8950c96cd8b4aaf7b9346d",
+      "path": "src/components/ConstellationEnterTransition.tsx",
+      "sha256": "5ec060ea8a99dffc718d671544451413c9c8951303d12172a8c71a608b82290e"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "2c4e15195706e6bf4ef00563fbad74bc758942f0",
+      "path": "src/components/ConstellationNodes.tsx",
+      "sha256": "efd7acf39b2590de0518fc446a192f0f35ed9155c2f08bfed30c2e3b23c3f3df"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "c3ea2111d0ab7031645bfcb5188109b2393fbd59",
+      "path": "src/components/ConstellationOverview.tsx",
+      "sha256": "e358e49d433404b59d82097e8c990c7aa876a2c8e04e21113ffe32d4ba12b0a7"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "eebbdddd77dbd1cd2a6b4697c769afee148e344b",
+      "path": "src/components/ConstellationSources.tsx",
+      "sha256": "c45408490f99c902909d9930c09f4bf6624fa76cdd48ad7e7ad535a32ff3f4cc"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "0e5fd93097ae09df841ddfb1f2154861fef73d4e",
+      "path": "src/components/ConstellationStudio.css",
+      "sha256": "ddb9cd1b7f794af99876fb792dd1c1c83ba075083526ed57e0442c0e80a5c653"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "16d4b7226305aedb723a3eebdc3ef72b399265be",
+      "path": "src/components/ConstellationStudio.tsx",
+      "sha256": "ea2d935bfef24649cb444db70f09965af617e939c8b2732332eedc048f80292c"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "b7a59ee9e161dbcdb4bc548289ed00149387740d",
+      "path": "src/components/CreativeStudioHeader.tsx",
+      "sha256": "f86e45fe62207f18cfac59e0600a1c5423b5a6ec9fbb9c8e891563a5ffc092dd"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "10769bac16a7b03c1353ec5a4d61feb6c271f738",
+      "path": "src/components/MediaReferenceList.tsx",
+      "sha256": "57ed10dd3d6df9a85c386a54a2369fb59b0b6648502343f10a4f41d09fe9f913"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "437f9d11614db1863943a6eeb5ad5f10007af4cc",
+      "path": "src/components/MediaStudio.css",
+      "sha256": "77f7308662556edd00f46b7c0e4e06b6a317cf97022b2b5e8c40598e3e8f6da8"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "a78748670d931aa729d15e49f76735fd3c6a98f0",
+      "path": "src/components/MediaStudio.tsx",
+      "sha256": "fa2c3053c28b6e66442b13855ca0810349a8d567d3da292854b73236113da411"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "7de6384b0d7a7545d1eba54732197ea6c41a6f59",
+      "path": "src/components/ModelReferenceEditor.tsx",
+      "sha256": "72ce8c28df437aab21ad064402c4ec1cf5abb9efc0cb914362a634e907c86dfb"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "cf7a442de7c33e8b291b8be8369bd0ff90a9a7bb",
+      "path": "src/components/ModelViewer.tsx",
+      "sha256": "3a8685aba428cb539c5b1d1930260d3638790aae0b637c804469947393cc5650"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "d5c3162e06ba044bf26364bed74f6c124cdacd74",
+      "path": "src/components/ModelWorkbench.css",
+      "sha256": "807b616afdebef3dad432ff7c631df74781cb38aa9027ced39f47d23aa9f3879"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "bfd8d61c422ef28ab1b48ef8131b074b5ec06519",
+      "path": "src/components/ModelWorkbench.tsx",
+      "sha256": "1d184c98030f99d8b00924157760f6dabcb9015e2e031a97461431a717d5a156"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "1f3a37a81dc2c81f7cfc26ab5fa366369f8eff4f",
+      "path": "src/components/MusicWorkbench.css",
+      "sha256": "6f017144d6e9242146066aa3b9b0d7356c5fce040a6f59efb485b1347788221f"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "cf2afef6ad343ff02bef22f21b964878f409b5ef",
+      "path": "src/components/MusicWorkbench.tsx",
+      "sha256": "48a7d5e63bff907d12b483eb6d44f487c0600bed29f8c2bc0085d3ae19412527"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "775decd84c7d20f60f88714565fcca1b3cf66cf3",
+      "path": "src/components/SpineAssistantPanel.tsx",
+      "sha256": "87118b304acf8321b17019be5c83c6dcbabbf5a3eaf2a2e073cc994fa0361b67"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "fd1b25f5b096452401f66896355b159dd83d9fb5",
+      "path": "src/components/SpineCanvas.tsx",
+      "sha256": "9a91155ea3b4050e84c610758c4e43bfa6909b92147a56c4bea18ae9bbf91e37"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "15afc1cc292a7ebdab4909f7ec0213f968c59303",
+      "path": "src/components/SpineComfyPanel.tsx",
+      "sha256": "9f0d027ca420a585e70cefe1f3d704768d01fe91c2e54fa47906e82125669702"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "ee39d3b9a9b929b6a5dc964f86f0a08cd1697841",
+      "path": "src/components/SpineLayerImport.tsx",
+      "sha256": "b16436ede48fc57ed4f221c1067d80d138f5ccbc26ef3f786c92cddff91bcc32"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "b2071274ba63a78df10c7ca92117d49343ee705a",
+      "path": "src/components/SpineMotionStudyPanel.tsx",
+      "sha256": "37fb9715dfd043876fbc314e0516b58f72a7e90470460ea408c3d7412bb841e9"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "4c5152df62d5eaa5c9f246683c097bd483c559f8",
+      "path": "src/components/SpinePoseAssistant.tsx",
+      "sha256": "b854a3143dfc68fe6ade8bb2decf66cc8f8b068538e7f8672ee9ca5cc3028aec"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "2a4ad9e89b69ddb8d2d8a0ef9d0cbf92539346ec",
+      "path": "src/components/SpineRedrawReview.tsx",
+      "sha256": "33b0d0870376f8f776945c754a522df4dcee3c725cb2a29a57ec1b980f0d13c4"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "6534de78fa73a938792db046dfe66c4a3086a2cc",
+      "path": "src/components/SpineStudio.css",
+      "sha256": "3f78d51c385d5eabbd7b520a9bb40c101b8c87e720a6e5e973cbc60cee2409ae"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "d153089fb6b13ccf45993680de5700b7a6f5a701",
+      "path": "src/components/SpineStudio.tsx",
+      "sha256": "1edf85ede8831dee670e60bc7af31e06b14c0bf94d0cfb673767f2a95fd4ecb6"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "0fc4323046ab8a74b47b07fca7cafb5933bb1797",
+      "path": "src/components/WritingMissionControl.tsx",
+      "sha256": "23e4bc2792be692425cd48973eb3ecc9b08c678ef399869463122816bc619b62"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "f978969e6f76cfb0d4823dc35eeb0367ae83ed66",
+      "path": "src/components/WritingStudio.css",
+      "sha256": "4511be83eb8bc4a576ce75ea885ac9fe5a656ba23c14d1f0b73e1e25060f2ea1"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "871a165d6912231ebfe9e8896f6ea0dd56f6301f",
+      "path": "src/components/WritingStudio.tsx",
+      "sha256": "ba563261da060464fcbd6d93fbc0b9cc41187dbe01398709e72618f1540546bb"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "e03fc1f8e03e4cafffafa4c31e30ef0aefe77a7e",
+      "path": "src/lib/constellation.ts",
+      "sha256": "98882c6e7524942ff2618de146a7dfbdc54f92b7627110c4572be3c6fe43a3af"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "55771f9a3c3f0680e68486823cf7831d59a63828",
+      "path": "src/lib/constellationStorage.ts",
+      "sha256": "e272bc1a8b2c3879aa5c4208a5899944a76b503a13900454803a6dde22077b52"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "8fbd93956d13675ca472c71c6d9fbc69fe177e3c",
+      "path": "src/lib/mediaCapabilities.ts",
+      "sha256": "3bca7aeae51a5a2cf3347a42b39180c0cb365cd4ef797a1746492b75a81051eb"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "9995913283ca791c40b756e64fde91dddace7e9e",
+      "path": "src/lib/mediaConcurrency.ts",
+      "sha256": "38040cdbc2de76e971b370507d90d1f1f81dd57862a85b155d984b8906634494"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "57df777e8a28ba3ad8f0d237e212074334a69c71",
+      "path": "src/lib/mediaHistory.ts",
+      "sha256": "f505bd206e37ec4aa8a823e9cf2f43fdbd2867ff2cf3727965b9ee0824c03773"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "dad39de5f3a408af20d28a95d2d5d0a516fef5c5",
+      "path": "src/lib/mediaPolling.ts",
+      "sha256": "41380cffeee3a2e2a2c9cf8c0d4ad0ddc41ef0497239e03b32a2d6f33788f7dc"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "2cc403ebcb724fab277ebdfcc9a9996e0a1b0185",
+      "path": "src/lib/mediaReferences.ts",
+      "sha256": "97c764b995d6badb7b1cb62731596e67aab767bfb3b75a71ca281e51915117da"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "f93326c272050f403658cb17de11709b381acbca",
+      "path": "src/lib/modelWorkbench.ts",
+      "sha256": "7c2d4de2597200fde1882c7a360721f65536ba51f2bf71d63f0aa4fd9bbda88d"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "971aaa468d784af7e20951a8389419646ae03770",
+      "path": "src/lib/musicWorkbench.ts",
+      "sha256": "5c278f41f67b263a6def721b11418486237d308324314fead01725d2546cb245"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "dda21e1b58dd3af954f4c9af6914acb9770da468",
+      "path": "src/lib/spine.ts",
+      "sha256": "35d8f865cc957daaa82eccc923983da94b3ceb34bc144d8853dbbda3ee07f55a"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "60657ebc0e7ed86ab8b0a3a70152590ad59191fd",
+      "path": "src/lib/spineArchive.ts",
+      "sha256": "441adefcee8c10a75f1717d0f9b7f93cc4661ff2a39e8fae135bec0df06725fa"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "96c1c928b984ef5522e38500985963ba1f3fad55",
+      "path": "src/lib/spineAssets.ts",
+      "sha256": "a16263cfed9ff56bbdf67e8737e5e18ed2a81ea1b495a3fffb9183f95f7acfe4"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "44f1086906439b3c73ecf1bebe63590d0a5f5b1a",
+      "path": "src/lib/spineAssistant.ts",
+      "sha256": "35fdc524060a180bead08432373fb2069f3e8d67b42cae4c526e1ff734bc8b7e"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "5e5d1f3082d7d039775ca6e7b047849a8227ca46",
+      "path": "src/lib/spineAssistantImages.ts",
+      "sha256": "84f0bb627b67e7ee6910ed420c76312510642d96da8ac809ddd031462f115caf"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "69d8a0442539324395f2a3f0c655b142babfc242",
+      "path": "src/lib/spineBridge.ts",
+      "sha256": "c48ece63fe834ccd1f0a4522ab0b6eb6400ed713db3aecd89b31ec6e76651e22"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "777f1f6a60ab5533efc59f11d1c9006c4cfbaf4a",
+      "path": "src/lib/spineComfy.ts",
+      "sha256": "eb41713cfa24e9a6fb7f1121753532f3aafe0aa2d33fd3c99c51d6f91961ac33"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "eee98d97cdf62f39a73ce7af9e87d6ec88416a65",
+      "path": "src/lib/spineComfyStorage.ts",
+      "sha256": "39d3f85a3a1b337a3789911e355ae7dcbbeb0c1d98d55c2bcc9eb6c72eed999a"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "18623df22818068210f2bdebd8dce5ae44fb8fa9",
+      "path": "src/lib/spineGeneration.ts",
+      "sha256": "51381f3aff1f9e9eff2e3b26423b87901569b79e692ed15c64c015f9cfa6f06d"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "84282c4e2bccc6f4d11a2affd14fa856d3a9f1ef",
+      "path": "src/lib/spineLayerAssets.ts",
+      "sha256": "fd67ced1c5d2a41c833e4c393598ef1b717b4dc530c074766df39c8853980504"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "9b1db694f03a4304c6b1be3f6b007cff050dcc76",
+      "path": "src/lib/spineLayers.ts",
+      "sha256": "da19701e7c9550a34062eaceb607fededff22222a28bd45389b497f615394f34"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "9a74df6a3ecf5306ae12ed0efb372ca56438b4bc",
+      "path": "src/lib/spineMatting.ts",
+      "sha256": "05790da9a444b1881243fec2ac13e0fc21d8c084b026a6c9b8ec9145f427f994"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "e3e8b6636f4cd6f3e7f0071623ef147be2324f8c",
+      "path": "src/lib/spineMotion.ts",
+      "sha256": "012a979e35ade4d218bc2f0ddd1e4846dc19d6f0f76d2deb1fe88f67bf20e97d"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "8cf09cc929733e5b8807c99a3c195c453feccc95",
+      "path": "src/lib/spinePixelInterpolation.ts",
+      "sha256": "469e6cc9ae48a5523fe7c1afba2f0df7cee009149163716156ae64942c98ab95"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "df56ae8934a7d4dd181422bd713621560ddaeb96",
+      "path": "src/lib/spinePoseComparison.ts",
+      "sha256": "61a516c8cd044a73facb9303290df58a078ffad2ba9ea6451449989a8fa7e550"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "5a2f1803d1b187d095d6b64622fda690d4ea81e2",
+      "path": "src/lib/spinePoseFit.ts",
+      "sha256": "4840c0e309fd6e869e86bf043833cc7fb9d8265ff11455c514a7864eec742768"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "b4a8117bf704a5858ef59002fefce6d6303721e3",
+      "path": "src/lib/spinePoseGeneration.ts",
+      "sha256": "6cd0175c3950270f61389b8d2450d9cd7f9d9d9c5a29ce29a9c95e51b7130b10"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "3f2cc406d887880eb50e50607f51bb7f596fb8e0",
+      "path": "src/lib/spineRenderer.ts",
+      "sha256": "21fb7fee87d78bef60dbf43d7e41254d3cbe6417f4c1fbdb348a209656249963"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "717c50d2deae45452a847dc963566d2a1ee19bfe",
+      "path": "src/lib/spineSource.ts",
+      "sha256": "26e046c816ec1d68bf7979589432ed0e1f0cf10e8fceddd93b32dc8cf58054c5"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "ef22ebeeb8834bb87e808bd289320793278ac488",
+      "path": "src/lib/spineStorage.ts",
+      "sha256": "2da12dcdbccaae9cd711e7e3958b725503819641a6ea4abbc20fc0866ad9eac0"
+    },
+    {
+      "mode": "100644",
+      "type": "blob",
+      "oid": "9b60576e63f33e28e208fce4d3df2650533ebcf8",
+      "path": "src/lib/writing.ts",
+      "sha256": "4f8f215a78aa9235a64ed50e4f05a7dc5e25402f2d13cc4960e41b2249600289"
+    }
+  ],
+  "dependencyGaps": [
+    {
+      "source": "scripts/test-media-references.mjs",
+      "import": "../src/lib/canvasEditorState.ts",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "scripts/test-model-resource-platform.mjs",
+      "import": "./model-resource-platform.mjs",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "scripts/test-spine-v4.mjs",
+      "import": "./spine",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "scripts/test-spine-v4.mjs",
+      "import": "./spine",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "scripts/test-spine.mjs",
+      "import": "./spine",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/ConstellationCanvasEditor.tsx",
+      "import": "../lib/bridge",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/ConstellationCanvasEditor.tsx",
+      "import": "../lib/i18n",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/ConstellationCanvasEditor.tsx",
+      "import": "../lib/types",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/ConstellationCanvasEditor.tsx",
+      "import": "../lib/canvasEditorState",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/ConstellationNodes.tsx",
+      "import": "../lib/bridge",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/ConstellationNodes.tsx",
+      "import": "../lib/i18n",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/ConstellationNodes.tsx",
+      "import": "../lib/types",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/ConstellationOverview.tsx",
+      "import": "../lib/bridge",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/ConstellationOverview.tsx",
+      "import": "../lib/types",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/ConstellationOverview.tsx",
+      "import": "../lib/i18n",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/ConstellationSources.tsx",
+      "import": "../lib/bridge",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/ConstellationSources.tsx",
+      "import": "../lib/types",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/ConstellationSources.tsx",
+      "import": "../lib/i18n",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/ConstellationStudio.tsx",
+      "import": "../lib/bridge",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/ConstellationStudio.tsx",
+      "import": "../lib/i18n",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/ConstellationStudio.tsx",
+      "import": "../lib/modelSelection",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/ConstellationStudio.tsx",
+      "import": "../lib/types",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/ConstellationStudio.tsx",
+      "import": "../lib/bridge",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/CreativeStudioHeader.tsx",
+      "import": "../lib/i18n",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/CreativeStudioHeader.tsx",
+      "import": "./CreationModeSwitch.css",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/MediaReferenceList.tsx",
+      "import": "../lib/i18n",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/MediaReferenceList.tsx",
+      "import": "../lib/types",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/MediaReferenceList.tsx",
+      "import": "./AttachmentChip",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/MediaReferenceList.tsx",
+      "import": "./IconButton",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/MediaStudio.tsx",
+      "import": "../lib/bridge",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/MediaStudio.tsx",
+      "import": "../lib/i18n",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/MediaStudio.tsx",
+      "import": "./useImageCopy",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/MediaStudio.tsx",
+      "import": "../lib/clipboard",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/MediaStudio.tsx",
+      "import": "../lib/types",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/ModelReferenceEditor.tsx",
+      "import": "../lib/i18n",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/ModelViewer.tsx",
+      "import": "../lib/i18n",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/ModelWorkbench.tsx",
+      "import": "./ResourceRemovalControl",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/ModelWorkbench.tsx",
+      "import": "../lib/i18n",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/ModelWorkbench.tsx",
+      "import": "../lib/bridge",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/MusicWorkbench.tsx",
+      "import": "./ResourceRemovalControl",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/MusicWorkbench.tsx",
+      "import": "../lib/bridge",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/MusicWorkbench.tsx",
+      "import": "../lib/i18n",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/SpineAssistantPanel.tsx",
+      "import": "../lib/bridge",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/SpineAssistantPanel.tsx",
+      "import": "../lib/i18n",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/SpineAssistantPanel.tsx",
+      "import": "../lib/modelSelection",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/SpineAssistantPanel.tsx",
+      "import": "../lib/types",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/SpineCanvas.tsx",
+      "import": "../lib/i18n",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/SpineComfyPanel.tsx",
+      "import": "../lib/bridge",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/SpineComfyPanel.tsx",
+      "import": "../lib/i18n",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/SpineComfyPanel.tsx",
+      "import": "../lib/types",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/SpineLayerImport.tsx",
+      "import": "../lib/i18n",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/SpineMotionStudyPanel.tsx",
+      "import": "../lib/i18n",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/SpineMotionStudyPanel.tsx",
+      "import": "../lib/bridge",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/SpinePoseAssistant.tsx",
+      "import": "../lib/bridge",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/SpinePoseAssistant.tsx",
+      "import": "../lib/modelSelection",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/SpinePoseAssistant.tsx",
+      "import": "../lib/i18n",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/SpinePoseAssistant.tsx",
+      "import": "../lib/types",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/SpineRedrawReview.tsx",
+      "import": "../lib/i18n",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/SpineStudio.tsx",
+      "import": "../lib/i18n",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/SpineStudio.tsx",
+      "import": "../lib/bridge",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/SpineStudio.tsx",
+      "import": "../lib/types",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/WritingMissionControl.tsx",
+      "import": "../lib/i18n",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/WritingStudio.tsx",
+      "import": "../lib/bridge",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/WritingStudio.tsx",
+      "import": "../lib/i18n",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/WritingStudio.tsx",
+      "import": "../lib/modelSelection",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/components/WritingStudio.tsx",
+      "import": "../lib/types",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/lib/constellation.ts",
+      "import": "./types",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/lib/constellationStorage.ts",
+      "import": "./types",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/lib/mediaCapabilities.ts",
+      "import": "./types",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/lib/mediaConcurrency.ts",
+      "import": "./types",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/lib/mediaHistory.ts",
+      "import": "./types",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/lib/spineBridge.ts",
+      "import": "./bridge",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    },
+    {
+      "source": "src/lib/writing.ts",
+      "import": "./types",
+      "action": "Select dependency or replace with an explicit MAM adapter"
+    }
+  ],
+  "dependencyAnalysis": "Relative JS/TS imports only; no semantic dependency resolution"
+}

@@ -22,7 +22,7 @@ describe('MAM Design Draft store', () => {
 
     expect(store.get()).toEqual(draft)
     expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual(draft)
-    expect(statSync(path).mode & 0o777).toBe(0o600)
+    expectPrivateFile(path)
   })
 
   it('archives malformed JSON and starts a fresh local draft', () => {
@@ -43,7 +43,7 @@ describe('MAM Design Draft store', () => {
     expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual(draft)
     expect(corruptDraftNames(root)).toEqual(['design-draft.corrupt-2026-07-29T12-00-00-000Z.json'])
     expect(readFileSync(join(root, corruptDraftNames(root)[0]!), 'utf8')).toBe('{not valid json')
-    expect(statSync(join(root, corruptDraftNames(root)[0]!)).mode & 0o777).toBe(0o600)
+    expectPrivateFile(join(root, corruptDraftNames(root)[0]!))
   })
 
   it('archives a schema-invalid draft without overwriting an existing recovery copy', () => {
@@ -82,4 +82,11 @@ function corruptDraftNames(root: string): string[] {
 
 function fixedNow(): string {
   return '2026-07-29T12:00:00.000Z'
+}
+
+function expectPrivateFile(path: string): void {
+  const stat = statSync(path)
+  expect(stat.isFile()).toBe(true)
+  if (process.platform !== 'win32') expect(stat.mode & 0o777).toBe(0o600)
+  else expect(readFileSync(path).byteLength).toBeGreaterThan(0)
 }

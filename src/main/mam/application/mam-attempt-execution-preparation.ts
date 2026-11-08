@@ -22,13 +22,14 @@ export function resolveExecutableTask(
   const staticTask = bundle.taskCatalog.find((candidate) => candidate.id === taskId)
   if (staticTask) {
     const node = bundle.definition.nodes.find((candidate) => candidate.id === staticTask.nodeId)!
-    const workspaceMode = node.type === 'role_task' ? node.workspaceMode : 'write'
+    const workspaceMode =
+      node.type === 'role_task' || node.type === 'component_task' ? node.workspaceMode : 'write'
     const handoff = resolveAttemptHandoffContext({
       bundle,
       projection,
       nodeId: staticTask.nodeId,
       inputArtifacts: staticTask.inputArtifacts,
-      requireIntegratedRoleInputs: node.type === 'role_task',
+      requireIntegratedRoleInputs: node.type === 'role_task' || node.type === 'component_task',
       ...(isCommitAncestor ? { isCommitAncestor } : {})
     })
     const latestAttemptId = currentTaskDeliveryAttemptId(
@@ -195,7 +196,12 @@ export function resolveExecutionCredentials(input: {
       input.provider
     )
   return {
-    providerCredentials: resolve([input.resolved.snapshot.execution.providerSecretRef]),
+    providerCredentials: resolve([
+      input.resolved.snapshot.execution.providerSecretRef,
+      ...(input.resolved.snapshot.componentBindings ?? []).map(
+        (binding) => binding.provider?.secretRef
+      )
+    ]),
     mcpCredentials: resolve(
       input.resolved.mcpResources.map((resource) => resource.profile.credentialRef)
     )

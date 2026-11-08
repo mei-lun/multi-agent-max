@@ -22,7 +22,12 @@ export function validateReviewAggregateWorkflow(
   const nodesById = new Map(nodes.map((node) => [node.id, node]))
   const executableNodeIds = new Set(
     nodes
-      .filter((node) => node.type === 'role_task' || node.type === 'dynamic_tasks')
+      .filter(
+        (node) =>
+          node.type === 'role_task' ||
+          node.type === 'component_task' ||
+          node.type === 'dynamic_tasks'
+      )
       .map((node) => node.id)
   )
   for (const node of nodes.filter((candidate) => candidate.type === 'review_aggregate')) {

@@ -29,6 +29,25 @@ export function buildEffectiveConfigSnapshot(
   catalog: ProfileCatalog,
   input: SnapshotInput
 ): EffectiveRoleConfigSnapshot {
+  const componentBindings = (input.role.componentBindings ?? []).map((binding) => {
+    if (!input.role.tools.includes(`component:${binding.componentId}`))
+      throw new Error('component_binding_permission_missing')
+    if (!binding.modelProfileId) return binding
+    const model = catalog.models.getActive(binding.modelProfileId)
+    const provider = model && catalog.providers.getActive(model.providerProfileId)
+    if (!model || !provider) throw new Error('component_model_route_unavailable')
+    if (
+      provider.secretRef &&
+      !input.localSecrets.some((secret) => secret.secretRef === provider.secretRef)
+    )
+      throw new Error('component_model_secret_unavailable')
+    return { ...binding, model: structuredClone(model), provider: structuredClone(provider) }
+  })
+  if (
+    new Set(componentBindings.map((binding) => binding.componentId)).size !==
+    componentBindings.length
+  )
+    throw new Error('duplicate_component_binding')
   const localBindingIds = [
     ...input.skills.map((skill) => skill.localBinding.id),
     ...input.knowledgeResources.flatMap((resource) =>
@@ -49,6 +68,7 @@ export function buildEffectiveConfigSnapshot(
     },
     providerProfile: profileRef(input.provider, catalog.providers.contentHash(input.provider)),
     modelProfile: profileRef(input.model, catalog.models.contentHash(input.model)),
+    ...(componentBindings.length ? { componentBindings } : {}),
     systemPromptRef: input.role.systemPromptRef,
     execution: {
       executableRef: input.executor.executableRef,

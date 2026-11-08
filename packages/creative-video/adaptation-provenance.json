@@ -1,0 +1,7 @@
+{
+  "upstream": "src/components/MediaStudio.tsx",
+  "sourceCommit": "6542241",
+  "workflow": "Video modes, model output controls, ordered references, async task progress/history, preview and export adapted into a standalone host component.",
+  "boundary": "No upstream Agent or provider credentials. Owned asset imports and video.generate/edit/refresh jobs use the MAM host bridge. URL references and size controls are omitted because shared video params do not support them. Modes and output options come from model capabilities. Local tracking cancellation does not claim remote cancellation.",
+  "verification": "Build records exact vendored source SHA256 and package hashes. Native mock fixture exercises DOM submissions, cancel, recovery and output preview/export."
+}

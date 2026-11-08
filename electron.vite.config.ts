@@ -10,6 +10,10 @@ export default defineConfig({
   preload: {
     build: {
       rollupOptions: {
+        input: {
+          index: resolve('src/preload/index.ts'),
+          'component-api': resolve('src/preload/component-api.ts')
+        },
         output: { format: 'cjs', entryFileNames: '[name].cjs' }
       }
     }

@@ -4,6 +4,7 @@ import { minimatch } from 'minimatch'
 import { z } from 'zod'
 import type { ArtifactContract, ArtifactVersion } from '../../../shared/mam/domain/artifact'
 import { ArtifactStoreError } from './artifact-store-error'
+import { AssetBundleSchema } from '../../../shared/mam/domain/binary-artifact'
 
 export const TestReportContentSchema = z
   .object({
@@ -34,6 +35,8 @@ export function validateAndEncodeArtifactContent(
   content: unknown
 ): Buffer {
   switch (contract.format) {
+    case 'asset-bundle':
+      return Buffer.from(canonicalJson(AssetBundleSchema.parse(content)))
     case 'json-schema': {
       const validator = new Ajv({ allErrors: true, strict: false }).compile(contract.jsonSchema!)
       if (!validator(content)) {
@@ -83,7 +86,10 @@ export function validateAndEncodeArtifactContent(
 
 export function decodeArtifactContent(format: ArtifactVersion['format'], bytes: Buffer): unknown {
   const text = bytes.toString('utf8')
-  return format === 'json-schema' || format === 'file-set' || format === 'test-report'
+  return format === 'json-schema' ||
+    format === 'file-set' ||
+    format === 'test-report' ||
+    format === 'asset-bundle'
     ? JSON.parse(text)
     : text
 }

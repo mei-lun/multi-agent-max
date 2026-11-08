@@ -20,10 +20,11 @@ import {
 } from './MamWorkflowFieldControls'
 import { MamWorkflowRoleSelectionFields } from './MamWorkflowRoleSelectionFields'
 import { MamWorkflowDataContractDetails } from './MamWorkflowDataContractDetails'
+import { MamWorkflowComponentFields } from './MamWorkflowComponentFields'
 
 type RoleNode = Extract<
   WorkflowNode,
-  { type: 'role_task' | 'dynamic_tasks' | 'review_gate' | 'git_merge' }
+  { type: 'role_task' | 'component_task' | 'dynamic_tasks' | 'review_gate' | 'git_merge' }
 >
 
 export function MamWorkflowRoleNodeFields({
@@ -43,10 +44,16 @@ export function MamWorkflowRoleNodeFields({
       onChange={(selection) => onChange({ ...node, ...selection })}
     />
   )
-  if (node.type === 'role_task') {
+  if (node.type === 'role_task' || node.type === 'component_task') {
     return (
       <div className="space-y-3">
         {roleFields}
+        {node.type === 'component_task' && (
+          <MamWorkflowComponentFields
+            value={node.component}
+            onChange={(component) => onChange({ ...node, component })}
+          />
+        )}
         <MamWorkflowLabeledField label="Instruction">
           <Textarea
             className="min-h-28"

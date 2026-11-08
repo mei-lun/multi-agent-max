@@ -1,0 +1,9 @@
+import {build} from 'esbuild'
+import {tmpdir} from 'node:os'
+import {mkdtemp,rm} from 'node:fs/promises'
+import {pathToFileURL,fileURLToPath} from 'node:url'
+import path from 'node:path'
+import assert from 'node:assert/strict'
+const root=fileURLToPath(new URL('../../',import.meta.url)),directory=await mkdtemp(path.join(tmpdir(),'writing-pure-'))
+// Original source functions are exercised directly after type-only transpilation.
+try{const file=path.join(directory,'writing.mjs');await build({entryPoints:[path.join(root,'vendor/levelup/baseline-6542241/src/lib/writing.ts')],outfile:file,bundle:true,format:'esm',platform:'node'});const w=await import(pathToFileURL(file).href);const project=w.createWritingProject();project.documents[0].content='Hello writing';const record=w.projectToRecord(project),restored=w.projectFromRecord(record);assert.equal(restored.documents[0].content,'Hello writing');assert.ok(w.projectToMarkdown(project).includes('Hello writing'));assert.ok(w.parseImportedProject(record));const node=w.createStoryNode();project.storyNodes.push(node);assert.ok(w.createPlayState(project));assert.ok(Array.isArray(w.validateNarrative(project)));const reference=w.createWritingReference('research','Source fixture');reference.content='Research fact';project.references.push(reference);const goal=w.createWritingGoal(project.documents[0].id,'Goal fixture');goal.brief='Write scene';goal.plan=w.createDefaultWritingGoalPlan(goal);project.goals.push(goal);assert.ok(goal.plan.length>0);const roundtrip=w.projectFromRecord(w.projectToRecord(project));assert.equal(roundtrip.references[0].content,'Research fact');assert.equal(roundtrip.goals[0].title,'Goal fixture');assert.ok(w.buildWritingGoalPlanPrompt);console.log('Original writing pure functions passed: record roundtrip, import, markdown, node, play state, validation')}finally{await rm(directory,{recursive:true,force:true})}
