@@ -1,3 +1,5 @@
+import { createMediaServices } from '../media'
+import { decodeImage } from './host-native-assets'
 import { test, expect, vi } from 'vitest'
 vi.mock('electron', () => ({
   dialog: { showMessageBox: vi.fn(async () => ({ response: 1 })) },
@@ -20,8 +22,15 @@ import { createComponentTools } from './attempt-component-tools'
 import { ComponentToolGateway } from '../application/component-tool-gateway'
 import type { PreparedAttempt } from '../application/mam-attempt-execution-types'
 import { dialog } from 'electron'
+import { acquireAttemptComponent } from './attempt-component-identity'
+import type { ComponentRegistry } from './registry'
+import { execFileSync } from 'node:child_process'
+import { readFile, writeFile } from 'node:fs/promises'
+import { collectPreparedAttemptResult } from '../application/prepared-attempt-result-collector'
+import { createGitCommandClient } from '../state-store/git-command-client'
+import { AssetBundleSchema } from '../../../shared/mam/domain/binary-artifact'
 type Input = Parameters<ComponentExecutionPort['execute']>[0]
-function input(root: string, operation: string, baseUrl: string): Input {
+export function input(root: string, operation: string, baseUrl: string): Input {
   const authority = {
     workflowRunId: 'run.1',
     nodeRunId: 'node-run.1',
@@ -96,10 +105,16 @@ test('production image HTTP output reaches formal bundle validator and granted w
     assets,
     registry: {
       acquireVersion: async () => ({
-        manifest: { hostApiVersion: '1.0.0', operations: [{ id: 'image.generate' }] },
+        manifest: {
+          version: '1.0.0',
+          hostApiVersion: '1.0.0',
+          operations: [{ id: 'image.generate' }]
+        },
         release
       })
     },
+    runtimeHandlers: (context: Parameters<typeof createMediaServices>[0]) =>
+      createMediaServices({ ...context, assets, validateImage: decodeImage }).handlers,
     handlers: () => undefined
   } as unknown as DesktopCreativeServices
   try {
@@ -110,8 +125,15 @@ test('production image HTTP output reaches formal bundle validator and granted w
     )
     const result = await createComponentExecutionPort({
       root,
-      services: async () => services
-    }).execute(request)
+      services: async () => services,
+      requestApproval: async () => true
+    }).execute({
+      ...request,
+      snapshot: {
+        ...request.snapshot,
+        permissions: { ...request.snapshot.permissions, requireApprovalFor: ['network'] }
+      }
+    })
     expect(auth).toBe('Bearer frozen-secret')
     expect(release).toHaveBeenCalledOnce()
     const store = new LocalArtifactStore(join(root, 'artifacts'))
@@ -162,11 +184,15 @@ test('abort keeps lease until delayed handler teardown completes', async () => {
     assets,
     registry: {
       acquireVersion: async () => ({
-        manifest: { hostApiVersion: '1.0.0', operations: [{ id: 'fixture.render' }] },
+        manifest: {
+          version: '1.0.0',
+          hostApiVersion: '1.0.0',
+          operations: [{ id: 'fixture.render' }]
+        },
         release
       })
     },
-    handlers: () => ({
+    runtimeHandlers: () => () => ({
       validate() {},
       async run() {
         started()
@@ -223,8 +249,11 @@ test('Pi component gateway native approval and owned output feed image edit over
       list: async () => [
         { id: 'creative.image', versions: [{ enabled: true, status: 'installed', manifest }] }
       ],
-      acquire: async () => ({ manifest, release })
+      acquire: async () => ({ manifest, release }),
+      acquireVersion: async () => ({ manifest, release })
     },
+    runtimeHandlers: (context: Parameters<typeof createMediaServices>[0]) =>
+      createMediaServices({ ...context, assets, validateImage: decodeImage }).handlers,
     handlers: () => undefined
   } as unknown as DesktopCreativeServices
   const direct = input(root, 'image.generate', baseUrl)
@@ -233,7 +262,15 @@ test('Pi component gateway native approval and owned output feed image edit over
     attemptId: 'attempt.1',
     taskId: 'task.1',
     executorInvocationId: 'invocation.1',
-    task: { nodeId: 'node.1', inputArtifacts: [] },
+    task: {
+      nodeId: 'node.1',
+      inputArtifacts: [],
+      outputContracts: [
+        ...direct.outputContracts,
+        { ...direct.outputContracts[0]!, artifactType: 'binary.second' }
+      ]
+    },
+    worktree: { path: direct.workspace },
     credentialValues: { key: 'secret' },
     snapshot: {
       ...direct.snapshot,
@@ -309,13 +346,194 @@ test('Pi component gateway native approval and owned output feed image edit over
       await new Promise((resolve) => setTimeout(resolve, 10))
     }
     expect(status?.state).toBe('succeeded')
+    await expect(
+      call('component.publishOutputs', { jobId: second.jobId, contractIds: ['ungranted'] })
+    ).rejects.toThrow('not granted')
+    const published = (await call('component.publishOutputs', {
+      jobId: second.jobId,
+      contractIds: ['binary.output', 'binary.second']
+    })) as { artifacts: unknown[] }
+    expect(published.artifacts).toHaveLength(2)
+    const formal = new LocalArtifactStore(join(root, 'artifacts'))
+    let result!: Awaited<ReturnType<typeof collectPreparedAttemptResult>>['result']
+    for (const writePaths of [['.'], []]) {
+      const collected = await collectPreparedAttemptResult({
+        prepared: {
+          ...prepared,
+          snapshot: {
+            ...prepared.snapshot,
+            permissions: { ...prepared.snapshot.permissions, writePaths }
+          }
+        },
+        assistantText: 'Published the generated images.',
+        usage: { status: 'unknown' },
+        git: createGitCommandClient(),
+        authority: direct.authority
+      })
+      expect(collected.result.artifacts).toHaveLength(2)
+      expect(collected.contents.size).toBe(2)
+      result = collected.result
+    }
+    const checked = await new AttemptArtifactValidator(formal).validate({
+      result,
+      outputContracts: prepared.task.outputContracts,
+      workspacePath: direct.workspace,
+      workflowRunId: authority.workflowRunId,
+      nodeRunId: authority.nodeRunId,
+      taskId: authority.taskId,
+      attemptId: authority.attemptId,
+      roleInstanceId: authority.roleInstanceId,
+      inputArtifacts: []
+    })
+    const version = checked.records[0]!.version
+    const reference = {
+      artifactId: version.id,
+      version: version.version,
+      contentHash: version.contentHash
+    }
+    execFileSync('git', ['init'], { cwd: direct.workspace })
+    execFileSync('git', ['add', '.'], { cwd: direct.workspace })
+    execFileSync(
+      'git',
+      [
+        '-c',
+        'user.name=Test',
+        '-c',
+        'user.email=test@example.invalid',
+        'commit',
+        '-m',
+        'Publish component claims'
+      ],
+      { cwd: direct.workspace }
+    )
+    const downstream = join(root, 'downstream')
+    execFileSync('git', ['clone', direct.workspace, downstream], { stdio: 'pipe' })
+    await expect(
+      formal.readForNode(authority.workflowRunId, 'ungranted', reference)
+    ).rejects.toThrow()
+    await formal.authorizeNodeInputs(authority.workflowRunId, 'consumer', [reference])
+    await formal.materializeAssetBundleForNode(
+      authority.workflowRunId,
+      'consumer',
+      reference,
+      join(downstream, 'generated')
+    )
+    const bundle = AssetBundleSchema.parse(
+      (await formal.readForNode(authority.workflowRunId, 'consumer', reference)).content
+    )
+    expect(await readFile(join(downstream, 'generated', bundle.files[0]!.logicalPath))).toEqual(png)
     expect(paths).toEqual(['/v1/images/generations', '/v1/images/edits'])
     expect(audit).toHaveBeenCalledTimes(2)
     expect(dialog.showMessageBox).toHaveBeenCalled()
+    await writeFile(join(direct.workspace, result.artifacts[0]!.contentRef), '{}')
+    await expect(
+      collectPreparedAttemptResult({
+        prepared,
+        assistantText: 'done',
+        usage: { status: 'unknown' },
+        git: createGitCommandClient(),
+        authority: direct.authority
+      })
+    ).rejects.toThrow('Published artifact hash mismatch')
   } finally {
     await port.dispose()
     server.closeAllConnections()
     await new Promise<void>((resolve) => server.close(() => resolve()))
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('task port rejects forbidden, denied, stale authority and aborted approval before execution', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'component-policy-'))
+  const handler = vi.fn()
+  const release = vi.fn()
+  const services = {
+    registry: {
+      acquireVersion: async () => ({
+        manifest: {
+          version: '1.0.0',
+          hostApiVersion: '1.0.0',
+          operations: [{ id: 'image.generate' }]
+        },
+        release
+      })
+    },
+    runtimeHandlers: handler
+  } as unknown as DesktopCreativeServices
+  const approval = vi.fn(async () => false),
+    audit = vi.fn()
+  const port = createComponentExecutionPort({
+    root,
+    services: async () => services,
+    requestApproval: approval,
+    audit
+  })
+  const request = input(root, 'image.generate', 'https://example.invalid')
+  request.snapshot = {
+    ...request.snapshot,
+    permissions: { ...request.snapshot.permissions, requireApprovalFor: ['network'] },
+    componentBindings: [{ componentId: 'creative.image', allowedOperations: ['image.edit'] }]
+  } as Input['snapshot']
+  try {
+    await expect(port.execute(request)).rejects.toThrow('operation_denied')
+    expect(approval).not.toHaveBeenCalled()
+    request.snapshot = { ...request.snapshot, componentBindings: [] }
+    await expect(
+      port.execute({
+        ...request,
+        authority: { ...request.authority, effectiveConfigHash: 'b'.repeat(64) }
+      })
+    ).rejects.toThrow('authority')
+    expect(approval).not.toHaveBeenCalled()
+    await expect(port.execute(request)).rejects.toThrow('approval_denied')
+    expect(audit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        allowed: false,
+        requestHash: expect.stringMatching(/^[a-f0-9]{64}$/)
+      })
+    )
+    const controller = new AbortController()
+    await expect(
+      createComponentExecutionPort({
+        root,
+        services: async () => services,
+        requestApproval: async () => {
+          controller.abort()
+          return true
+        }
+      }).execute({ ...request, signal: controller.signal })
+    ).rejects.toThrow()
+    expect(handler).not.toHaveBeenCalled()
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('persisted attempt identity survives upgrades and rejects replacement manifest', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'component-identity-'))
+  let active = '1.0.0',
+    changed = false
+  const exact = vi.fn(async (_id: string, version: string) => ({
+    manifest: { version, files: { 'runtime.js': changed ? 'b' : 'a' } },
+    release: vi.fn()
+  }))
+  const registry = {
+    acquire: () => exact('creative.image', active),
+    acquireVersion: exact
+  } as unknown as ComponentRegistry
+  try {
+    const first = await acquireAttemptComponent(registry, root, 'creative.image')
+    first.release()
+    active = '2.0.0'
+    const resumed = await acquireAttemptComponent(registry, root, 'creative.image')
+    resumed.release()
+    expect(resumed.identity).toEqual(first.identity)
+    expect(exact).toHaveBeenLastCalledWith('creative.image', '1.0.0')
+    changed = true
+    await expect(acquireAttemptComponent(registry, root, 'creative.image')).rejects.toThrow(
+      'manifest mismatch'
+    )
+  } finally {
     await rm(root, { recursive: true, force: true })
   }
 })

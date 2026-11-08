@@ -110,6 +110,7 @@ test('real HTTP images and speech freeze model and credential, errors never retr
       idempotencyKey: 'test'
     })
     const r = request('image.generate')
+    r.params.background = 'transparent'
     const handler = services.handlers(r)!
     secret = 'second'
     model.remoteModelId = 'dall-e-3'
@@ -124,8 +125,12 @@ test('real HTTP images and speech freeze model and credential, errors never retr
     await handler.run(r, context)
     expect(calls[0]?.auth).toBe('Bearer first')
     expect(JSON.parse(calls[0]!.body).model).toBe('gpt-image-1')
+    expect(JSON.parse(calls[0]!.body).background).toBe('transparent')
     expect(emitted).toHaveLength(2)
     model.remoteModelId = 'tts-1'
+    const unsupported = request('speech.generate')
+    unsupported.params.instructions = 'whisper'
+    expect(() => services.handlers(unsupported)).toThrow('instructions unsupported')
     const speech = request('speech.generate')
     await services.handlers(speech)!.run(speech, context)
     expect(calls[1]?.path).toBe('/v1/audio/speech')

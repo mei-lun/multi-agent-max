@@ -2,6 +2,7 @@ import type { ModelProfile, ProviderProfile } from '../../../shared/mam/domain/e
 import type { CreativeTextParams } from '../../../shared/mam/creative-text'
 import type { OperationHandler } from '../creative-runtime/jobs'
 import { textRequest } from './request'
+import { readUsage } from './usage'
 
 const object = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
@@ -34,6 +35,7 @@ export async function executeText(o: {
       total = 0,
       completed = false,
       anthropicStopped = false
+    let usage: { inputTokens?: number; outputTokens?: number } = {}
     const event = async (frame: string) => {
       const data = frame
         .split('\n')
@@ -45,6 +47,8 @@ export async function executeText(o: {
         return
       }
       const value = object(JSON.parse(data))
+      const observed = readUsage(value)
+      if (observed) usage = { ...usage, ...observed }
       if (
         value.error ||
         ['error', 'response.failed', 'response.incomplete'].includes(String(value.type))
@@ -119,6 +123,13 @@ export async function executeText(o: {
       pending += decoder.decode()
       if (pending.trim()) await event(pending)
       if (!completed || !text.trim()) throw new Error('Incomplete text response')
+      const status =
+        usage.inputTokens !== undefined && usage.outputTokens !== undefined
+          ? 'known'
+          : Object.keys(usage).length
+            ? 'partial'
+            : 'unknown'
+      await o.context.emit('usage', { ...usage, status, costStatus: 'unknown' })
       return { text }
     } finally {
       await reader.cancel().catch(() => {})

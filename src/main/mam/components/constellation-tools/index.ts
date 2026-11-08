@@ -83,7 +83,8 @@ export function createConstellationTools(options: {
     },
     async execute(
       token: string,
-      context: ConstellationContext
+      context: ConstellationContext,
+      signal?: AbortSignal
     ): Promise<{ output: string; isError: boolean }> {
       const ticket = tickets.get(token)
       if (
@@ -95,11 +96,14 @@ export function createConstellationTools(options: {
         return { output: 'Tool authorization invalid or expired', isError: true }
       tickets.delete(token)
       try {
+        signal?.throwIfAborted()
         const { call, workspace } = ticket
         if (call.name === 'run_command')
           return approvedCommand(
             call.args.command,
-            await workspacePath(workspace!, call.args.workdir ?? '.')
+            await workspacePath(workspace!, call.args.workdir ?? '.'),
+            120000,
+            signal
           )
         if (call.name === 'read_file')
           return {
@@ -115,7 +119,7 @@ export function createConstellationTools(options: {
             ),
             isError: false
           }
-        const text = await fetchPublicText(new URL(call.args.url))
+        const text = await fetchPublicText(new URL(call.args.url), signal)
         return {
           output: text
             .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')

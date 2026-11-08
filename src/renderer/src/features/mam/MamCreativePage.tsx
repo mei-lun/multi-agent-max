@@ -5,6 +5,15 @@ import type { ComponentId } from '../../../../shared/mam/components'
 import { Button } from '../../components/ui/button'
 import { Badge } from '../../components/ui/badge'
 import { useUiLocale } from '../../i18n/ui-locale'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '../../components/ui/select'
+import { MamCreativeDeliveries } from './MamCreativeDeliveries'
+import { MamCreativeDrafts } from './MamCreativeDrafts'
 
 const labels: Record<ComponentId, [string, string, string, string]> = {
   'creative.image': [
@@ -54,12 +63,17 @@ function api(): CreativeRendererApi {
   return bridge
 }
 
-export function MamCreativePage(): React.JSX.Element {
+export function MamCreativePage({
+  projectDirectory
+}: {
+  projectDirectory?: string | undefined
+}): React.JSX.Element {
   const { locale } = useUiLocale()
   const text = (zh: string, en: string) => (locale === 'zh-CN' ? zh : en)
   const [components, setComponents] = useState<CreativeComponent[]>([])
   const [pending, setPending] = useState(false)
   const [error, setError] = useState('')
+  const [scope, setScope] = useState<'project' | 'local'>('project')
   const perform = useCallback(async (operation: () => Promise<CreativeComponent[] | void>) => {
     setPending(true)
     setError('')
@@ -106,6 +120,31 @@ export function MamCreativePage(): React.JSX.Element {
           </Button>
         </div>
       </header>
+      <div className="space-y-2">
+        <label className="text-sm font-medium" htmlFor="creative-scope">
+          {text('创作空间', 'Creative workspace')}
+        </label>
+        <Select value={scope} onValueChange={(value) => setScope(value as 'project' | 'local')}>
+          <SelectTrigger id="creative-scope" className="max-w-xl">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="project">
+              {projectDirectory ??
+                text('本机草稿（尚未连接项目）', 'Local drafts (no connected project)')}
+            </SelectItem>
+            <SelectItem value="local">
+              {text('本机草稿（包含旧版本工程）', 'Local drafts (includes earlier projects)')}
+            </SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          {text(
+            '工程和素材按所选空间保存。已打开的工作台保留原来的空间。',
+            'Projects and assets belong to the selected workspace. Open workbenches keep their original workspace.'
+          )}
+        </p>
+      </div>
       {error && (
         <div
           role="alert"
@@ -173,7 +212,7 @@ export function MamCreativePage(): React.JSX.Element {
                         <Button
                           size="sm"
                           disabled={pending}
-                          onClick={() => void perform(() => api().open(component.id))}
+                          onClick={() => void perform(() => api().open(component.id, scope))}
                         >
                           {text('打开工作台', 'Open workbench')}
                         </Button>
@@ -214,6 +253,8 @@ export function MamCreativePage(): React.JSX.Element {
           )
         })}
       </div>
+      <MamCreativeDeliveries api={api} projectDirectory={projectDirectory} />
+      <MamCreativeDrafts api={api} projectDirectory={projectDirectory} />
     </section>
   )
 }

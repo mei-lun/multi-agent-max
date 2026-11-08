@@ -105,7 +105,8 @@ async function executeOne(o: Execution) {
         model: o.model.remoteModelId,
         input: p.prompt,
         voice: p.voice ?? 'alloy',
-        response_format: format
+        response_format: format,
+        ...(p.instructions ? { instructions: p.instructions } : {})
       }
     : {
         model: o.model.remoteModelId,
@@ -114,6 +115,7 @@ async function executeOne(o: Execution) {
         ...(p.size ? { size: p.size } : {}),
         ...(p.quality ? { quality: p.quality } : {}),
         response_format: 'b64_json',
+        ...(p.background ? { background: p.background } : {}),
         ...(o.model.remoteModelId.startsWith('gpt-image-') ? { output_format: format } : {})
       }
   if (r.operation === 'image.edit') {
@@ -172,7 +174,10 @@ async function executeOne(o: Execution) {
     }
     body = JSON.stringify(
       speech && native === 'gemini'
-        ? geminiSpeechBody(p.prompt, p.voice)
+        ? geminiSpeechBody(
+            p.instructions ? `${p.instructions.trim()}\n\n${p.prompt.trim()}` : p.prompt,
+            p.voice
+          )
         : nativeBody(native, o.model.remoteModelId, p, images)
     )
     headers.set('Content-Type', 'application/json')

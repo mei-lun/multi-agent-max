@@ -39,6 +39,7 @@ export async function executePreparedAttempt(
         component,
         nodeId: prepared.task.nodeId,
         workspace: prepared.worktree.path,
+        projectDirectory: input.repository.projectDirectory,
         inputArtifacts: prepared.task.inputArtifacts,
         outputContracts: prepared.task.outputContracts,
         credentialValues: prepared.credentialValues,

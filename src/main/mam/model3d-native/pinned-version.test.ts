@@ -7,7 +7,10 @@ vi.mock('electron', () => ({ dialog: {}, nativeImage: {} }))
 vi.mock('./launcher', () => ({ runModelLauncher: mocks.launch }))
 vi.mock('./resources', () => ({
   names: ['runtime', 'triposg', 'texture', 'blender'],
-  model3dResources: () => ({ directory: '.', installed: mocks.installed })
+  model3dResources: (root: string) => ({
+    directory: `${root}/resources`,
+    installed: mocks.installed
+  })
 }))
 vi.mock('./projects', () => ({
   scopeDirectory: (root: string) => root,
@@ -28,7 +31,8 @@ test('3D launcher resolves exact requested version rather than active package', 
     acquire = vi.fn()
   const acquireVersion = vi.fn(async () => ({ packageDirectory: join(root, 'version-a'), release }))
   const service = createModel3dServices({
-    root,
+    root: join(root, 'attempt'),
+    resourceRoot: join(root, 'shared'),
     assets: {} as BinaryAssetStore,
     registry: { acquire, acquireVersion } as unknown as ComponentRegistry
   })
@@ -49,7 +53,9 @@ test('3D launcher resolves exact requested version rather than active package', 
     expect(acquire).not.toHaveBeenCalled()
     expect(mocks.launch).toHaveBeenCalledWith(
       expect.objectContaining({
-        script: join(root, 'version-a', 'modules/model_workbench/launcher.py')
+        script: join(root, 'version-a', 'modules/model_workbench/launcher.py'),
+        python: join(root, 'shared', 'model3d', 'resources', 'runtime/python/python.exe'),
+        data: join(root, 'attempt', 'model3d')
       })
     )
     expect(release).toHaveBeenCalledOnce()

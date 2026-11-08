@@ -32,6 +32,7 @@ import { MamWorkflowMotionEdge } from './MamWorkflowMotionEdge'
 import { MamWorkflowViewToolbar } from './MamWorkflowViewToolbar'
 import { useMamWorkflowMotion } from './use-mam-workflow-motion'
 import { workflowArtifactRelations } from './mam-workflow-artifact-relations'
+import { placeWorkflowEdgeLabels } from './mam-workflow-edge-label-layout'
 import { analyzeWorkflowVisual } from './mam-workflow-visual-analysis'
 import { workflowParallelRegions } from './mam-workflow-parallel-regions'
 import { reachableWorkflowNodes } from './mam-workflow-reachability'
@@ -159,7 +160,7 @@ export function MamWorkflowEditor({
   )
   const displayEdges = useMemo(
     () =>
-      visibleEdges.map((edge) => {
+      placeWorkflowEdgeLabels(nodes, visibleEdges).map((edge) => {
         const dimmed =
           tracedNodes && (!tracedNodes.has(edge.source) || !tracedNodes.has(edge.target))
         return {
@@ -175,7 +176,7 @@ export function MamWorkflowEditor({
           style: { ...edge.style, opacity: dimmed ? 0.2 : (edge.style?.opacity ?? 1) }
         }
       }),
-    [visibleEdges, tracedNodes, motion.enabled, viewMode]
+    [nodes, visibleEdges, tracedNodes, motion.enabled, viewMode]
   )
   const save = async (): Promise<void> => {
     if (visualDiagnostics.some((message) => message.startsWith('固定节点'))) {

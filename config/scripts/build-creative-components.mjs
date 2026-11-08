@@ -9,7 +9,7 @@ import ts from 'typescript'
 
 const root = fileURLToPath(new URL('../../', import.meta.url)),
   require = createRequire(import.meta.url)
-const release = path.join(root, 'release/creative-components/0.1.42'),
+const release = path.join(root, 'release/creative-components/0.1.43'),
   local = path.join(root, '.mam-local/component-packages')
 const kinds = ['image', 'video', 'speech', 'writing', 'spine', 'music', 'model3d', 'constellation']
 const sha = (bytes) => createHash('sha256').update(bytes).digest('hex')
@@ -44,7 +44,8 @@ for (const name of [
   '@xyflow/system',
   'lucide-react',
   'zustand',
-  'use-sync-external-store'
+  'use-sync-external-store',
+  'zod'
 ]) {
   let directory
   try {
@@ -77,18 +78,29 @@ for (const kind of kinds) {
   const source = path.join(local, `creative-${kind}`),
     target = path.join(release, `creative-${kind}`)
   const manifest = JSON.parse(await readFile(path.join(source, 'manifest.json'), 'utf8'))
+  if (['writing', 'spine', 'constellation', 'music', 'model3d'].includes(kind)) {
+    const file = path.join(source, 'provenance.json')
+    const provenance = JSON.parse(await readFile(file, 'utf8'))
+    provenance.sharedNavigation = {
+      file: 'packages/creative-navigation.tsx',
+      sha256: sha(await readFile(path.join(root, 'packages/creative-navigation.tsx')))
+    }
+    await writeFile(file, JSON.stringify(provenance, null, 2))
+    manifest.files['provenance.json'] = sha(await readFile(file))
+    manifest.source.sha256 = manifest.files['provenance.json']
+  }
   if (
     manifest.minimumHostVersion
       .split('.')
       .map(Number)
       .some(
         (n, i) =>
-          n > [0, 1, 42][i] &&
+          n > [0, 1, 43][i] &&
           manifest.minimumHostVersion
             .split('.')
             .map(Number)
             .slice(0, i)
-            .every((m, j) => m === [0, 1, 42][j])
+            .every((m, j) => m === [0, 1, 43][j])
       )
   )
     throw Error(`Host version too new: ${kind}`)
@@ -158,7 +170,7 @@ for (const kind of kinds) {
 const catalog = {
   schemaVersion: 1,
   distribution: 'unsigned-local',
-  hostVersion: '0.1.42',
+  hostVersion: '0.1.43',
   signature: null,
   entries
 }
@@ -177,7 +189,7 @@ await writeFile(
 )
 await writeFile(
   path.join(release, 'COMPATIBILITY.md'),
-  `# Compatibility\n\nLocal unsigned candidate; MAM0.1.42 required. Windows x64 native QA is the current evidence; platform entries do not certify other-platform GPU tools.\n\n| Component | Version | Minimum host | Manifest SHA-256 |\n|---|---|---|---|\n${entries.map((e) => `| ${e.id} | ${e.version} | ${e.minimumHostVersion} | ${e.manifestSha256} |`).join('\n')}\n\nOffline editing is available for writing/spine/constellation. Image/video/speech and AI writing require configured model profiles. Music/3D require separately installed native resources and suitable hardware. RIFE/ComfyUI require separately configured local installations. No weights, credentials, signatures, or provider endpoints are bundled. See each package provenance.json for source input hashes.\n`
+  `# Compatibility\n\nLocal unsigned candidate; MAM0.1.43 required. Windows x64 native QA is the current evidence; platform entries do not certify other-platform GPU tools.\n\n| Component | Version | Minimum host | Manifest SHA-256 |\n|---|---|---|---|\n${entries.map((e) => `| ${e.id} | ${e.version} | ${e.minimumHostVersion} | ${e.manifestSha256} |`).join('\n')}\n\nOffline editing is available for writing/spine/constellation. Image/video/speech and AI writing require configured model profiles. Music/3D require separately installed native resources and suitable hardware. RIFE/ComfyUI require separately configured local installations. No weights, credentials, signatures, or provider endpoints are bundled. See each package provenance.json for source input hashes.\n`
 )
 console.log(
   JSON.stringify(

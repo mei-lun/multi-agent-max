@@ -1,3 +1,5 @@
+import { ComponentTaskDescriptorSchema } from './domain/component-task'
+import { RoleComponentBindingSchema } from './domain/component-binding'
 import { z } from 'zod'
 import { ArtifactFormatSchema } from './domain/artifact'
 import { MamEntityIdSchema } from './domain/primitives'
@@ -136,6 +138,10 @@ const DesignFinishNodeSchema = z
 
 export const MamDesignWorkflowNodeSpecSchema = z.discriminatedUnion('type', [
   DesignRoleTaskNodeSchema,
+  DesignRoleTaskNodeSchema.extend({
+    type: z.literal('component_task'),
+    component: ComponentTaskDescriptorSchema
+  }),
   DesignDynamicTasksNodeSchema,
   DesignReviewGateNodeSchema,
   DesignApprovalGateNodeSchema,
@@ -160,6 +166,7 @@ export const MamDesignRoleSpecSchema = z
     mcpServerIds: z.array(MamEntityIdSchema).default([]),
     knowledgeBaseIds: z.array(MamEntityIdSchema).default([]),
     tools: z.array(MamEntityIdSchema).default([]),
+    componentBindings: z.array(RoleComponentBindingSchema).optional(),
     permissions: z
       .object({
         readPaths: z.array(z.string().min(1)).default(['.']),

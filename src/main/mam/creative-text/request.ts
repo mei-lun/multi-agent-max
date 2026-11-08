@@ -9,6 +9,8 @@ export function textRequest(
   images: { mime: string; data: string }[] = []
 ) {
   const protocol = provider.protocol
+  if (params.reasoningEffort && !['openai-responses', 'openai-completions'].includes(protocol))
+    throw new Error('Reasoning effort unsupported by provider protocol')
   const defaults =
     protocol === 'anthropic-messages'
       ? 'https://api.anthropic.com/v1/'
@@ -75,6 +77,7 @@ export function textRequest(
       model: model.remoteModelId,
       messages,
       stream: true,
+      stream_options: { include_usage: true },
       ...(params.reasoningEffort ? { reasoning_effort: params.reasoningEffort } : {})
     }
   } else if (protocol === 'anthropic-messages') {

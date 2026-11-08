@@ -89,6 +89,18 @@ export function createMediaServices(options: {
     const secret = provider.secretRef ? options.resolveSecret(provider.secretRef) : undefined
     if (provider.secretRef && !secret) throw new Error('Media credential unavailable')
     const snapshot = structuredClone(model)
+    if (
+      params.background &&
+      (request.operation === 'speech.generate' || !model.remoteModelId.startsWith('gpt-image-'))
+    )
+      throw new Error('Background unsupported by model')
+    if (
+      params.instructions &&
+      (request.operation !== 'speech.generate' ||
+        (!model.remoteModelId.startsWith('gpt-4o-mini-tts') &&
+          provider.protocol !== 'google-generative-ai'))
+    )
+      throw new Error('Speech instructions unsupported by model')
     return {
       validate() {
         if (request.operation !== 'image.edit' && request.inputAssets.length)

@@ -29,6 +29,7 @@ export type ComponentExecutionPort = {
     snapshot: StructuredExecutorInput['snapshot']
     component: ComponentTaskDescriptor
     workspace: string
+    projectDirectory?: string
     nodeId: string
     inputArtifacts: readonly ArtifactRef[]
     outputContracts: readonly ArtifactContract[]

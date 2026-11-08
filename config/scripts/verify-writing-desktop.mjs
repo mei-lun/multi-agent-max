@@ -3,6 +3,7 @@ import { spawn, execFileSync } from 'node:child_process'
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { build } from 'esbuild'
 
 const require = createRequire(import.meta.url),
   root = process.cwd()
@@ -12,6 +13,20 @@ const run = await mkdtemp(join(output, 'run-'))
 const packagePath = join(root, '.mam-local/component-packages/creative-writing')
 const manifest = JSON.parse(await readFile(join(packagePath, 'manifest.json'), 'utf8'))
 const reportPath = join(run, 'result.json')
+const corePath = join(run, 'writing-core.cjs')
+await build({
+  entryPoints: [join(root, 'vendor/levelup/baseline-6542241/src/lib/writing.ts')],
+  outfile: corePath,
+  bundle: true,
+  platform: 'node',
+  format: 'cjs'
+})
+const core = require(corePath)
+const goalProject = core.createWritingProject(),
+  goal = core.createWritingGoal(goalProject.activeDocumentId)
+goal.mode = 'director'
+goal.plan = core.createDefaultWritingGoalPlan(goal).slice(0, 2)
+goalProject.goals = [goal]
 const script = `
 const {app,BrowserWindow,dialog}=require('electron'),fs=require('node:fs'),http=require('node:http');
 app.disableHardwareAcceleration();app.setPath('userData',${JSON.stringify(join(run, 'user-data'))});
@@ -40,8 +55,9 @@ async function test(){await new Promise(r=>server.listen(0,'127.0.0.1',r));let m
  const content=await runView('('+editor+').value');if(!content.includes('流式生成的正文'))throw Error('Accept did not edit document');
  step='close and reopen persistence';component.destroy();await wait(150);await runMain('window.mamCreative.open("creative.writing")');component=BrowserWindow.getAllWindows().find(w=>w!==main);await ready();const restored=await runView('('+editor+').value');if(restored!==content)throw Error('Document lost after reopen');
  if(!requests.length||requests.some(r=>!r.authorized||r.body.tools))throw Error('Request contract invalid');
+ step='background Goal after close';const models=await runView('window.componentHost.request({action:"listModels"})');const model=models.find(item=>item.kind==='text');const jobId=await runView('window.componentHost.request('+JSON.stringify({action:'submit',operation:'writing.goal.execute',idempotencyKey:'background-goal',params:{project:${JSON.stringify(goalProject)},goalId:${JSON.stringify(goal.id)},modelProfileId:model.id,approved:true,automatic:true},inputAssets:[]})+')');component.destroy();await wait(500);await runMain('window.mamCreative.open("creative.writing")');component=BrowserWindow.getAllWindows().find(w=>w!==main);await ready();let job;for(let i=0;i<100;i++){job=(await runView('window.componentHost.request({action:"listJobs"})')).find(item=>item.id===jobId);if(['succeeded','failed','reconciliation-required'].includes(job?.state))break;await wait(100)}if(job?.state!=='succeeded')throw Error('Background Goal failed '+JSON.stringify(job));const goalResult=job.events.findLast(event=>event.type==='succeeded')?.data;if(goalResult?.project?.payload?.goals?.[0]?.status!=='completed')throw Error('Goal did not complete original steps');if(job.events.filter(event=>event.type==='log'&&event.data?.type==='writing_goal_checkpoint').length!==2)throw Error('Goal checkpoints missing');
  fs.writeFileSync(${JSON.stringify(join(output, 'workbench.png'))},(await component.webContents.capturePage()).toPNG());
- finish({passed:true,originalEditor:true,streamedSuggestion:true,acceptedText:true,saveCloseReopen:true,requestCount:requests.length,noTools:true,componentVersion:${JSON.stringify(manifest.version)},scope:'local HTTP fixture; no live model call'});
+ finish({passed:true,originalEditor:true,streamedSuggestion:true,acceptedText:true,saveCloseReopen:true,backgroundGoalAfterClose:true,goalCheckpoints:2,requestCount:requests.length,noTools:true,componentVersion:${JSON.stringify(manifest.version)},scope:'local HTTP fixture; no live model call'});
 }
 import(${JSON.stringify(pathToFileURL(join(root, 'out/main/index.js')).href)}).then(()=>app.whenReady()).then(test).catch(e=>finish({passed:false,error:String(e),stack:e.stack}));
 `

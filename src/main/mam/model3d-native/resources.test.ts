@@ -1,10 +1,23 @@
-import { test, expect } from 'vitest'
+import { test, expect, vi } from 'vitest'
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
 import { model3dResources, validateModel3dManifest, manifestFile, names } from './resources'
 import { model3dResourceSpec } from '../../../shared/mam/model3d-native'
+import type * as FsPromises from 'node:fs/promises'
+vi.mock('node:fs/promises', async (original) => {
+  const fs = await original<typeof FsPromises>()
+  return {
+    ...fs,
+    writeFile: (...args: Parameters<typeof fs.writeFile>) => {
+      // Inject failure for any truncating publication; atomic temporary writes work.
+      if (String(args[0]).replaceAll('\\', '/').endsWith('/manifest.json'))
+        throw new Error('Injected unsafe manifest write failure')
+      return fs.writeFile(...args)
+    }
+  }
+})
 function archive() {
   const data = Buffer.from('fixture'),
     name = Buffer.from('model_index.json')
@@ -76,6 +89,36 @@ test('tiny verified resource ZIP staging and manifest rejects mismatched target'
     await expect(
       service.install(['texture'], new AbortController().signal, async () => {}, offline)
     ).rejects.toThrow()
+    await rm(service.directory, { recursive: true, force: true })
+    await expect(
+      service.install(['triposg', 'texture'], new AbortController().signal, async () => {}, offline)
+    ).rejects.toThrow()
+    expect((await service.installed()).triposg).toBe(true)
+    // An older texture remains usable if a refreshed manifest changes its hash,
+    // but its replacement fails after the triposg commit.
+    const texture = join(service.directory, 'texture')
+    await mkdir(join(texture, 'base'), { recursive: true })
+    await mkdir(join(texture, 'adapter'), { recursive: true })
+    await writeFile(join(texture, 'base/model_index.json'), '{}')
+    await writeFile(join(texture, 'adapter/mvadapter_ig2mv_sd21.safetensors'), 'old')
+    await writeFile(join(texture, 'provenance.json'), '{}')
+    await writeFile(
+      join(texture, '.installed.json'),
+      JSON.stringify({
+        ...model3dResourceSpec,
+        sha256: digest
+      })
+    )
+    expect((await service.installed()).texture).toBe(true)
+    const refreshed = structuredClone(metadata)
+    ;(refreshed.components.texture as { sha256: string }).sha256 = 'a'.repeat(64)
+    await writeFile(join(offline, manifestFile), JSON.stringify(refreshed))
+    await expect(
+      service.install(['triposg', 'texture'], new AbortController().signal, async () => {}, offline)
+    ).rejects.toThrow()
+    expect(await service.installed()).toMatchObject({ triposg: true, texture: true })
+    await service.install(['triposg'], new AbortController().signal, async () => {}, offline)
+    expect((await service.installed()).texture).toBe(true)
   } finally {
     await rm(root, { recursive: true, force: true })
   }

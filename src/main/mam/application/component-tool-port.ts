@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { componentIdSchema } from '../../../shared/mam/components'
 import { ArtifactRefSchema } from '../../../shared/mam/domain/artifact'
 import { assetRefSchema } from '../../../shared/mam/creative-runtime'
+import { AttemptResultSchema } from '../../../shared/mam/domain/attempt-result'
 import type { PreparedAttempt } from './mam-attempt-execution-types'
 import type { AttemptGatewayAuthority } from '../gateways/attempt-gateway-authority'
 export const ComponentToolInvokeSchema = z
@@ -17,6 +18,7 @@ export const ComponentToolInvokeSchema = z
 export const ComponentCapabilitySchema = z.object({
   componentId: componentIdSchema,
   version: z.string(),
+  manifestHash: z.string().optional(),
   operations: z.array(z.string())
 })
 export const ComponentToolStatusSchema = z.object({
@@ -31,9 +33,11 @@ export const ComponentToolStatusSchema = z.object({
     'reconciliation-required'
   ]),
   assets: z.array(assetRefSchema).default([]),
-  text: z.string().max(1000000).optional()
+  text: z.string().max(1000000).optional(),
+  usage: AttemptResultSchema.shape.usage.optional()
 })
 export type ComponentToolPort = {
+  publishOutputs?(request: { jobId: string; contractIds: string[] }): Promise<unknown>
   requestApproval?(input: {
     request: z.infer<typeof ComponentToolInvokeSchema>
     requestHash: string

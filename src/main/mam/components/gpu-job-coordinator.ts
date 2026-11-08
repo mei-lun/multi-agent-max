@@ -6,8 +6,20 @@ const wrapped = new WeakSet<OperationHandler>()
 const operations = new Set([
   'music.generate',
   'music.native.generate',
+  'music.list',
+  'music.reference',
+  'music.trim',
+  'music.archive',
+  'music.favorite',
+  'music.export',
   'model3d.start',
-  'spine.rife.frame'
+  'spine.rife.frame',
+  'music.resources.install',
+  'music.resources.offline',
+  'music.resources.remove',
+  'model3d.resources.install',
+  'model3d.resources.offline',
+  'model3d.resources.remove'
 ])
 type Ticket = { start(): void; reject(error: Error): void; signal: AbortSignal; abort(): void }
 type Queue = { running: boolean; waiting: Ticket[] }

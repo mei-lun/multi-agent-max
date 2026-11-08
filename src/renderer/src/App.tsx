@@ -428,7 +428,8 @@ function ActivePage({
   onOpenWorkflows(): void
   onOpenReviews(): void
 }>): React.JSX.Element {
-  if (page === 'creative') return <MamCreativePage />
+  if (page === 'creative')
+    return <MamCreativePage projectDirectory={snapshot.projectBinding?.projectDirectory} />
   if (page === 'design') {
     return <MamDesignPage snapshot={snapshot} design={design} onOpenSettings={onOpenSettings} />
   }

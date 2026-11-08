@@ -1,3 +1,4 @@
+import { creativeBackgroundUiPlugin } from './creative-background-ui-patches.mjs'
 import { build } from 'esbuild'
 import { readFile, writeFile, mkdir, copyFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
@@ -39,6 +40,7 @@ await build({
   target: 'es2022',
   jsx: 'automatic',
   plugins: [
+    creativeBackgroundUiPlugin(root),
     {
       name: 'mam-adapters',
       setup(b) {
@@ -88,6 +90,14 @@ provenance.adapters = await Promise.all(
     sha256: hash(await readFile(path.join(source, file)))
   }))
 )
+provenance.businessUiPatches = await Promise.all(
+  [
+    'config/scripts/creative-background-ui-patches.mjs',
+    'packages/creative-writing/background-jobs.ts'
+  ].map(async (file) => ({ file, sha256: hash(await readFile(path.join(root, file))) }))
+)
+provenance.transformation +=
+  '; anchored MAM background Job UI patch, explicit resume from durable checkpoints; immutable upstream preserved'
 await writeFile(path.join(output, 'provenance.json'), JSON.stringify(provenance, null, 2))
 files['provenance.json'] = hash(await readFile(path.join(output, 'provenance.json')))
 await writeFile(
@@ -123,4 +133,5 @@ await writeFile(
     2
   )
 )
+await (await import('./build-creative-runtime.mjs')).buildCreativeRuntime(output)
 console.log(output)

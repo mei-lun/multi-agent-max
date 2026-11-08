@@ -1,5 +1,7 @@
+import { assertComponentBudget } from '../components/attempt-component-budget'
 import { z } from 'zod'
 import { createHash } from 'node:crypto'
+import { assertComponentOperation } from './component-operation-policy'
 import type { PreparedAttempt } from './mam-attempt-execution-types'
 import type { AttemptGatewayAuthority } from '../gateways/attempt-gateway-authority'
 import {
@@ -19,7 +21,8 @@ const requestSchema = z
       'component.listCapabilities',
       'component.invoke',
       'component.status',
-      'component.cancel'
+      'component.cancel',
+      'component.publishOutputs'
     ]),
     request: z.unknown()
   })
@@ -61,6 +64,8 @@ export class ComponentToolGateway {
     }
     if (input.method === 'component.invoke') {
       const request = ComponentToolInvokeSchema.parse(input.request)
+      assertComponentOperation(snapshot, request.componentId, request.operation)
+      assertComponentBudget(snapshot, request.operation)
       if (JSON.stringify(request).length > 1024 * 1024)
         throw new Error('component_request_too_large')
       if (
@@ -106,7 +111,10 @@ export class ComponentToolGateway {
       const categories = snapshot.permissions.requireApprovalFor.filter((kind) =>
         ['command', 'network', 'file'].includes(kind)
       )
-      const requestHash = createHash('sha256').update(JSON.stringify(request)).digest('hex')
+      const identity = capabilities.find((item) => item.componentId === request.componentId)
+      const requestHash = createHash('sha256')
+        .update(JSON.stringify({ request, identity, authority: this.authority }))
+        .digest('hex')
       if (categories.length) {
         if (!this.port.requestApproval) throw new Error('component_approval_required')
         const allowed = await this.port.requestApproval({
@@ -120,7 +128,8 @@ export class ComponentToolGateway {
           operation: request.operation,
           requestHash,
           categories,
-          allowed
+          allowed,
+          identity
         })
         this.signal.throwIfAborted()
         if (!allowed) throw new Error('component_approval_denied')
@@ -129,6 +138,15 @@ export class ComponentToolGateway {
       const result = z.object({ jobId: z.uuid() }).parse(await this.port.invoke(request))
       this.owned.add(result.jobId)
       return result
+    }
+    if (input.method === 'component.publishOutputs') {
+      const request = z
+        .object({ jobId: z.uuid(), contractIds: z.array(z.string().min(1)).min(1).max(100) })
+        .strict()
+        .parse(input.request)
+      if (!this.owned.has(request.jobId)) throw new Error('component_job_not_owned')
+      if (!this.port.publishOutputs) throw new Error('component_publish_unavailable')
+      return this.port.publishOutputs(request)
     }
     const { jobId } = z.object({ jobId: z.uuid() }).strict().parse(input.request)
     if (!this.owned.has(jobId)) throw new Error('component_job_not_owned')

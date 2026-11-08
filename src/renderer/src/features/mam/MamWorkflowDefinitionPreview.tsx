@@ -8,6 +8,7 @@ import { MamWorkflowReturnEdge } from './MamWorkflowReturnEdge'
 import { MamWorkflowMotionEdge } from './MamWorkflowMotionEdge'
 import { useMamWorkflowMotion } from './use-mam-workflow-motion'
 import { workflowArtifactRelations } from './mam-workflow-artifact-relations'
+import { placeWorkflowEdgeLabels } from './mam-workflow-edge-label-layout'
 import {
   toCanvasEdges,
   toCanvasNodes,
@@ -53,7 +54,7 @@ export function MamWorkflowDefinitionPreview({
           })),
           ...artifactEdges
         ]
-  const displayEdges = edges.map((edge) => ({
+  const displayEdges = placeWorkflowEdgeLabels(nodes, edges).map((edge) => ({
     ...edge,
     data: {
       ...edge.data,

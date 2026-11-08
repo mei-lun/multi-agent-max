@@ -1,83 +1,69 @@
+import { attemptModelHandler } from './attempt-model-handler'
+import { attemptComponentUsage } from './attempt-usage-budget'
+import { registerComponentLedger } from './attempt-component-ledger'
+import { componentJobUsage } from './attempt-component-budget'
+import { attemptRuntimeContext } from './attempt-runtime-context'
+import { approveComponentTool } from './attempt-component-approval'
+import { acquireAttemptComponent } from './attempt-component-identity'
+import { publishComponentOutputs } from './attempt-component-outputs'
+import { assertComponentOperation } from '../application/component-operation-policy'
 import { createHash } from 'node:crypto'
-import { dialog } from 'electron'
-import { createReadStream } from 'node:fs'
+import { createReadStream, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import type { ComponentToolPortFactory } from '../application/component-tool-port'
 import type { DesktopCreativeServices } from './desktop-creative-services'
 import { CreativeJobManager } from '../creative-runtime'
-import {
-  assetRefSchema,
-  type AssetRef,
-  type CreativeRequest
-} from '../../../shared/mam/creative-runtime'
-import { createMediaServices } from '../media'
-import { createCreativeTextServices } from '../creative-text'
-import { createDesktopMusicServices } from '../music-native/desktop'
-import { createMusicResourceManager } from '../music-native/resources'
-import { coordinateGpuHandler } from './gpu-job-coordinator'
+import { assetRefSchema, type AssetRef } from '../../../shared/mam/creative-runtime'
 import { LocalArtifactStore } from '../artifacts/local-artifact-store'
 import { AssetBundleSchema } from '../../../shared/mam/domain/binary-artifact'
-import { decodeImage } from './host-native-assets'
 import type { ComponentId } from '../../../shared/mam/components'
 
 export function createComponentTools(options: {
   root: string
   services(): Promise<DesktopCreativeServices>
 }): ComponentToolPortFactory {
-  return ({ prepared, signal }) => {
+  return ({ prepared, authority, signal }) => {
+    registerComponentLedger(options.root, authority)
     let jobs: CreativeJobManager | undefined,
       disposed = false
     const leases = new Map<string, { release(): void }>()
     const running = new Set<Promise<unknown>>()
-    let music: ReturnType<typeof createDesktopMusicServices> | undefined
+    const identities = new Map<string, Awaited<ReturnType<typeof acquireAttemptComponent>>>()
+    const identityDirectory = join(options.root, 'component-identities', hash(prepared.attemptId))
     const ready = (async () => {
       const services = await options.services()
-      const modelRegistry = (request: CreativeRequest) => {
-        const binding = prepared.snapshot.componentBindings?.find(
-          (item) => item.componentId === request.componentId
-        )
-        if (!binding?.model || !binding.provider) return undefined
-        const model = binding.model,
-          provider = binding.provider
-        const catalog = {
-          models: {
-            listActive: () => [model],
-            getActive: (id: string) => (id === model.id ? model : undefined)
-          },
-          providers: { getActive: (id: string) => (id === provider.id ? provider : undefined) }
-        }
-        const config = {
-          catalog,
-          assets: services.assets,
-          validateImage: decodeImage,
-          resolveSecret: (ref: string) => prepared.credentialValues[ref]
-        }
-        return (
-          createMediaServices(config).handlers(request) ??
-          createCreativeTextServices(config).handlers(request)
-        )
-      }
-      music = createDesktopMusicServices({
-        root: join(
-          options.root,
-          'workflow-native',
-          hash(prepared.workflowRunId + String.fromCharCode(0) + prepared.attemptId)
-        ),
-        assets: services.assets,
-        resources: createMusicResourceManager({ root: join(options.root, 'music') }),
-        registry: services.registry
-      })
       jobs = await CreativeJobManager.open({
         directory: join(options.root, 'component-tool-attempts', hash(prepared.attemptId)),
         handlers: (request) => {
-          const handler = coordinateGpuHandler(
-            options.root,
-            request.operation,
-            modelRegistry(request) ??
-              (request.componentId === 'creative.music'
-                ? music?.handlers(request)
-                : services.handlers(request))
-          )
+          const handler =
+            attemptModelHandler(
+              services,
+              options.root,
+              prepared,
+              authority,
+              (id) => jobs?.get(id),
+              request
+            ) ??
+            services.runtimeHandlers(
+              attemptRuntimeContext(
+                services,
+                {
+                  catalog: {
+                    models: { listActive: () => [], getActive: () => undefined },
+                    providers: { getActive: () => undefined }
+                  },
+                  resolveSecret: () => undefined,
+                  scope: hash(prepared.attemptId),
+                  lookupJob: (id) => jobs?.get(id)
+                },
+                {
+                  root: options.root,
+                  workspace: prepared.worktree.path,
+                  snapshot: prepared.snapshot,
+                  authority
+                }
+              )
+            )(request)
           if (!handler) return undefined
           return {
             validate: (req) => handler.validate(req),
@@ -99,7 +85,9 @@ export function createComponentTools(options: {
         if (!['succeeded', 'failed', 'cancelled'].includes(job.state))
           leases.set(
             job.id,
-            await services.registry.acquireVersion(
+            await acquireAttemptComponent(
+              services.registry,
+              identityDirectory,
               job.request.componentId as ComponentId,
               job.request.componentVersion
             )
@@ -125,54 +113,37 @@ export function createComponentTools(options: {
     }
     signal.addEventListener('abort', stop, { once: true })
     return {
-      async requestApproval({ request, requestHash, categories }) {
-        active()
-        const binding = prepared.snapshot.componentBindings?.find(
-          (item) => item.componentId === request.componentId
-        )
-        const redact = (value: string) =>
-          value.replace(/Bearer\s+\S+|\b(?:sk|xai|api)-[A-Za-z0-9_-]+/gi, '[redacted]')
-        const prompt =
-          typeof request.params.prompt === 'string'
-            ? redact(request.params.prompt.slice(0, 1500))
-            : '(native component operation)'
-        const decision = await dialog.showMessageBox({
-          type: 'question',
-          title: 'Approve component operation',
-          message: `${request.componentId}: ${request.operation}`,
-          detail: `Role: ${prepared.snapshot.roleProfile.id}\nTask: ${prepared.taskId}\nModel: ${binding?.model?.displayName ?? 'Native engine'}\nCount: ${typeof request.params.count === 'number' ? request.params.count : 1}\nPermissions: ${categories.join(', ')}\nProvider cost is unknown and may be charged.\n\n${prompt}\n\nRequest: ${requestHash}`,
-          buttons: ['Reject', 'Approve this operation'],
-          defaultId: 0,
-          cancelId: 0
-        })
-        active()
-        return decision.response === 1
-      },
+      requestApproval: (request) =>
+        approveComponentTool(prepared, authority, identityDirectory, active, request),
       async listCapabilities() {
         active()
         const services = await ready
-        return (await services.registry.list()).flatMap((item) =>
-          item.versions
-            .filter((version) => version.enabled && version.status === 'installed')
-            .map((version) => ({
-              componentId: item.id,
-              version: version.manifest.version,
-              operations: version.manifest.operations.map((operation) => operation.id)
-            }))
-        )
+        for (const item of await services.registry.list()) {
+          if (!prepared.snapshot.tools.includes(`component:${item.id}`) || identities.has(item.id))
+            continue
+          if (
+            !existsSync(join(identityDirectory, `${item.id}.identity.json`)) &&
+            !item.versions.some((v) => v.enabled && v.status === 'installed')
+          )
+            continue
+          identities.set(
+            item.id,
+            await acquireAttemptComponent(services.registry, identityDirectory, item.id)
+          )
+        }
+        return [...identities].map(([componentId, lease]) => ({
+          componentId,
+          version: lease.identity.version,
+          manifestHash: lease.identity.manifestHash,
+          operations: lease.manifest.operations.map((o) => o.id)
+        }))
       },
       async invoke(request) {
         active()
-        if (
-          !prepared.snapshot.tools.includes(`component:${request.componentId}`) ||
-          /(^|\.)(resources|install|remove|offline|status|hardware)(\.|$)/.test(request.operation)
-        )
-          throw new Error('Component permission denied')
+        assertComponentOperation(prepared.snapshot, request.componentId, request.operation)
         const binding = prepared.snapshot.componentBindings?.find(
           (item) => item.componentId === request.componentId
         )
-        if (binding?.allowedOperations && !binding.allowedOperations.includes(request.operation))
-          throw new Error('Component operation denied')
         if (
           /^(image|video|speech|text|vision)\./.test(request.operation) &&
           (!binding?.model || request.params.modelProfileId !== binding.model.id)
@@ -180,7 +151,11 @@ export function createComponentTools(options: {
           throw new Error('Frozen component model binding required')
         const services = await ready
         active()
-        const lease = await services.registry.acquire(request.componentId)
+        const lease = await acquireAttemptComponent(
+          services.registry,
+          identityDirectory,
+          request.componentId
+        )
         try {
           if (!lease.manifest.operations.some((operation) => operation.id === request.operation))
             throw new Error('Component operation unavailable')
@@ -227,6 +202,15 @@ export function createComponentTools(options: {
           const params = structuredClone(request.params)
           if (context.length && typeof params.prompt === 'string')
             params.prompt += `\n\nInput artifacts:\n${context.join('\n\n')}`
+          active()
+          await attemptComponentUsage(
+            options.root,
+            prepared.snapshot,
+            jobs!.list().some((job) => job.request.idempotencyKey === request.idempotencyKey)
+              ? undefined
+              : request.operation
+          )
+          active()
           const id = await jobs!.submit({
             componentId: request.componentId,
             componentVersion: lease.manifest.version,
@@ -260,7 +244,37 @@ export function createComponentTools(options: {
           final && typeof final === 'object' && 'text' in final && typeof final.text === 'string'
             ? final.text
             : undefined
-        return { jobId, state: job.state, assets, ...(text ? { text } : {}) }
+        return {
+          jobId,
+          state: job.state,
+          assets,
+          ...(text ? { text } : {}),
+          usage: componentJobUsage(job, prepared.snapshot)
+        }
+      },
+      async publishOutputs({ jobId, contractIds }) {
+        active()
+        const services = await ready
+        const job = owned(jobId)
+        await attemptComponentUsage(options.root, prepared.snapshot)
+        const contracts = prepared.task.outputContracts.filter((c) =>
+          contractIds.includes(c.artifactType)
+        )
+        if (new Set(contractIds).size !== contracts.length)
+          throw new Error('Output contract not granted')
+        return {
+          artifacts: await publishComponentOutputs(
+            {
+              authority: { ...authority, createdAt: new Date().toISOString() },
+              workspace: prepared.worktree.path,
+              outputContracts: contracts,
+              signal
+            },
+            job,
+            services,
+            options.root
+          )
+        }
       },
       async cancel(jobId) {
         active()
@@ -271,10 +285,11 @@ export function createComponentTools(options: {
       async dispose() {
         disposed = true
         signal.removeEventListener('abort', stop)
-        await ready
+        const services = await ready
         await jobs!.dispose()
         await Promise.allSettled(running)
-        await music?.dispose()
+        await services.releaseRuntimeScope?.(hash(prepared.attemptId))
+        for (const lease of identities.values()) lease.release()
         for (const lease of leases.values()) lease.release()
         leases.clear()
       }

@@ -16,8 +16,10 @@ export function createAttemptExecutionAcceptanceFixture(input?: {
   executorKind?: 'codex-cli' | 'pi-rpc'
   retryMaxAttempts?: number
   componentTask?: boolean
+  root?: string
+  configureWorkflow?(definition: WorkflowDefinition): void
 }) {
-  const root = mkdtempSync(join(tmpdir(), 'mam-attempt-execution-'))
+  const root = input?.root ?? mkdtempSync(join(tmpdir(), 'mam-attempt-execution-'))
   const origin = join(root, 'origin.git')
   const project = join(root, 'project')
   git(root, ['init', '--bare', origin])
@@ -82,6 +84,7 @@ export function createAttemptExecutionAcceptanceFixture(input?: {
           }
         : node
     )
+  input?.configureWorkflow?.(sourceWorkflow)
   const definition = catalog.workflows.save(sourceWorkflow)
   const settings = new MamLocalSettingsStore(join(root, 'local-settings.json'), 'machine.test')
   settings.save({

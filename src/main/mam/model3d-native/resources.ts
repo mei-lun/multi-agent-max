@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { model3dManifest, model3dResourceSpec as spec } from '../../../shared/mam/model3d-native'
 import { downloadResource, verifyResource } from '../music-native/resources/download'
 import { extractMusicZip } from '../music-native/resources/zip'
+import { recoverResources } from './resource-recovery'
 export const names = ['runtime', 'triposg', 'texture', 'blender'] as const
 const required: Record<string, string[]> = {
   runtime: [
@@ -105,6 +106,13 @@ export function model3dResources(root: string, fetcher: typeof fetch = fetch) {
         ? validateModel3dManifest(await readFile(join(offline, manifestFile)))
         : await manifest(signal)
       await mkdir(directory, { recursive: true })
+      await recoverResources(directory)
+      let committed = await readFile(join(directory, 'manifest.json'))
+        .then(validateModel3dManifest)
+        .catch((error: NodeJS.ErrnoException) => {
+          if (error.code !== 'ENOENT') throw error
+          return metadata
+        })
       const cache = join(root, '.3d-downloads')
       await mkdir(cache, { recursive: true })
       const totalBytes = selected.reduce(
@@ -179,7 +187,18 @@ export function model3dResources(root: string, fetcher: typeof fetch = fetch) {
           }
           try {
             await rename(stage, target)
+            // Register each completed resource before proceeding to the next download.
+            // A failed later archive must not leave the completed component unregistered.
+            const manifestStage = join(directory, '.manifest-' + randomUUID())
+            const next = {
+              ...committed,
+              components: { ...committed.components, [name]: component }
+            }
+            await writeFile(manifestStage, JSON.stringify(next))
+            await rename(manifestStage, join(directory, 'manifest.json'))
+            committed = next
           } catch (error) {
+            await rm(target, { recursive: true, force: true })
             if (replaced) await rename(backup, target)
             throw error
           }
@@ -189,7 +208,6 @@ export function model3dResources(root: string, fetcher: typeof fetch = fetch) {
           await rm(archive, { force: true })
         }
       }
-      await writeFile(join(directory, 'manifest.json'), JSON.stringify(metadata))
       return installed()
     }
   }

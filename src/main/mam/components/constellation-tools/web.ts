@@ -2,7 +2,8 @@ import { lookup } from 'node:dns/promises'
 import { request, type RequestOptions } from 'node:https'
 import { isIP } from 'node:net'
 import { isPublicAddress } from '../../media/result-download'
-export async function fetchPublicText(url: URL) {
+export async function fetchPublicText(url: URL, cancel?: AbortSignal) {
+  cancel?.throwIfAborted()
   if (url.protocol !== 'https:' || url.username || url.password || (url.port && url.port !== '443'))
     throw new Error('Public HTTPS required')
   const host = url.hostname.replace(/^\[|\]$/g, ''),
@@ -12,7 +13,9 @@ export async function fetchPublicText(url: URL) {
   if (!addresses.length || addresses.some((address) => !isPublicAddress(address.address)))
     throw new Error('Nonpublic address')
   const selected = addresses[0]!,
-    signal = AbortSignal.timeout(30000)
+    signal = cancel
+      ? AbortSignal.any([cancel, AbortSignal.timeout(30000)])
+      : AbortSignal.timeout(30000)
   return new Promise<string>((resolve, reject) => {
     const options: RequestOptions & { autoSelectFamily: boolean } = {
       signal,

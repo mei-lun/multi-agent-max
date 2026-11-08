@@ -141,7 +141,7 @@ export class ComponentRegistry {
       }))
     )
   }
-  install(input: unknown) {
+  install(input: unknown, authorizeManifest?: (manifest: ComponentManifest) => void) {
     return this.mutate(async () => {
       const request = componentInstallRequestSchema.parse(input)
       const source = path.resolve(request.sourceDirectory)
@@ -155,6 +155,7 @@ export class ComponentRegistry {
       const manifest = componentManifestSchema.parse(
         JSON.parse(await fs.readFile(manifestPath, 'utf8'))
       )
+      authorizeManifest?.(structuredClone(manifest))
       if (!this.compatible(manifest))
         throw new Error('Incompatible host, platform, or capabilities')
       if (
@@ -219,7 +220,7 @@ export class ComponentRegistry {
         )
       )
         throw new Error('Active dependent version conflict')
-      if (this.leases.get(id)) throw new Error('Component in use')
+      // Existing leases retain their immutable package version during activation.
       this.state.active[id] = version
       await this.save()
     })

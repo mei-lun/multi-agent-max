@@ -5,6 +5,7 @@ export type CreativeRequest = {
   operation: string
   projectId: string
   attempt?: { id: string; serverId: string }
+  conversation?: { rootJobId?: string; previousJobId?: string; command: string }
   idempotencyKey: string
   inputAssets: AssetRef[]
   params: Record<string, unknown>
@@ -48,6 +49,14 @@ export const creativeRequestSchema = z
     projectId: z.string().min(1).max(512),
     attempt: z
       .object({ id: z.string().min(1), serverId: z.string().min(1) })
+      .strict()
+      .optional(),
+    conversation: z
+      .object({
+        rootJobId: z.uuid().optional(),
+        previousJobId: z.uuid().optional(),
+        command: z.string().min(1).max(100000)
+      })
       .strict()
       .optional(),
     idempotencyKey: z.string().min(1).max(512),

@@ -11,6 +11,8 @@ export const mediaParamsSchema = z
       .optional(),
     count: z.number().int().min(1).max(10).optional(),
     voice: z.string().max(100).optional(),
+    background: z.enum(['auto', 'transparent', 'opaque']).optional(),
+    instructions: z.string().max(16000).optional(),
     maskAssetId: z.string().optional()
   })
   .strict()

@@ -61,4 +61,5 @@ await writeFile(
     2
   )
 )
+await (await import('./build-creative-runtime.mjs')).buildCreativeRuntime(output)
 console.log(output)

@@ -106,6 +106,7 @@ function createMainWindow(): void {
     previousLogDirectories
   )
   const initialRepository = configuredStateRepository(localSettings)
+  let creativeRepository = initialRepository
   const executionDrafts = new LocalExecutionDraftStore(join(mamRoot, 'execution-drafts'))
   let activeProjectDirectory =
     initialRepository?.projectDirectory ??
@@ -228,6 +229,7 @@ function createMainWindow(): void {
         gitClient: createGitCommandClient(localSettings.get().gitExecutable)
       })
       activeProjectDirectory = repository.projectDirectory
+      creativeRepository = repository
       service.setRunSource(repository)
       commands.setRepository(repository)
       workflowRuns.setRepository(repository)
@@ -256,7 +258,18 @@ function createMainWindow(): void {
   const unregisterCreativeIpc = registerCreativeIpc(
     window,
     mamRoot,
-    desktopMediaDependencies(profiles, localSettings, secretValues)
+    desktopMediaDependencies(profiles, localSettings, secretValues),
+    () => service.getSnapshot().projectBinding?.projectDirectory,
+    () => {
+      const repository = creativeRepository
+      return repository
+        ? {
+            directory: repository.projectDirectory,
+            snapshot: service.getSnapshot(),
+            readProjectBlob: (commit, path) => repository.readProjectBlob(commit, path)
+          }
+        : undefined
+    }
   )
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('https://')) void shell.openExternal(url)

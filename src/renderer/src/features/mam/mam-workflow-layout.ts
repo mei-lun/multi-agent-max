@@ -3,7 +3,7 @@ import type { WorkflowVisualAnalysis } from './mam-workflow-visual-analysis'
 
 export type WorkflowPoint = Readonly<{ x: number; y: number }>
 
-const COLUMN_GAP = 260
+const COLUMN_GAP = 340
 const ROW_GAP = 150
 const NODE_WIDTH = 190
 const NODE_HEIGHT = 110

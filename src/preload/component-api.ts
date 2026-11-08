@@ -37,5 +37,11 @@ contextBridge.exposeInMainWorld('componentHost', {
       callbacks.delete(callback)
     }
   },
-  request: (input: ComponentHostRequest) => ipcRenderer.invoke(COMPONENT_HOST_CHANNEL, input)
+  request: (input: ComponentHostRequest) =>
+    ipcRenderer.invoke(
+      COMPONENT_HOST_CHANNEL,
+      input.action === 'submit'
+        ? { ...input, params: JSON.parse(JSON.stringify(input.params)) }
+        : input
+    )
 })

@@ -61,8 +61,9 @@ test('real assets and jobs remain scoped behind the fake Electron bridge', async
   const handlers = () => ({ validate() {}, run: async () => ({ value: 1 }) })
   const jobs = await CreativeJobManager.open({ directory: join(directory, 'jobs'), handlers })
   const registry = {
+    list: async () => [],
     acquire: async () => ({ manifest: { version: '1.0.0' }, release() {} }),
-    acquireVersion: async () => ({ release() {} })
+    acquireVersion: async () => ({ manifest: { version: '1.0.0' }, release() {} })
   } as unknown as ComponentRegistry
   const service = createComponentHostService({
     assets,
@@ -108,6 +109,10 @@ test('real assets and jobs remain scoped behind the fake Electron bridge', async
     await expect(invoke({ action: 'events', jobId: id, afterSequence: 0 }, b)).rejects.toThrow(
       'outside'
     )
+    await service.open('creative.image', 'second-project')
+    const otherProject = fake.hosts.at(-1)!
+    await expect(invoke({ action: 'previewAsset', ref }, otherProject)).rejects.toThrow('outside')
+    expect(await invoke({ action: 'listJobs' }, otherProject)).toEqual([])
   } finally {
     service.dispose()
     await jobs.dispose()

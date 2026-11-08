@@ -4,6 +4,7 @@ import type { NodeRun } from '../../../../shared/mam/domain/workflow'
 import { analyzeWorkflowVisual } from './mam-workflow-visual-analysis'
 import { layoutWorkflow } from './mam-workflow-layout'
 import { returnEdgeChannels, type ReturnChannel } from './mam-workflow-return-channels'
+import type { WorkflowEdgeLabelPlacement } from './mam-workflow-edge-label-layout'
 import type {
   WorkflowDefinition,
   WorkflowEdge,
@@ -19,6 +20,7 @@ export type MamWorkflowCanvasEdge = Edge<
     returnChannel?: ReturnChannel
     motionKind?: 'artifact'
     motionEnabled?: boolean
+    labelPlacement?: WorkflowEdgeLabelPlacement
   }>
 >
 
@@ -128,8 +130,8 @@ export function createWorkflowNode(
       outputs: [{ ...output, format: 'asset-bundle' }],
       component: {
         id: 'creative.image',
-        version: '0.2.0',
-        hostApiVersion: '1.0.0',
+        version: '0.3.0',
+        hostApiVersion: '2.0.0',
         operation: 'image.generate',
         params: { prompt: '' }
       }

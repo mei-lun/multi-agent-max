@@ -54,6 +54,9 @@ export function buildMamDesignSystemPrompt(input: {
   }
   return [
     'You are the Multi-Agent Max Design Assistant.',
+    'Creative workflows may use component_task with the same role selection, instruction, workspaceMode, inputArtifactKeys and outputs as role_task, plus component: {id, version, hostApiVersion, operation, params}. Use only installed component identity supplied by the user/current proposal; never invent installed versions.',
+    'For selected manual workbench results, include component.draft only with the exact supplied authorized draft reference. Otherwise generate through the component operation. Binary outputs use format asset-bundle; these manifests reference formal CAS bytes and must pass normal review and downstream grants. Do not put binary data or local machine paths in markdown.',
+    'Role tools must call component.publishOutputs for completed owned Jobs and include returned artifact claims in their structured Attempt result. Grant component:<id> and explicit allowedOperations only when needed. Graph tools additionally require tool.execute and frozen path/command/network permissions. Unknown provider cost is not zero; maxCostUsd zero prohibits unpriced generation.',
     input.workflowRevision
       ? `Optimize Workflow ${input.workflowRevision.workflowId} version ${input.workflowRevision.baseVersion} as version ${input.workflowRevision.nextVersion}.`
       : 'Design only brand-new Role Profiles and one brand-new Workflow Definition.',

@@ -1,3 +1,5 @@
+import { constellationFilePortsPlugin } from './creative-constellation-source-patches.mjs'
+import { creativeBackgroundUiPlugin } from './creative-background-ui-patches.mjs'
 import { build } from 'esbuild'
 import { readFile, writeFile, mkdir, copyFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
@@ -18,22 +20,6 @@ function index(value) {
   }
 }
 index(pinned)
-const metadataPlugin = {
-  name: 'owned-file-metadata',
-  setup(b) {
-    b.onLoad({ filter: /[\\/]lib[\\/]constellation\.ts$/ }, async (args) => {
-      let contents = await readFile(args.path, 'utf8')
-      const marker = '  if (!attachments.length) return {};'
-      if (!contents.includes(marker)) throw Error('File output metadata transform anchor changed')
-      contents = contents.replace(
-        marker,
-        marker +
-          `\n  if (!text?.trim() && attachments.some(item => item.kind === "file")) text = attachments.map(item => "附件元数据（未解析内容）: " + item.name + ", " + item.mimeType + ", " + item.size + " bytes").join("\\n");`
-      )
-      return { contents, loader: 'ts' }
-    })
-  }
-}
 const sourcePaths = [
   'src/components/ConstellationStudio.tsx',
   'src/components/ConstellationNodes.tsx',
@@ -55,7 +41,8 @@ await build({
   target: 'es2022',
   jsx: 'automatic',
   plugins: [
-    metadataPlugin,
+    creativeBackgroundUiPlugin(root),
+    constellationFilePortsPlugin,
     {
       name: 'mam-adapters',
       setup(b) {
@@ -102,7 +89,7 @@ await writeFile(
     {
       commit: '6542241e440dead6cee60440afd8e658dd0ce0ca',
       transformation:
-        'Upstream React UI plus explicit MAM adapters; anchored constellationFileOutputs metadata-only text transform for generic files. No upstream file edits.',
+        'Upstream React UI plus explicit MAM adapters; shared constellationFileOutputs content-port transform for authorized text files. No upstream file edits.',
       inputs: await Promise.all(
         inputs.map(async (file) => ({
           file,
@@ -137,6 +124,14 @@ provenance.adapters = await Promise.all(
     sha256: hash(await readFile(path.join(source, file)))
   }))
 )
+provenance.businessUiPatches = await Promise.all(
+  [
+    'config/scripts/creative-background-ui-patches.mjs',
+    'packages/creative-writing/background-jobs.ts'
+  ].map(async (file) => ({ file, sha256: hash(await readFile(path.join(root, file))) }))
+)
+provenance.transformation +=
+  '; anchored MAM background Job UI patch, explicit resume from durable checkpoints; immutable upstream preserved'
 await writeFile(path.join(output, 'provenance.json'), JSON.stringify(provenance, null, 2))
 files['provenance.json'] = hash(await readFile(path.join(output, 'provenance.json')))
 await writeFile(
@@ -182,4 +177,5 @@ await writeFile(
     2
   )
 )
+await (await import('./build-creative-runtime.mjs')).buildCreativeRuntime(output)
 console.log(output)

@@ -1,33 +1,38 @@
+import { assertComponentBudget } from './attempt-component-budget'
+import { attemptComponentUsage } from './attempt-usage-budget'
+import { attemptRuntimeContext } from './attempt-runtime-context'
+import { publishComponentOutputs } from './attempt-component-outputs'
+import { CreativeDraftStore } from './creative-drafts'
+import { creativeProjectScope } from './creative-project-scope'
+import { frozenCatalog } from './attempt-component-catalog'
+import { acquireAttemptComponent } from './attempt-component-identity'
 import { createHash } from 'node:crypto'
 import { createReadStream } from 'node:fs'
-import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { ComponentExecutionPort } from '../application/component-execution-port'
 import type { DesktopCreativeServices } from './desktop-creative-services'
 import { CreativeJobManager } from '../creative-runtime'
-import { assetRefSchema, type AssetRef } from '../../../shared/mam/creative-runtime'
-import { createMediaServices, type MediaCatalog } from '../media'
-import { createCreativeTextServices } from '../creative-text'
+import { type AssetRef } from '../../../shared/mam/creative-runtime'
 import { LocalArtifactStore } from '../artifacts/local-artifact-store'
-import { BinaryArtifactStorage } from '../artifacts/binary-asset-storage'
 import { AssetBundleSchema } from '../../../shared/mam/domain/binary-artifact'
 import { buildAttemptResult } from '../artifacts/attempt-result-builder'
-import { validateAndEncodeArtifactContent } from '../artifacts/artifact-content-validator'
-import { decodeImage } from './host-native-assets'
-import type { ModelProfile, ProviderProfile } from '../../../shared/mam/domain/execution-profile'
-import { createDesktopMusicServices } from '../music-native/desktop'
-import { createMusicResourceManager } from '../music-native/resources'
-import { coordinateGpuHandler } from './gpu-job-coordinator'
-
-type Execution = Parameters<ComponentExecutionPort['execute']>[0]
+import { assertComponentOperation } from '../application/component-operation-policy'
 
 export function createComponentExecutionPort(options: {
   root: string
   services(): Promise<DesktopCreativeServices>
+  requestApproval?(input: {
+    request: unknown
+    requestHash: string
+    categories: string[]
+  }): Promise<boolean>
+  audit?(receipt: Record<string, unknown>): void | Promise<void>
 }): ComponentExecutionPort {
   return {
     execute: async (input) => {
       const { component, snapshot, authority } = input
+      assertComponentOperation(snapshot, component.id, component.operation)
+      assertComponentBudget(snapshot, component.operation, !!component.draft)
       if (
         authority.workflowRunId !== snapshot.workflowRunId ||
         authority.taskId !== snapshot.taskId ||
@@ -39,12 +44,44 @@ export function createComponentExecutionPort(options: {
         throw new Error('Component authorization missing')
       if (/\.resources\.|\.status$|\.hardware$/.test(component.operation))
         throw new Error('Component maintenance is a manual workbench operation')
+      input.signal.throwIfAborted()
       const services = await options.services()
-      const lease = await services.registry.acquireVersion(component.id, component.version)
+      const lease = await acquireAttemptComponent(
+        services.registry,
+        join(
+          options.root,
+          'component-identities',
+          createHash('sha256').update(authority.attemptId).digest('hex')
+        ),
+        component.id,
+        component.version
+      )
       let jobs: CreativeJobManager | undefined
-      let nativeMusic: ReturnType<typeof createDesktopMusicServices> | undefined
       const executions = new Set<Promise<unknown>>()
       try {
+        const categories = (snapshot.permissions?.requireApprovalFor ?? []).filter((kind) =>
+          ['command', 'network', 'file'].includes(kind)
+        )
+        if (categories.length) {
+          const request = structuredClone({
+            component,
+            identity: lease.identity,
+            inputArtifacts: input.inputArtifacts,
+            authority
+          })
+          const requestHash = createHash('sha256').update(JSON.stringify(request)).digest('hex')
+          if (!options.requestApproval) throw new Error('component_approval_required')
+          const allowed = await options.requestApproval({ request, requestHash, categories })
+          await options.audit?.({
+            type: 'component_approval',
+            requestHash,
+            categories,
+            allowed,
+            ...authority
+          })
+          input.signal.throwIfAborted()
+          if (!allowed) throw new Error('component_approval_denied')
+        }
         if (
           lease.manifest.hostApiVersion !== component.hostApiVersion ||
           !lease.manifest.operations.some((operation) => operation.id === component.operation)
@@ -70,31 +107,27 @@ export function createComponentExecutionPort(options: {
               )
             )
         }
-        const media = frozenCatalog(input)
-        const generation = createMediaServices({
-          ...media,
-          assets: services.assets,
-          validateImage: decodeImage
-        })
-        const text = createCreativeTextServices({
-          ...media,
-          assets: services.assets,
-          validateImage: decodeImage
-        })
-        if (component.id === 'creative.music') {
-          nativeMusic = createDesktopMusicServices({
-            root: join(
-              options.root,
-              'workflow-native',
-              createHash('sha256')
-                .update(authority.workflowRunId + String.fromCharCode(0) + authority.attemptId)
-                .digest('hex')
-            ),
-            assets: services.assets,
-            resources: createMusicResourceManager({ root: join(options.root, 'music') }),
-            registry: { acquire: (id) => services.registry.acquireVersion(id, component.version) }
-          })
-        }
+        if (component.draft && !input.projectDirectory)
+          throw new Error('Draft requires a connected project')
+        const draftHandler = component.draft
+          ? await new CreativeDraftStore(
+              join(options.root, 'creative-drafts'),
+              services.assets
+            ).handler(creativeProjectScope(input.projectDirectory!), component)
+          : undefined
+        const handlers = draftHandler
+          ? () => draftHandler
+          : services.runtimeHandlers(
+              attemptRuntimeContext(
+                services,
+                {
+                  ...frozenCatalog(input),
+                  scope: createHash('sha256').update(authority.attemptId).digest('hex'),
+                  lookupJob: (id) => jobs?.get(id)
+                },
+                { root: options.root, workspace: input.workspace, snapshot, authority }
+              )
+            )
         const directory = join(
           options.root,
           'component-attempts',
@@ -103,15 +136,7 @@ export function createComponentExecutionPort(options: {
         jobs = await CreativeJobManager.open({
           directory,
           handlers: (request) => {
-            const handler = coordinateGpuHandler(
-              options.root,
-              request.operation,
-              generation.handlers(request) ??
-                text.handlers(request) ??
-                (component.id === 'creative.music'
-                  ? nativeMusic?.handlers(request)
-                  : services.handlers(request))
-            )
+            const handler = handlers(request)
             if (!handler) return undefined
             return {
               validate: (request) => handler.validate(request),
@@ -128,10 +153,21 @@ export function createComponentExecutionPort(options: {
           }
         })
         const params = structuredClone(component.params)
+        if (component.draft) params.__mamDraft = component.draft
         if (contextInputs.length && typeof params.prompt === 'string')
           params.prompt += `\n\nInput artifacts:\n${contextInputs.join('\n\n')}`
         if (/^(image|video|speech|text|vision)\./.test(component.operation))
           params.modelProfileId = snapshot.modelProfile.id
+        input.signal.throwIfAborted()
+        if (!component.draft)
+          await attemptComponentUsage(
+            options.root,
+            snapshot,
+            jobs.list().some((job) => job.request.idempotencyKey === authority.attemptId)
+              ? undefined
+              : component.operation
+          )
+        input.signal.throwIfAborted()
         const id = await jobs.submit({
           componentId: component.id,
           componentVersion: component.version,
@@ -143,61 +179,12 @@ export function createComponentExecutionPort(options: {
           params
         })
         const result = await settled(jobs, id, input.signal)
-        const outputs = new Map<string, AssetRef>()
-        for (const event of result.events) {
-          if (event.type !== 'asset') continue
-          const ref = assetRefSchema.parse(event.data)
-          await services.assets.read(ref)
-          outputs.set(ref.id, ref)
-        }
-        const final = result.events.at(-1)?.data
-        if (final && typeof final === 'object' && 'partial' in final && final.partial)
-          throw new Error('Component returned partial output; review retained job results')
-        const binaries = new BinaryArtifactStorage(join(options.root, 'artifacts', 'binary'))
-        const refs = [...outputs.values()]
-        const bundle = refs.length
-          ? await binaries.import(
-              refs.map((ref, index) => ({
-                logicalPath: `${index + 1}-${ref.filename}`,
-                mime: ref.mime,
-                stream: (async function* () {
-                  yield await services.assets.read(ref)
-                })()
-              })),
-              {
-                componentId: component.id,
-                componentVersion: component.version,
-                operation: component.operation
-              }
-            )
-          : undefined
-        await mkdir(input.workspace, { recursive: true })
-        const claims = []
-        for (const [index, contract] of input.outputContracts.entries()) {
-          const value =
-            contract.format === 'asset-bundle'
-              ? bundle
-              : contract.format === 'markdown'
-                ? textValue(final)
-                : final
-          if (value === undefined) {
-            if (contract.required) throw new Error('Required component output absent')
-            continue
-          }
-          const bytes = validateAndEncodeArtifactContent(contract, value)
-          const contentRef = `.mam-component-${createHash('sha256').update(authority.attemptId).digest('hex').slice(0, 16)}-${index}.json`
-          await writeFile(join(input.workspace, contentRef), bytes, { flag: 'wx' })
-          claims.push({
-            contractId: contract.artifactType,
-            type: contract.artifactType,
-            contentRef,
-            sha256: createHash('sha256').update(bytes).digest('hex')
-          })
-        }
+        const usage = await attemptComponentUsage(options.root, snapshot)
+        const claims = await publishComponentOutputs(input, result, services, options.root)
         return {
           invocation: { component, jobId: id },
           events: [],
-          usage: { status: 'unknown' },
+          usage,
           stderr: '',
           result: buildAttemptResult(
             {
@@ -208,7 +195,7 @@ export function createComponentExecutionPort(options: {
               verifications: [],
               risks: ['Provider cost is unknown unless reported by the component.'],
               followUps: [],
-              usage: { status: 'unknown' }
+              usage
             },
             authority
           )
@@ -216,46 +203,12 @@ export function createComponentExecutionPort(options: {
       } finally {
         await jobs?.dispose()
         await Promise.allSettled(executions)
-        await nativeMusic?.dispose()
+        await services.releaseRuntimeScope?.(
+          createHash('sha256').update(authority.attemptId).digest('hex')
+        )
         lease.release()
       }
     }
-  }
-}
-
-function frozenCatalog(input: Execution): {
-  catalog: MediaCatalog
-  resolveSecret(ref: string): string | undefined
-} {
-  const { snapshot } = input
-  const provider: ProviderProfile = {
-    id: snapshot.providerProfile.id,
-    version: snapshot.providerProfile.version,
-    protocol: snapshot.execution.providerProtocol,
-    ...(snapshot.execution.providerBaseUrl ? { baseUrl: snapshot.execution.providerBaseUrl } : {}),
-    ...(snapshot.execution.providerSecretRef
-      ? { secretRef: snapshot.execution.providerSecretRef }
-      : {}),
-    ...(snapshot.execution.providerHeaders ? { headers: snapshot.execution.providerHeaders } : {})
-  }
-  const model: ModelProfile = {
-    id: snapshot.modelProfile.id,
-    version: snapshot.modelProfile.version,
-    displayName: snapshot.execution.remoteModelId,
-    providerProfileId: provider.id,
-    remoteModelId: snapshot.execution.remoteModelId,
-    capabilities: snapshot.execution.modelCapabilities,
-    defaultInference: snapshot.execution.inference
-  }
-  return {
-    catalog: {
-      models: {
-        getActive: (id) => (id === model.id ? model : undefined),
-        listActive: () => [model]
-      },
-      providers: { getActive: (id) => (id === provider.id ? provider : undefined) }
-    },
-    resolveSecret: (ref) => input.credentialValues[ref]
   }
 }
 
@@ -279,11 +232,4 @@ async function settled(jobs: CreativeJobManager, id: string, signal: AbortSignal
   } finally {
     signal.removeEventListener('abort', abort)
   }
-}
-
-function textValue(value: unknown): string | undefined {
-  if (typeof value === 'string') return value
-  return value && typeof value === 'object' && 'text' in value && typeof value.text === 'string'
-    ? value.text
-    : undefined
 }

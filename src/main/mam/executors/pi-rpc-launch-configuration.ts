@@ -135,7 +135,8 @@ export function piBridgeTools(snapshot: EffectiveRoleConfigSnapshot): string[] {
           'mam_component_list',
           'mam_component_invoke',
           'mam_component_status',
-          'mam_component_cancel'
+          'mam_component_cancel',
+          'mam_component_publish_outputs'
         ]
       : []),
     ...(snapshot.mcpBindings.length ? ['mam_mcp'] : []),

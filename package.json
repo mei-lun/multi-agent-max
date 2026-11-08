@@ -1,6 +1,6 @@
 {
   "name": "multi-agent-max",
-  "version": "0.1.42",
+  "version": "0.1.43",
   "private": true,
   "description": "Git-driven multi-agent workflow control plane",
   "type": "module",
@@ -46,7 +46,11 @@
     "creative:verify:desktop": "node config/scripts/verify-creative-desktop.mjs",
     "creative:verify:offscreen": "node config/scripts/verify-creative-offscreen.mjs",
     "creative:sync": "node config/scripts/levelup-sync/sync.mjs",
-    "creative:test": "vitest run src/main/mam/components src/main/mam/creative-runtime src/main/mam/creative-text src/main/mam/media src/main/mam/music-native src/main/mam/model3d-native src/main/mam/spine-native src/main/mam/artifacts src/main/mam/application/component-task.real-git.test.ts src/main/mam/application/component-tool-gateway.test.ts && node --test config/scripts/levelup-sync/*.test.mjs"
+    "creative:test": "vitest run src/main/mam/components src/main/mam/creative-runtime src/main/mam/creative-text src/main/mam/media src/main/mam/music-native src/main/mam/model3d-native src/main/mam/spine-native src/main/mam/artifacts src/main/mam/application/component-task.real-git.test.ts src/main/mam/application/component-tool-gateway.test.ts && node --test config/scripts/levelup-sync/*.test.mjs",
+    "creative:verify:graph": "node config/scripts/verify-graph-desktop.mjs",
+    "creative:evidence": "node config/scripts/run-creative-evidence.mjs",
+    "creative:sign": "node config/scripts/sign-creative-catalog.mjs",
+    "creative:sync:rehearse": "node config/scripts/levelup-sync/rehearse-ui-native.mjs"
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "0.81.1",
@@ -63,6 +67,7 @@
     "ajv": "8.20.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "cross-spawn": "7.0.6",
     "lucide-react": "1.26.0",
     "minimatch": "10.2.5",
     "react": "19.2.8",

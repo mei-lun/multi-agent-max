@@ -28,8 +28,9 @@ export default function (pi) {
     ['mam_component_list','component.listCapabilities',Type.Object({})],
     ['mam_component_invoke','component.invoke',Type.Object({componentId:Type.String(),operation:Type.String(),params:Type.Record(Type.String(),Type.Unknown()),inputArtifacts:Type.Array(Type.Object({artifactId:Type.String(),version:Type.Number(),contentHash:Type.String()})),inputAssets:Type.Optional(Type.Array(Type.Object({id:Type.String(),sha256:Type.String(),bytes:Type.Number(),mime:Type.String(),filename:Type.String()}))),idempotencyKey:Type.String()})],
     ['mam_component_status','component.status',Type.Object({jobId:Type.String()})],
+    ['mam_component_publish_outputs','component.publishOutputs',Type.Object({jobId:Type.String(),contractIds:Type.Array(Type.String())})],
     ['mam_component_cancel','component.cancel',Type.Object({jobId:Type.String()})]
-  ]) if(enabled.has(name)) pi.registerTool({name,label:name,description:'Use an explicitly authorized installed creative component. Invoke returns a background job ID; poll status for output assets. No installation or maintenance.',parameters,
+  ]) if(enabled.has(name)) pi.registerTool({name,label:name,description:'Use an explicitly authorized installed creative component. Invoke returns a background job ID; poll status for output assets. Publish completed job outputs to granted contractIds; include returned artifact claims in your structured Attempt result. No installation or maintenance.',parameters,
     async execute(_id,params,signal){return toolResult(await execute(method,params,signal))}})
   if (enabled.has('mam_ask_user')) {
     pi.registerTool({

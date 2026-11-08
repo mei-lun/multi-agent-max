@@ -1,6 +1,8 @@
 import { spawn } from 'node:child_process'
 import { mkdir, mkdtemp, readFile, writeFile, cp } from 'node:fs/promises'
 import { join } from 'node:path'
+import { createRequire } from 'node:module'
+import { build } from 'esbuild'
 
 const root = process.cwd(),
   output = join(root, '.mam-local/packaged-creative-qa')
@@ -8,7 +10,21 @@ await mkdir(output, { recursive: true })
 const run = await mkdtemp(join(output, 'run-')),
   userData = join(run, 'user-data'),
   storage = join(userData, 'mam/components')
-const release = join(root, 'release/creative-components/0.1.42'),
+const corePath = join(run, 'writing-core.cjs')
+await build({
+  entryPoints: [join(root, 'vendor/levelup/baseline-6542241/src/lib/writing.ts')],
+  outfile: corePath,
+  platform: 'node',
+  format: 'cjs',
+  bundle: true
+})
+const project = createRequire(import.meta.url)(corePath).createWritingProject()
+project.documents[0].content = 'PACKAGED BACKEND EXPORT'
+const release = join(
+    root,
+    'release/creative-components',
+    JSON.parse(await readFile(join(root, 'package.json'), 'utf8')).version
+  ),
   catalog = JSON.parse(await readFile(join(release, 'catalog.json'), 'utf8'))
 const records = [],
   active = {}
@@ -74,7 +90,8 @@ try {
     if (m.id) {
       const p = awaiting.get(m.id)
       awaiting.delete(m.id)
-      m.error ? p?.reject(Error(JSON.stringify(m.error))) : p?.resolve(m.result)
+      if (m.error) p?.reject(Error(JSON.stringify(m.error)))
+      else p?.resolve(m.result)
     }
   })
   const command = (method, params) =>
@@ -108,12 +125,53 @@ try {
   const pages = await fetch('http://127.0.0.1:' + port + '/json/list').then((r) => r.json())
   if (!pages.some((p) => p.url.startsWith('mam-component://')))
     throw Error('Packaged component failed to load')
+  ws.close()
+  const componentPage = pages.find((page) => page.url.startsWith('mam-component://'))
+  ws = new WebSocket(componentPage.webSocketDebuggerUrl)
+  await new Promise((ok, fail) => {
+    ws.addEventListener('open', ok, { once: true })
+    ws.addEventListener('error', fail, { once: true })
+  })
+  ws.addEventListener('message', (event) => {
+    const message = JSON.parse(event.data),
+      pending = awaiting.get(message.id)
+    if (!pending) return
+    awaiting.delete(message.id)
+    if (message.error) pending.reject(Error(JSON.stringify(message.error)))
+    else pending.resolve(message.result)
+  })
+  const submission = {
+    action: 'submit',
+    operation: 'writing.project.export',
+    idempotencyKey: 'packaged-backend',
+    params: { project, format: 'markdown' },
+    inputAssets: []
+  }
+  const jobId = await evaluate(`window.componentHost.request(${JSON.stringify(submission)})`)
+  let completed
+  for (let attempt = 0; attempt < 100; attempt++) {
+    const jobs = await evaluate('window.componentHost.request({action:"listJobs"})')
+    completed = jobs.find((job) => job.id === jobId)
+    if (['succeeded', 'failed', 'reconciliation-required'].includes(completed?.state)) break
+    await wait(100)
+  }
+  if (completed?.state !== 'succeeded')
+    throw Error('Packaged backend failed: ' + JSON.stringify(completed?.events.at(-1)))
+  const ref = completed.events.findLast((event) => event.type === 'succeeded').data.assets[0]
+  const url = await evaluate(
+    `window.componentHost.request(${JSON.stringify({ action: 'previewAsset', ref })})`
+  )
+  const exported = await evaluate(`fetch(${JSON.stringify(url)}).then(response=>response.text())`)
+  if (!exported.includes('PACKAGED BACKEND EXPORT'))
+    throw Error('Packaged backend returned incorrect artifact bytes')
   const result = {
     passed: true,
     executable: 'release/win-unpacked/Multi-Agent Max.exe',
     catalogEntries: list.length,
     allEnabled: true,
     componentOpened: true,
+    packageBackendExecuted: true,
+    artifactPreviewVerified: true,
     scope: 'packaged executable with isolated seeded data; no model calls'
   }
   await writeFile(join(output, 'latest.json'), JSON.stringify(result, null, 2))

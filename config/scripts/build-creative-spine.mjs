@@ -56,6 +56,21 @@ await build({
   ]
 })
 await copyFile(path.join(source, 'index.html'), path.join(output, 'index.html'))
+await copyFile(path.join(source, 'spine-render.html'), path.join(output, 'spine-render.html'))
+await build({
+  entryPoints: [path.join(source, 'spine-render-entry.ts')],
+  outfile: path.join(output, 'spine-render-entry.js'),
+  bundle: true,
+  format: 'esm',
+  target: 'es2022'
+})
+await build({
+  entryPoints: [path.join(source, 'runtime-render.ts')],
+  outfile: path.join(output, 'spine-render.js'),
+  bundle: true,
+  format: 'esm',
+  target: 'es2022'
+})
 await writeFile(
   path.join(output, 'provenance.json'),
   JSON.stringify(
@@ -65,9 +80,17 @@ await writeFile(
         'Original Spine React UI/core bundled unchanged; explicit MAM bridge/header/native adapters',
       inputs,
       adapters: await Promise.all(
-        ['entry.tsx', 'bridge.ts', 'adapters.tsx', 'native-adapter.ts', 'shell.css'].map(
-          async (file) => ({ file, sha256: hash(await readFile(path.join(source, file))) })
-        )
+        [
+          'entry.tsx',
+          'bridge.ts',
+          'adapters.tsx',
+          'native-adapter.ts',
+          'shell.css',
+          'runtime-business.ts',
+          'runtime-render.ts',
+          'spine-render.html',
+          'spine-render-entry.ts'
+        ].map(async (file) => ({ file, sha256: hash(await readFile(path.join(source, file))) }))
       )
     },
     null,
@@ -75,7 +98,15 @@ await writeFile(
   )
 )
 const files = {}
-for (const file of ['index.html', 'spine.js', 'spine.css', 'provenance.json'])
+for (const file of [
+  'index.html',
+  'spine.js',
+  'spine.css',
+  'spine-render.js',
+  'spine-render.html',
+  'spine-render-entry.js',
+  'provenance.json'
+])
   files[file] = hash(await readFile(path.join(output, file)))
 await writeFile(
   path.join(output, 'manifest.json'),
@@ -101,7 +132,14 @@ await writeFile(
         'text.generate',
         'vision.generate',
         'spine.comfy.request',
-        'spine.rife.frame'
+        'spine.rife.frame',
+        'spine.project.normalize',
+        'spine.project.compile',
+        'spine.pose.capture',
+        'spine.pose.fit',
+        'spine.animation.generate',
+        'spine.image.normalize',
+        'spine.export'
       ].map((id) => ({
         id,
         title: id,
@@ -113,4 +151,5 @@ await writeFile(
     2
   )
 )
+await (await import('./build-creative-runtime.mjs')).buildCreativeRuntime(output)
 console.log(output)

@@ -43,6 +43,14 @@ export const ExecutorCapabilityBridgeRequestSchema = z.discriminatedUnion('metho
   z
     .object({ method: z.literal('component.listCapabilities'), request: z.object({}).strict() })
     .strict(),
+  z
+    .object({
+      method: z.literal('component.publishOutputs'),
+      request: z
+        .object({ jobId: z.uuid(), contractIds: z.array(z.string()).min(1).max(100) })
+        .strict()
+    })
+    .strict(),
   z.object({ method: z.literal('component.invoke'), request: ComponentToolInvokeSchema }).strict(),
   z
     .object({
@@ -101,7 +109,8 @@ export class ExecutorCapabilityBridge {
       request.method === 'component.listCapabilities' ||
       request.method === 'component.invoke' ||
       request.method === 'component.status' ||
-      request.method === 'component.cancel'
+      request.method === 'component.cancel' ||
+      request.method === 'component.publishOutputs'
     ) {
       if (!this.applicationApi.componentExecute) throw new Error('component_tools_unavailable')
       return this.applicationApi.componentExecute({ ...request, context: this.context })

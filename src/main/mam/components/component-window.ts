@@ -32,11 +32,16 @@ export async function openComponentWindow(
   host?: {
     preloadPath: string
     partitionKey?: string
+    version?: string
+    entrypoint?: string
+    show?: boolean
     bind(window: BrowserWindow, manifest: ComponentManifest): void
     asset?(request: Request): Promise<Response | undefined>
   }
 ): Promise<void> {
-  const lease = await registry.acquire(id)
+  const lease = host?.version
+    ? await registry.acquireVersion(id, host.version)
+    : await registry.acquire(id)
   const isolated = session.fromPartition(host?.partitionKey ?? `mam-component-${randomUUID()}`)
   const allowedHost = 'package'
   let released = false
@@ -98,7 +103,7 @@ export async function openComponentWindow(
         sandbox: true,
         contextIsolation: true,
         nodeIntegration: false,
-        ...(host ? { preload: host.preloadPath } : {})
+        ...(host?.preloadPath ? { preload: host.preloadPath } : {})
       }
     })
     host?.bind(window, lease.manifest)
@@ -109,9 +114,12 @@ export async function openComponentWindow(
       release()
     })
     try {
-      const entry = lease.manifest.uiEntrypoint.split('/').map(encodeURIComponent).join('/')
+      const entrypoint = host?.entrypoint ?? lease.manifest.uiEntrypoint
+      if (!lease.manifest.files[entrypoint])
+        throw new Error('Component page is absent from manifest')
+      const entry = entrypoint.split('/').map(encodeURIComponent).join('/')
       await window.loadURL(`mam-component://${allowedHost}/${entry}`)
-      window.show()
+      if (host?.show !== false) window.show()
     } catch (error) {
       window.destroy()
       throw error

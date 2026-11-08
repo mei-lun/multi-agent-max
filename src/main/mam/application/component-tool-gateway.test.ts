@@ -57,6 +57,30 @@ function fixture() {
     gateway.execute({ method, request, context: override })
   return { prepared, port, gateway, call }
 }
+
+test.each(['image.edit', 'video.edit'])(
+  'zero budget rejects %s before provider invocation',
+  async (operation) => {
+    const f = fixture()
+    f.prepared.snapshot.budget = {
+      maxCostUsd: 0,
+      maxInputTokens: 100,
+      maxOutputTokens: 100,
+      maxDurationSeconds: 10
+    }
+    f.prepared.snapshot.componentBindings![0]!.allowedOperations = [operation]
+    await expect(
+      f.call('component.invoke', {
+        componentId: 'creative.image',
+        operation,
+        params: { prompt: 'edit' },
+        inputArtifacts: [],
+        idempotencyKey: 'edit'
+      })
+    ).rejects.toThrow('zero cost budget')
+    expect(f.port.invoke).not.toHaveBeenCalled()
+  }
+)
 test('explicit binding selects media model and strips private backend fields', async () => {
   const f = fixture()
   expect(await f.call('component.listCapabilities')).toEqual([

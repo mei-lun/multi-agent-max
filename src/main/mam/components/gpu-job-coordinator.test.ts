@@ -14,7 +14,7 @@ function deferred() {
   })
   return { promise, resolve }
 }
-test('different services serialize local GPU work while CPU work stays independent', async () => {
+test('different services serialize native resource users while read-only status stays independent', async () => {
   const root = `gpu-test-${crypto.randomUUID()}`,
     gate = deferred(),
     started = deferred(),
@@ -33,7 +33,7 @@ test('different services serialize local GPU work while CPU work stays independe
       order.push('3d')
     }
   })!
-  const cpu = coordinateGpuHandler(root, 'music.trim', {
+  const cpu = coordinateGpuHandler(root, 'music.status', {
     validate() {},
     async run() {
       order.push('cpu')

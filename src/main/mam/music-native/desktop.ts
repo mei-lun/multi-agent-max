@@ -18,13 +18,16 @@ const engines: MusicEngine[] = ['musicgen', 'acestep', 'yue2']
 const resourceParams = z.object({ engine: z.enum(['musicgen', 'acestep', 'yue2']) }).strict()
 export function createDesktopMusicServices(options: {
   root: string
+  resourceRoot?: string
   assets: BinaryAssetStore
   registry: Pick<ComponentRegistry, 'acquire'>
   resources?: ReturnType<typeof createMusicResourceManager>
   coreFactory?: typeof createMusicNativeServices
 }) {
   const root = join(options.root, 'music')
-  const resources = options.resources ?? createMusicResourceManager({ root })
+  const resources =
+    options.resources ??
+    createMusicResourceManager({ root: join(options.resourceRoot ?? options.root, 'music') })
   let core: ReturnType<typeof createMusicNativeServices> | undefined
   let initializing: Promise<void> | undefined
   let lease: Awaited<ReturnType<ComponentRegistry['acquire']>> | undefined

@@ -21,6 +21,7 @@ import {
 } from './projects'
 import { runModelLauncher, type ModelSpawn } from './launcher'
 import { model3dResources, names } from './resources'
+import { rigPython } from './rig-python'
 import { musicHardware } from '../music-native/hardware'
 import { nativeRootCoordinator } from '../components/native-root-coordinator'
 const resourcesParams = z
@@ -28,6 +29,7 @@ const resourcesParams = z
   .strict()
 export function createModel3dServices(options: {
   root: string
+  resourceRoot?: string
   assets: BinaryAssetStore
   registry: Pick<ComponentRegistry, 'acquire' | 'acquireVersion'>
   fetch?: typeof fetch
@@ -37,12 +39,15 @@ export function createModel3dServices(options: {
   resourceFactory?: typeof model3dResources
 }) {
   const root = join(options.root, 'model3d'),
-    resources = (options.resourceFactory ?? model3dResources)(root, options.fetch),
+    resources = (options.resourceFactory ?? model3dResources)(
+      join(options.resourceRoot ?? options.root, 'model3d'),
+      options.fetch
+    ),
     controllers = new Map<
       AbortController,
       { scope: string; done: Promise<void>; finish: () => void }
     >()
-  const shared = nativeRootCoordinator(root)
+  const shared = nativeRootCoordinator(join(options.resourceRoot ?? options.root, 'model3d'))
   let disposed = false
   const handlers: HandlerRegistry = (request) => {
     if (!request.operation.startsWith('model3d.')) return
@@ -199,7 +204,7 @@ export function createModel3dServices(options: {
                 ? ['runtime', 'triposg']
                 : params.stage === 'texture'
                   ? ['runtime', 'texture']
-                  : ['blender', 'runtime']
+                  : ['blender']
           if (needs.some((name) => !installed[name]))
             throw new Error('Required 3D resources not installed')
           const lease = await options.registry.acquireVersion(
@@ -213,7 +218,10 @@ export function createModel3dServices(options: {
               stage: params.stage
             })
             await runModelLauncher({
-              python: join(resources.directory, 'runtime/python/python.exe'),
+              python:
+                params.stage === 'rig'
+                  ? await rigPython(resources.directory)
+                  : join(resources.directory, 'runtime/python/python.exe'),
               script: join(lease.packageDirectory, 'modules/model_workbench/launcher.py'),
               data,
               resources: resources.directory,

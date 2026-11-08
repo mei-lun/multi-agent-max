@@ -125,7 +125,10 @@ for (const [protocol, events] of protocols)
           }
         })
       ).toEqual({ text: 'hello' })
-      expect(deltas).toEqual([{ type: 'text_delta', text: 'hello' }])
+      expect(deltas).toEqual([
+        { type: 'text_delta', text: 'hello' },
+        { status: 'unknown', costStatus: 'unknown' }
+      ])
       expect(received.tools).toBeUndefined()
       if (protocol !== 'google-generative-ai') expect(received.model).toBe('text-model')
       expect(() =>
