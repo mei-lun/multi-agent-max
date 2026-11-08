@@ -3,12 +3,15 @@ import { spawn, execFileSync } from 'node:child_process'
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { tmpdir } from 'node:os'
 
 const require = createRequire(import.meta.url),
   root = process.cwd(),
   output = join(root, '.mam-local/native-workbenches-qa')
 await mkdir(output, { recursive: true })
 const run = await mkdtemp(join(output, 'run-'))
+// Chromium LevelDB appends MANIFEST filenames; deep checkout paths exceed Windows MAX_PATH.
+const userData = await mkdtemp(join(tmpdir(), 'mam-native-'))
 const packages = []
 for (const id of ['music', 'model3d', 'constellation', 'video']) {
   const directory = join(root, '.mam-local/component-packages', 'creative-' + id)
@@ -20,7 +23,7 @@ for (const id of ['music', 'model3d', 'constellation', 'video']) {
 }
 const report = join(run, 'result.json'),
   script = `
-const {app,BrowserWindow,dialog}=require('electron'),fs=require('node:fs');app.disableHardwareAcceleration();app.setPath('userData',${JSON.stringify(join(run, 'user-data'))});
+const {app,BrowserWindow,dialog}=require('electron'),fs=require('node:fs');app.disableHardwareAcceleration();app.setPath('userData',${JSON.stringify(userData)});
 const packages=${JSON.stringify(packages)},messages=[],results=[];let current,step='start';
 dialog.showOpenDialog=async()=>({canceled:false,filePaths:[current.directory]});dialog.showMessageBox=async()=>({response:1});
 app.on('browser-window-created',(_e,w)=>{const label=current?.id??'main';w.show=()=>{};w.webContents.on('console-message',(_e,_l,m)=>messages.push(label+': '+m))});
